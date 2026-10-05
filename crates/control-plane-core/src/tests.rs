@@ -910,3 +910,101 @@ async fn legacy_workspaces_gain_primary_directory_once_without_losing_goals() {
     );
     assert_eq!(store.query("GoalList").unwrap()[0]["goal_id"], goal);
 }
+
+#[tokio::test]
+async fn missing_legacy_workspace_does_not_block_healthy_directory_backfill() {
+    let temp = scratch();
+    let absent = temp.path().join("disconnected");
+    std::fs::create_dir(&absent).unwrap();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let missing_id = workspace(&mut store, &absent).await;
+    let retained_goal = goal(&mut store, &missing_id).await;
+    let healthy_id = workspace(&mut store, temp.path()).await;
+    std::fs::remove_dir(&absent).unwrap();
+    store.backfill_workspace_directories().await.unwrap();
+    let directories = store.query("WorkspaceDirectoryList").unwrap();
+    assert!(
+        directories
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["workspace_id"] == healthy_id)
+    );
+    assert!(
+        !directories
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["workspace_id"] == missing_id)
+    );
+    assert_eq!(
+        store
+            .query("WorkspaceList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        store.query("GoalList").unwrap()[0]["goal_id"],
+        retained_goal
+    );
+    // Reconnecting the directory permits a later startup to finish its migration.
+    std::fs::create_dir(&absent).unwrap();
+    store.backfill_workspace_directories().await.unwrap();
+    assert_eq!(
+        store
+            .query("WorkspaceDirectoryList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn startup_backfill_does_not_restore_explicitly_removed_membership() {
+    let temp = scratch();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let registered = store
+        .register_workspace(temp.path(), "workspace")
+        .await
+        .unwrap();
+    let ws = identity(&registered, "workspace_id");
+    let dir = store.query("WorkspaceDirectoryList").unwrap()[0]["directory_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    store.remove_workspace_directory(&dir).await.unwrap();
+    drop(store);
+    let mut store = Store::open(&db).await.unwrap();
+    store.backfill_workspace_directories().await.unwrap();
+    store
+        .register_workspace(temp.path(), "workspace")
+        .await
+        .unwrap();
+    let directories = store.query("WorkspaceDirectoryList").unwrap();
+    assert_eq!(directories.as_array().unwrap().len(), 1);
+    assert_eq!(directories[0]["workspace_id"], ws);
+    assert_eq!(directories[0]["state"], "Removed");
+}
+
+#[tokio::test]
+async fn legacy_backfill_still_propagates_storage_failure() {
+    let temp = scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    workspace(&mut store, temp.path()).await;
+    store.version += 1;
+    assert!(store.backfill_workspace_directories().await.is_err());
+    assert!(
+        store
+            .query("WorkspaceDirectoryList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
