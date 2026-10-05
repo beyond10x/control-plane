@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:operator-console
 kind: story
-status: active
+status: implemented
 title: Local browser console and CLI over shared application handlers
 relations:
 - decomposes: epic:bootstrap
@@ -11,10 +11,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-app
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T20:46:56Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-05T20:46:56Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-05T21:43:27Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":5,"review_outcome":1}}}
 ---
 ## Outcome
 Local browser console and CLI over shared application handlers, as part of the approved standalone control-plane plan.
