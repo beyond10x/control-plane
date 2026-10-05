@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:04:50Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-observability",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Browser CDP on live port 8788: dashboard loaded, live panel changed across 2.5 seconds, unsaved goal form retained, no browser errors; screenshot retained locally"
+  }
+}

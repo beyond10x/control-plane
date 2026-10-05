@@ -53,6 +53,11 @@ pub enum PlannerAction {
     Read {
         paths: Vec<String>,
     },
+    ReadRange {
+        path: String,
+        start_line: usize,
+        line_count: usize,
+    },
     WriteSpecification {
         path: String,
         contents: String,
@@ -70,7 +75,7 @@ pub enum PlannerAction {
 impl PlannerAction {
     pub fn protocol_action(&self) -> &'static str {
         match self {
-            Self::Read { .. } => "repository.inspect",
+            Self::Read { .. } | Self::ReadRange { .. } => "repository.inspect",
             Self::WriteSpecification { .. } | Self::Aep { .. } => "plan.edit",
             Self::Finish { .. } => "plan.validate",
         }
@@ -80,6 +85,7 @@ impl PlannerAction {
 pub fn planner_schema() -> Value {
     json!({"oneOf":[
         {"type":"object","properties":{"action":{"const":"read"},"paths":{"type":"array","items":{"type":"string"}}},"required":["action","paths"],"additionalProperties":false},
+        {"type":"object","properties":{"action":{"const":"read_range"},"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"line_count":{"type":"integer","minimum":1,"maximum":200}},"required":["action","path","start_line","line_count"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"write_specification"},"path":{"type":"string"},"contents":{"type":"string"}},"required":["action","path","contents"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"aep"},"args":{"type":"array","items":{"type":"string"}},"body":{"type":["string","null"]}},"required":["action","args","body"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"finish"},"stories":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["action","stories","summary"],"additionalProperties":false}

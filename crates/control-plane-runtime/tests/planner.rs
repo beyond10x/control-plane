@@ -365,6 +365,76 @@ struct ObservingModel {
     store: Arc<tokio::sync::Mutex<Store>>,
     entered: Mutex<Vec<Value>>,
 }
+
+struct RepeatedReadModel {
+    calls: Mutex<usize>,
+    prompts: Mutex<Vec<usize>>,
+}
+impl AgentModel for RepeatedReadModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        self.prompts.lock().unwrap().push(request.prompt.len());
+        if request.role == "critic" {
+            return Ok(
+                json!({"approved":true,"reason":"The existing scoped story matches the goal"}),
+            );
+        }
+        let mut calls = self.calls.lock().unwrap();
+        *calls += 1;
+        Ok(if *calls <= 8 {
+            json!({"action":"read","paths":["context.txt"]})
+        } else if *calls == 9 {
+            json!({"action":"read_range","path":"context.txt","start_line":7001,"line_count":1})
+        } else {
+            assert!(request.prompt.contains("Final page acceptance marker"));
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Context inspected; deliver the existing story"})
+        })
+    }
+}
+
+#[tokio::test]
+async fn repeated_large_reads_do_not_exhaust_planner_context() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::write(
+        repo.join("context.txt"),
+        format!(
+            "{}Final page acceptance marker\n",
+            "Observed repository context.\n".repeat(7_000)
+        ),
+    )
+    .unwrap();
+    run(&repo, "git", &["add", "context.txt"], &config.environment);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Add large context fixture"],
+        &config.environment,
+    );
+    let model = Arc::new(RepeatedReadModel {
+        calls: Mutex::new(0),
+        prompts: Mutex::new(Vec::new()),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(
+        report.queued, 1,
+        "Repeated reads prevented planning: {report:?}"
+    );
+    assert!(
+        model
+            .prompts
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|size| *size <= 160 * 1024),
+        "planner sent oversized context"
+    );
+}
 impl AgentModel for ObservingModel {
     fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
         let receipt = tokio::runtime::Handle::current().block_on(async {

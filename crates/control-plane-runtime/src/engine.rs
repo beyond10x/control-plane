@@ -125,7 +125,11 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
         started: std::time::Instant::now(),
         state: Mutex::new(State {
             revision: 1,
-            transcript: vec![inspection, scan, backlog],
+            transcript: vec![
+                inspection,
+                crate::context::scan(&scan)?,
+                crate::context::backlog(&backlog)?,
+            ],
             pending: None,
             selected: Vec::new(),
             evidence: Vec::new(),
@@ -259,13 +263,16 @@ impl Planning<'_> {
             .lock()
             .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
         let text = format!(
-            "Goal: {}\nAcceptance: {}\nRegistered workspace directories: {}\nRead context files using workspace:<directory_id>/<relative-file>. These directories are read-only; every edit stays inside this planning worktree.\nObserved repository context:\n{}",
+            "Goal: {}\nAcceptance: {}\nRegistered workspace directories: {}\nRead context files using workspace:<directory_id>/<relative-file>. These directories are read-only; every edit stays inside this planning worktree.\nContext is a bounded working set. Read returns a first page; use read_range with path, start_line and line_count for more. Older observations may leave this working set; retrieve relevant files again when needed. Do not repeat unchanged reads without a reason.\nObserved repository context:\n{}",
             text(&self.input.goal, "objective")?,
             text(&self.input.goal, "acceptance")?,
             self.input.goal["directories"],
             state.transcript.join("\n")
         );
-        ensure!(text.len() <= 1024 * 1024, "planner context exceeds 1 MiB");
+        ensure!(
+            text.len() <= 160 * 1024,
+            "goal and registered directory metadata exceed planner input budget"
+        );
         Ok(text)
     }
     fn record(&self, message: String) -> Result<()> {
@@ -274,7 +281,7 @@ impl Planning<'_> {
                 .state
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
-            state.transcript.push(message);
+            crate::context::push(&mut state.transcript, message);
             json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript})
         };
         (self.input.progress)("observation", &receipt)
@@ -292,8 +299,30 @@ impl Planning<'_> {
                     let file = context_file(path, &name, &self.input.goal)?;
                     let metadata = std::fs::metadata(&file)?;
                     ensure!(metadata.len() <= 256 * 1024, "file exceeds read budget");
-                    self.record(format!("{name}:\n{}", std::fs::read_to_string(file)?))?;
+                    self.record(crate::context::page(
+                        &name,
+                        &std::fs::read_to_string(file)?,
+                        1,
+                        160,
+                    )?)?;
                 }
+            }
+            PlannerAction::ReadRange {
+                path: name,
+                start_line,
+                line_count,
+            } => {
+                let file = context_file(path, &name, &self.input.goal)?;
+                ensure!(
+                    std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
+                    "file exceeds paged read budget"
+                );
+                self.record(crate::context::page(
+                    &name,
+                    &std::fs::read_to_string(file)?,
+                    start_line,
+                    line_count,
+                )?)?;
             }
             PlannerAction::WriteSpecification {
                 path: name,
@@ -779,7 +808,7 @@ pub fn context_file(root: &Path, name: &str, goal: &Value) -> Result<PathBuf> {
 }
 fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
     let files = runner.command(root, "git", &["ls-files"])?;
-    let mut context = format!("Files:\n{files}");
+    let mut context = String::new();
     for name in ["AGENTS.md", "README.md", "TODO.md", "PLAN.md"] {
         if root.join(name).is_file() {
             let path = confined(root, name, false)?;
@@ -787,10 +816,17 @@ fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
                 std::fs::metadata(&path)?.len() <= 256 * 1024,
                 "instruction file too large"
             );
-            context.push_str(&format!("\n{name}:\n{}", std::fs::read_to_string(path)?));
+            context.push_str(&format!(
+                "\n{name}:\n{}",
+                crate::context::excerpt(&std::fs::read_to_string(path)?, 8 * 1024)
+            ));
         }
     }
     context.push_str("\nRead relevant specification/domain files before editing. Existing TODO/PLAN sources must be migrated with citations, never duplicated or deleted.");
+    context.push_str(&format!(
+        "\nFile index (read relevant files):\n{}",
+        crate::context::excerpt(&files, 8 * 1024)
+    ));
     Ok(context)
 }
 fn ready_stories(root: &Path, runner: &ProcessRunner) -> Result<BTreeSet<String>> {

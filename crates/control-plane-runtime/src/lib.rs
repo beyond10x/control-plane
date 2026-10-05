@@ -4,6 +4,7 @@ use control_plane_core::Store;
 use serde_json::Value;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
+mod context;
 mod engine;
 mod model;
 pub mod process;

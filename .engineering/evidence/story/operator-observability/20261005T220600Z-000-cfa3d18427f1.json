@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:06:00Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-observability",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "RED repeated_large_reads_do_not_exhaust_planner_context reproduced planner context exceeds 1 MiB; GREEN bounded indexes, deduplicated observations and paged reads, 18 runtime tests pass"
+  }
+}
