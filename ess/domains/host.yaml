@@ -4,15 +4,13 @@ summary: Local workspace goals and assignments; AEP owns stories, Loom owns agen
   executions.
 entities:
 - name: controlplane.host.Workspace
-  identity: &31
+  identity:
     name: workspace_id
     type: Uuid
   fields:
-  - &32
-    name: path
+  - name: path
     type: String
-  - &33
-    name: name
+  - name: name
     type: String
   lifecycle:
     initial: Registered
@@ -38,30 +36,23 @@ entities:
     cardinality: many
     via: workspace_id
 - name: controlplane.host.RepositoryRegistration
-  identity: &34
+  identity:
     name: repository_id
     type: Uuid
   fields:
-  - &35
-    name: workspace_id
+  - name: workspace_id
     type: Uuid
-  - &36
-    name: name
+  - name: name
     type: String
-  - &37
-    name: path
+  - name: path
     type: String
-  - &38
-    name: common_dir
+  - name: common_dir
     type: String
-  - &39
-    name: base_branch
+  - name: base_branch
     type: String
-  - &40
-    name: test_command
+  - name: test_command
     type: String
-  - &41
-    name: publish_command
+  - name: publish_command
     type: String
   lifecycle:
     initial: Registered
@@ -79,46 +70,50 @@ entities:
       - Disabled
       to: Registered
 - name: controlplane.host.Goal
-  identity: &42
+  identity:
     name: goal_id
     type: Uuid
   fields:
-  - &43
-    name: workspace_id
+  - name: workspace_id
     type: Uuid
-  - &1
-    name: objective
+  - name: objective
     type: String
-  - &2
-    name: acceptance
+  - name: acceptance
     type: String
-  - &3
-    name: max_workers
+  - name: max_workers
     type: Integer
-  - &4
-    name: max_attempts
+  - name: max_attempts
     type: Integer
-  - &5
-    name: max_minutes
+  - name: max_minutes
     type: Integer
-  - &6
-    name: planner_model
+  - name: planner_model
     type: String
-  - &7
-    name: implementor_model
+  - name: implementor_model
     type: String
-  - &8
-    name: reviewer_model
+  - name: reviewer_model
     type: String
-  - &9
-    name: merge_authority
+  - name: merge_authority
     type: Boolean
-  - &44
-    name: revision
+  - name: revision
     type: Integer
-  - &45
-    name: satisfaction_receipt
+  - name: satisfaction_receipt
     type: String
+  - name: planning_revision
+    type: Integer
+  - name: planning_fingerprint
+    type: String
+  - name: planning_repository
+    type: String
+  - name: planning_worktree_id
+    type: String
+  - name: planning_worktree_path
+    type: String
+  - name: planning_reason
+    type: String
+  - name: planning_receipt
+    type: String
+  - name: planning_phase
+    type: controlplane.host.PlanningPhase
   lifecycle:
     initial: Paused
     states:
@@ -154,54 +149,39 @@ entities:
     cardinality: many
     via: goal_id
 - name: controlplane.host.Assignment
-  identity: &46
+  identity:
     name: assignment_id
     type: Uuid
   fields:
-  - &47
-    name: goal_id
+  - name: goal_id
     type: Uuid
-  - &48
-    name: repository_id
+  - name: repository_id
     type: Uuid
-  - &49
-    name: story_id
+  - name: story_id
     type: String
-  - &50
-    name: case_id
+  - name: case_id
     type: String
-  - &51
-    name: worktree_id
+  - name: worktree_id
     type: String
-  - &52
-    name: candidate
+  - name: candidate
     type: String
-  - &53
-    name: attempt
+  - name: attempt
     type: Integer
-  - &54
-    name: reason
+  - name: reason
     type: String
-  - &55
-    name: implementor_run
+  - name: implementor_run
     type: String
-  - &56
-    name: reviewer_run
+  - name: reviewer_run
     type: String
-  - &57
-    name: goal_revision
+  - name: goal_revision
     type: Integer
-  - &58
-    name: base_revision
+  - name: base_revision
     type: String
-  - &59
-    name: test_revision
+  - name: test_revision
     type: String
-  - &60
-    name: review_revision
+  - name: review_revision
     type: String
-  - &61
-    name: merge_receipt
+  - name: merge_receipt
     type: String
   lifecycle:
     initial: Queued
@@ -276,24 +256,19 @@ entities:
     cardinality: many
     via: assignment_id
 - name: controlplane.host.PublicationIntent
-  identity: &62
+  identity:
     name: publication_id
     type: Uuid
   fields:
-  - &10
-    name: assignment_id
+  - name: assignment_id
     type: Uuid
-  - &11
-    name: candidate
+  - name: candidate
     type: String
-  - &12
-    name: target
+  - name: target
     type: String
-  - &13
-    name: expected_base
+  - name: expected_base
     type: String
-  - &63
-    name: receipt
+  - name: receipt
     type: String
   lifecycle:
     initial: Prepared
@@ -352,6 +327,7 @@ actors:
   - controlplane.host.PreparePublication
   - controlplane.host.MarkPublicationUncertain
   - controlplane.host.ConfirmPublication
+  - controlplane.host.RecordPlanningProgress
 errors:
 - name: controlplane.host.WorkspaceStateConflict
   summary: The command cannot act in the current state.
@@ -550,6 +526,14 @@ commands:
       merge_authority: input.merge_authority
       revision: 1
       satisfaction_receipt: ''
+      planning_revision: 0
+      planning_fingerprint: ''
+      planning_repository: ''
+      planning_worktree_id: ''
+      planning_worktree_path: ''
+      planning_reason: ''
+      planning_receipt: ''
+      planning_phase: Idle
     emits:
     - controlplane.host.GoalCreated
     payload:
@@ -566,6 +550,14 @@ commands:
         merge_authority: input.merge_authority
         goal_id:
           generated: true
+        planning_revision: 0
+        planning_fingerprint: ''
+        planning_repository: ''
+        planning_worktree_id: ''
+        planning_worktree_path: ''
+        planning_reason: ''
+        planning_receipt: ''
+        planning_phase: Idle
 - name: controlplane.host.StartGoal
   input:
   - name: goal_id
@@ -608,8 +600,7 @@ commands:
   input:
   - name: goal_id
     type: Uuid
-  - &14
-    name: satisfaction_receipt
+  - name: satisfaction_receipt
     type: String
   outcomes:
   - name: applied
@@ -713,14 +704,11 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &15
-    name: worktree_id
+  - name: worktree_id
     type: String
-  - &16
-    name: implementor_run
+  - name: implementor_run
     type: String
-  - &17
-    name: base_revision
+  - name: base_revision
     type: String
   outcomes:
   - name: applied
@@ -750,11 +738,9 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &18
-    name: candidate
+  - name: candidate
     type: String
-  - &19
-    name: test_revision
+  - name: test_revision
     type: String
   outcomes:
   - name: applied
@@ -780,11 +766,9 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &20
-    name: reason
+  - name: reason
     type: String
-  - &21
-    name: implementor_run
+  - name: implementor_run
     type: String
   outcomes:
   - name: applied
@@ -815,11 +799,9 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &22
-    name: reviewer_run
+  - name: reviewer_run
     type: String
-  - &23
-    name: review_revision
+  - name: review_revision
     type: String
   outcomes:
   - name: applied
@@ -864,8 +846,7 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &24
-    name: merge_receipt
+  - name: merge_receipt
     type: String
   outcomes:
   - name: applied
@@ -889,8 +870,7 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &25
-    name: reason
+  - name: reason
     type: String
   outcomes:
   - name: applied
@@ -933,15 +913,24 @@ commands:
   input:
   - name: goal_id
     type: Uuid
-  - *1
-  - *2
-  - *3
-  - *4
-  - *5
-  - *6
-  - *7
-  - *8
-  - *9
+  - name: objective
+    type: String
+  - name: acceptance
+    type: String
+  - name: max_workers
+    type: Integer
+  - name: max_attempts
+    type: Integer
+  - name: max_minutes
+    type: Integer
+  - name: planner_model
+    type: String
+  - name: implementor_model
+    type: String
+  - name: reviewer_model
+    type: String
+  - name: merge_authority
+    type: Boolean
   outcomes:
   - name: applied
     updates: controlplane.host.Goal
@@ -959,6 +948,7 @@ commands:
       revision:
         increment: 1
       satisfaction_receipt: ''
+      planning_fingerprint: ''
     emits:
     - controlplane.host.UpdateGoalApplied
     payload:
@@ -980,14 +970,11 @@ commands:
   input:
   - name: repository_id
     type: Uuid
-  - &26
-    name: base_branch
+  - name: base_branch
     type: String
-  - &27
-    name: test_command
+  - name: test_command
     type: String
-  - &28
-    name: publish_command
+  - name: publish_command
     type: String
   outcomes:
   - name: applied
@@ -1012,8 +999,7 @@ commands:
   input:
   - name: assignment_id
     type: Uuid
-  - &29
-    name: merge_receipt
+  - name: merge_receipt
     type: String
   outcomes:
   - name: applied
@@ -1035,10 +1021,14 @@ commands:
     error: controlplane.host.AssignmentStateConflict
 - name: controlplane.host.PreparePublication
   input:
-  - *10
-  - *11
-  - *12
-  - *13
+  - name: assignment_id
+    type: Uuid
+  - name: candidate
+    type: String
+  - name: target
+    type: String
+  - name: expected_base
+    type: String
   outcomes:
   - name: created
     creates: controlplane.host.PublicationIntent
@@ -1083,8 +1073,7 @@ commands:
   input:
   - name: publication_id
     type: Uuid
-  - &30
-    name: receipt
+  - name: receipt
     type: String
   outcomes:
   - name: applied
@@ -1104,6 +1093,55 @@ commands:
   - name: wrong-state
     wrong_state: true
     error: controlplane.host.PublicationIntentStateConflict
+- name: controlplane.host.RecordPlanningProgress
+  input:
+  - name: goal_id
+    type: Uuid
+  - name: planning_revision
+    type: Integer
+  - name: planning_fingerprint
+    type: String
+  - name: planning_repository
+    type: String
+  - name: planning_worktree_id
+    type: String
+  - name: planning_worktree_path
+    type: String
+  - name: planning_reason
+    type: String
+  - name: planning_receipt
+    type: String
+  - name: planning_phase
+    type: controlplane.host.PlanningPhase
+  outcomes:
+  - name: applied
+    updates: controlplane.host.Goal
+    instance: goal_id
+    sets:
+      planning_revision: input.planning_revision
+      planning_fingerprint: input.planning_fingerprint
+      planning_repository: input.planning_repository
+      planning_worktree_id: input.planning_worktree_id
+      planning_worktree_path: input.planning_worktree_path
+      planning_reason: input.planning_reason
+      planning_receipt: input.planning_receipt
+      planning_phase: input.planning_phase
+    emits:
+    - controlplane.host.PlanningProgressRecorded
+    payload:
+      controlplane.host.PlanningProgressRecorded:
+        goal_id: input.goal_id
+        planning_revision: input.planning_revision
+        planning_fingerprint: input.planning_fingerprint
+        planning_repository: input.planning_repository
+        planning_worktree_id: input.planning_worktree_id
+        planning_worktree_path: input.planning_worktree_path
+        planning_reason: input.planning_reason
+        planning_receipt: input.planning_receipt
+        planning_phase: input.planning_phase
+  - name: not-found
+    unknown_instance: true
+    error: controlplane.host.GoalNotFound
 events:
 - name: controlplane.host.WorkspaceCreated
   fields:
@@ -1167,6 +1205,22 @@ events:
     type: String
   - name: merge_authority
     type: Boolean
+  - name: planning_revision
+    type: Integer
+  - name: planning_fingerprint
+    type: String
+  - name: planning_repository
+    type: String
+  - name: planning_worktree_id
+    type: String
+  - name: planning_worktree_path
+    type: String
+  - name: planning_reason
+    type: String
+  - name: planning_receipt
+    type: String
+  - name: planning_phase
+    type: controlplane.host.PlanningPhase
 - name: controlplane.host.StartGoalApplied
   fields:
   - name: goal_id
@@ -1179,7 +1233,8 @@ events:
   fields:
   - name: goal_id
     type: Uuid
-  - *14
+  - name: satisfaction_receipt
+    type: String
 - name: controlplane.host.CancelGoalApplied
   fields:
   - name: goal_id
@@ -1214,27 +1269,36 @@ events:
   fields:
   - name: assignment_id
     type: Uuid
-  - *15
-  - *16
-  - *17
+  - name: worktree_id
+    type: String
+  - name: implementor_run
+    type: String
+  - name: base_revision
+    type: String
 - name: controlplane.host.ReviewAssignmentApplied
   fields:
   - name: assignment_id
     type: Uuid
-  - *18
-  - *19
+  - name: candidate
+    type: String
+  - name: test_revision
+    type: String
 - name: controlplane.host.RepairAssignmentApplied
   fields:
   - name: assignment_id
     type: Uuid
-  - *20
-  - *21
+  - name: reason
+    type: String
+  - name: implementor_run
+    type: String
 - name: controlplane.host.ReadyAssignmentApplied
   fields:
   - name: assignment_id
     type: Uuid
-  - *22
-  - *23
+  - name: reviewer_run
+    type: String
+  - name: review_revision
+    type: String
 - name: controlplane.host.MergeAssignmentApplied
   fields:
   - name: assignment_id
@@ -1243,12 +1307,14 @@ events:
   fields:
   - name: assignment_id
     type: Uuid
-  - *24
+  - name: merge_receipt
+    type: String
 - name: controlplane.host.BlockAssignmentApplied
   fields:
   - name: assignment_id
     type: Uuid
-  - *25
+  - name: reason
+    type: String
 - name: controlplane.host.CancelAssignmentApplied
   fields:
   - name: assignment_id
@@ -1257,33 +1323,50 @@ events:
   fields:
   - name: goal_id
     type: Uuid
-  - *1
-  - *2
-  - *3
-  - *4
-  - *5
-  - *6
-  - *7
-  - *8
-  - *9
+  - name: objective
+    type: String
+  - name: acceptance
+    type: String
+  - name: max_workers
+    type: Integer
+  - name: max_attempts
+    type: Integer
+  - name: max_minutes
+    type: Integer
+  - name: planner_model
+    type: String
+  - name: implementor_model
+    type: String
+  - name: reviewer_model
+    type: String
+  - name: merge_authority
+    type: Boolean
 - name: controlplane.host.ConfigureRepositoryApplied
   fields:
   - name: repository_id
     type: Uuid
-  - *26
-  - *27
-  - *28
+  - name: base_branch
+    type: String
+  - name: test_command
+    type: String
+  - name: publish_command
+    type: String
 - name: controlplane.host.ReconcileAssignmentApplied
   fields:
   - name: assignment_id
     type: Uuid
-  - *29
+  - name: merge_receipt
+    type: String
 - name: controlplane.host.PublicationIntentCreated
   fields:
-  - *10
-  - *11
-  - *12
-  - *13
+  - name: assignment_id
+    type: Uuid
+  - name: candidate
+    type: String
+  - name: target
+    type: String
+  - name: expected_base
+    type: String
   - name: publication_id
     type: Uuid
 - name: controlplane.host.MarkPublicationUncertainApplied
@@ -1294,81 +1377,174 @@ events:
   fields:
   - name: publication_id
     type: Uuid
-  - *30
+  - name: receipt
+    type: String
+- name: controlplane.host.PlanningProgressRecorded
+  fields:
+  - name: goal_id
+    type: Uuid
+  - name: planning_revision
+    type: Integer
+  - name: planning_fingerprint
+    type: String
+  - name: planning_repository
+    type: String
+  - name: planning_worktree_id
+    type: String
+  - name: planning_worktree_path
+    type: String
+  - name: planning_reason
+    type: String
+  - name: planning_receipt
+    type: String
+  - name: planning_phase
+    type: controlplane.host.PlanningPhase
 views:
 - name: controlplane.host.WorkspaceList
   source: controlplane.host.Workspace
   consistency: read_your_writes
   fields:
-  - *31
-  - *32
-  - *33
+  - name: workspace_id
+    type: Uuid
+  - name: path
+    type: String
+  - name: name
+    type: String
   - name: state
     type: controlplane.host.Workspace.State
 - name: controlplane.host.RepositoryRegistrationList
   source: controlplane.host.RepositoryRegistration
   consistency: read_your_writes
   fields:
-  - *34
-  - *35
-  - *36
-  - *37
-  - *38
-  - *39
-  - *40
-  - *41
+  - name: repository_id
+    type: Uuid
+  - name: workspace_id
+    type: Uuid
+  - name: name
+    type: String
+  - name: path
+    type: String
+  - name: common_dir
+    type: String
+  - name: base_branch
+    type: String
+  - name: test_command
+    type: String
+  - name: publish_command
+    type: String
   - name: state
     type: controlplane.host.RepositoryRegistration.State
 - name: controlplane.host.GoalList
   source: controlplane.host.Goal
   consistency: read_your_writes
   fields:
-  - *42
-  - *43
-  - *1
-  - *2
-  - *3
-  - *4
-  - *5
-  - *6
-  - *7
-  - *8
-  - *9
-  - *44
-  - *45
+  - name: goal_id
+    type: Uuid
+  - name: workspace_id
+    type: Uuid
+  - name: objective
+    type: String
+  - name: acceptance
+    type: String
+  - name: max_workers
+    type: Integer
+  - name: max_attempts
+    type: Integer
+  - name: max_minutes
+    type: Integer
+  - name: planner_model
+    type: String
+  - name: implementor_model
+    type: String
+  - name: reviewer_model
+    type: String
+  - name: merge_authority
+    type: Boolean
+  - name: revision
+    type: Integer
+  - name: satisfaction_receipt
+    type: String
   - name: state
     type: controlplane.host.Goal.State
+  - name: planning_revision
+    type: Integer
+  - name: planning_fingerprint
+    type: String
+  - name: planning_repository
+    type: String
+  - name: planning_worktree_id
+    type: String
+  - name: planning_worktree_path
+    type: String
+  - name: planning_reason
+    type: String
+  - name: planning_receipt
+    type: String
+  - name: planning_phase
+    type: controlplane.host.PlanningPhase
 - name: controlplane.host.AssignmentList
   source: controlplane.host.Assignment
   consistency: read_your_writes
   fields:
-  - *46
-  - *47
-  - *48
-  - *49
-  - *50
-  - *51
-  - *52
-  - *53
-  - *54
-  - *55
-  - *56
-  - *57
-  - *58
-  - *59
-  - *60
-  - *61
+  - name: assignment_id
+    type: Uuid
+  - name: goal_id
+    type: Uuid
+  - name: repository_id
+    type: Uuid
+  - name: story_id
+    type: String
+  - name: case_id
+    type: String
+  - name: worktree_id
+    type: String
+  - name: candidate
+    type: String
+  - name: attempt
+    type: Integer
+  - name: reason
+    type: String
+  - name: implementor_run
+    type: String
+  - name: reviewer_run
+    type: String
+  - name: goal_revision
+    type: Integer
+  - name: base_revision
+    type: String
+  - name: test_revision
+    type: String
+  - name: review_revision
+    type: String
+  - name: merge_receipt
+    type: String
   - name: state
     type: controlplane.host.Assignment.State
 - name: controlplane.host.PublicationIntentList
   source: controlplane.host.PublicationIntent
   consistency: read_your_writes
   fields:
-  - *62
-  - *10
-  - *11
-  - *12
-  - *13
-  - *63
+  - name: publication_id
+    type: Uuid
+  - name: assignment_id
+    type: Uuid
+  - name: candidate
+    type: String
+  - name: target
+    type: String
+  - name: expected_base
+    type: String
+  - name: receipt
+    type: String
   - name: state
     type: controlplane.host.PublicationIntent.State
+types:
+- name: controlplane.host.PlanningPhase
+  kind: enum
+  variants:
+  - Idle
+  - Provisioning
+  - Planning
+  - Validated
+  - Queued
+  - Blocked

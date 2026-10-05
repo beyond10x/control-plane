@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -65,6 +65,35 @@ pub fn decode_controlplane_host_goal_state(value: &json::Value, at: &str) -> Res
         "Running" => crate::host::GoalState::Running,
         "Satisfied" => crate::host::GoalState::Satisfied,
         other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Cancelled`, `Paused`, `Running`, `Satisfied`".to_owned(), found: format!("`{other}`") }),
+    })
+}
+
+/// Writes `controlplane.host.PlanningPhase` as JSON.
+pub fn encode_controlplane_host_planning_phase(value: &crate::host::PlanningPhase, out: &mut String) {
+    match value {
+        crate::host::PlanningPhase::Idle => json::push_text(out, "Idle"),
+        crate::host::PlanningPhase::Provisioning => json::push_text(out, "Provisioning"),
+        crate::host::PlanningPhase::Planning => json::push_text(out, "Planning"),
+        crate::host::PlanningPhase::Validated => json::push_text(out, "Validated"),
+        crate::host::PlanningPhase::Queued => json::push_text(out, "Queued"),
+        crate::host::PlanningPhase::Blocked => json::push_text(out, "Blocked"),
+    }
+}
+
+/// Reads `controlplane.host.PlanningPhase` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_controlplane_host_planning_phase(value: &json::Value, at: &str) -> Result<crate::host::PlanningPhase, json::DecodeError> {
+    Ok(match json::text_at(value, at, "one of `Idle`, `Provisioning`, `Planning`, `Validated`, `Queued`, `Blocked`")? {
+        "Idle" => crate::host::PlanningPhase::Idle,
+        "Provisioning" => crate::host::PlanningPhase::Provisioning,
+        "Planning" => crate::host::PlanningPhase::Planning,
+        "Validated" => crate::host::PlanningPhase::Validated,
+        "Queued" => crate::host::PlanningPhase::Queued,
+        "Blocked" => crate::host::PlanningPhase::Blocked,
+        other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Idle`, `Provisioning`, `Planning`, `Validated`, `Queued`, `Blocked`".to_owned(), found: format!("`{other}`") }),
     })
 }
 
@@ -286,6 +315,22 @@ pub fn encode_event_controlplane_host_goal_created(value: &crate::host::GoalCrea
     json::push_text(out, &value.reviewer_model);
     json::member(out, "merge_authority");
     json::push_bool(out, value.merge_authority);
+    json::member(out, "planning_revision");
+    json::push_integer(out, value.planning_revision);
+    json::member(out, "planning_fingerprint");
+    json::push_text(out, &value.planning_fingerprint);
+    json::member(out, "planning_repository");
+    json::push_text(out, &value.planning_repository);
+    json::member(out, "planning_worktree_id");
+    json::push_text(out, &value.planning_worktree_id);
+    json::member(out, "planning_worktree_path");
+    json::push_text(out, &value.planning_worktree_path);
+    json::member(out, "planning_reason");
+    json::push_text(out, &value.planning_reason);
+    json::member(out, "planning_receipt");
+    json::push_text(out, &value.planning_receipt);
+    json::member(out, "planning_phase");
+    encode_controlplane_host_planning_phase(&value.planning_phase, out);
     out.push('}');
 }
 
@@ -310,6 +355,30 @@ pub fn encode_event_controlplane_host_pause_goal_applied(value: &crate::host::Pa
     out.push('{');
     json::member(out, "goal_id");
     json::push_text(out, &value.goal_id.0);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.PlanningProgressRecorded` as JSON.
+pub fn encode_event_controlplane_host_planning_progress_recorded(value: &crate::host::PlanningProgressRecorded, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
+    json::member(out, "planning_revision");
+    json::push_integer(out, value.planning_revision);
+    json::member(out, "planning_fingerprint");
+    json::push_text(out, &value.planning_fingerprint);
+    json::member(out, "planning_repository");
+    json::push_text(out, &value.planning_repository);
+    json::member(out, "planning_worktree_id");
+    json::push_text(out, &value.planning_worktree_id);
+    json::member(out, "planning_worktree_path");
+    json::push_text(out, &value.planning_worktree_path);
+    json::member(out, "planning_reason");
+    json::push_text(out, &value.planning_reason);
+    json::member(out, "planning_receipt");
+    json::push_text(out, &value.planning_receipt);
+    json::member(out, "planning_phase");
+    encode_controlplane_host_planning_phase(&value.planning_phase, out);
     out.push('}');
 }
 
@@ -594,6 +663,22 @@ pub fn encode_view_controlplane_host_goal_list(value: &crate::host::GoalList, ou
     json::push_text(out, &value.satisfaction_receipt);
     json::member(out, "state");
     encode_controlplane_host_goal_state(&value.state, out);
+    json::member(out, "planning_revision");
+    json::push_integer(out, value.planning_revision);
+    json::member(out, "planning_fingerprint");
+    json::push_text(out, &value.planning_fingerprint);
+    json::member(out, "planning_repository");
+    json::push_text(out, &value.planning_repository);
+    json::member(out, "planning_worktree_id");
+    json::push_text(out, &value.planning_worktree_id);
+    json::member(out, "planning_worktree_path");
+    json::push_text(out, &value.planning_worktree_path);
+    json::member(out, "planning_reason");
+    json::push_text(out, &value.planning_reason);
+    json::member(out, "planning_receipt");
+    json::push_text(out, &value.planning_receipt);
+    json::member(out, "planning_phase");
+    encode_controlplane_host_planning_phase(&value.planning_phase, out);
     out.push('}');
 }
 
@@ -2109,6 +2194,121 @@ pub fn encode_outcome_controlplane_host_reconcile_assignment(value: &crate::host
     out.push('}');
 }
 
+/// Writes the input of `controlplane.host.RecordPlanningProgress` as JSON.
+pub fn encode_command_controlplane_host_record_planning_progress(value: &crate::host::RecordPlanningProgress, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
+    json::member(out, "planning_revision");
+    json::push_integer(out, value.planning_revision);
+    json::member(out, "planning_fingerprint");
+    json::push_text(out, &value.planning_fingerprint);
+    json::member(out, "planning_repository");
+    json::push_text(out, &value.planning_repository);
+    json::member(out, "planning_worktree_id");
+    json::push_text(out, &value.planning_worktree_id);
+    json::member(out, "planning_worktree_path");
+    json::push_text(out, &value.planning_worktree_path);
+    json::member(out, "planning_reason");
+    json::push_text(out, &value.planning_reason);
+    json::member(out, "planning_receipt");
+    json::push_text(out, &value.planning_receipt);
+    json::member(out, "planning_phase");
+    encode_controlplane_host_planning_phase(&value.planning_phase, out);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.RecordPlanningProgress` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_record_planning_progress(value: &json::Value, at: &str) -> Result<crate::host::RecordPlanningProgress, json::DecodeError> {
+    Ok(crate::host::RecordPlanningProgress {
+        goal_id: {
+            let at0 = json::nested(at, "goal_id");
+            let member0 = json::member_at(value, at, "goal_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        planning_revision: {
+            let at1 = json::nested(at, "planning_revision");
+            let member1 = json::member_at(value, at, "planning_revision")?;
+            json::integer_at(member1, &at1, "an integer")?
+        },
+        planning_fingerprint: {
+            let at2 = json::nested(at, "planning_fingerprint");
+            let member2 = json::member_at(value, at, "planning_fingerprint")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
+        },
+        planning_repository: {
+            let at3 = json::nested(at, "planning_repository");
+            let member3 = json::member_at(value, at, "planning_repository")?;
+            json::text_at(member3, &at3, "a string")?.to_owned()
+        },
+        planning_worktree_id: {
+            let at4 = json::nested(at, "planning_worktree_id");
+            let member4 = json::member_at(value, at, "planning_worktree_id")?;
+            json::text_at(member4, &at4, "a string")?.to_owned()
+        },
+        planning_worktree_path: {
+            let at5 = json::nested(at, "planning_worktree_path");
+            let member5 = json::member_at(value, at, "planning_worktree_path")?;
+            json::text_at(member5, &at5, "a string")?.to_owned()
+        },
+        planning_reason: {
+            let at6 = json::nested(at, "planning_reason");
+            let member6 = json::member_at(value, at, "planning_reason")?;
+            json::text_at(member6, &at6, "a string")?.to_owned()
+        },
+        planning_receipt: {
+            let at7 = json::nested(at, "planning_receipt");
+            let member7 = json::member_at(value, at, "planning_receipt")?;
+            json::text_at(member7, &at7, "a string")?.to_owned()
+        },
+        planning_phase: {
+            let at8 = json::nested(at, "planning_phase");
+            let member8 = json::member_at(value, at, "planning_phase")?;
+            decode_controlplane_host_planning_phase(member8, &at8)?
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.RecordPlanningProgress` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_record_planning_progress(value: &crate::host::RecordPlanningProgressOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::RecordPlanningProgressOutcome::Applied { planning_progress_recorded } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.PlanningProgressRecorded");
+            json::member(out, "payload");
+            encode_event_controlplane_host_planning_progress_recorded(planning_progress_recorded, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::RecordPlanningProgressOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
 /// Writes the input of `controlplane.host.RegisterRepository` as JSON.
 pub fn encode_command_controlplane_host_register_repository(value: &crate::host::RegisterRepository, out: &mut String) {
     out.push('{');
@@ -2720,6 +2920,7 @@ pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
         crate::system::SystemEvent::MarkPublicationUncertainApplied(event) => encode_event_controlplane_host_mark_publication_uncertain_applied(event, &mut out),
         crate::system::SystemEvent::MergeAssignmentApplied(event) => encode_event_controlplane_host_merge_assignment_applied(event, &mut out),
         crate::system::SystemEvent::PauseGoalApplied(event) => encode_event_controlplane_host_pause_goal_applied(event, &mut out),
+        crate::system::SystemEvent::PlanningProgressRecorded(event) => encode_event_controlplane_host_planning_progress_recorded(event, &mut out),
         crate::system::SystemEvent::PublicationIntentCreated(event) => encode_event_controlplane_host_publication_intent_created(event, &mut out),
         crate::system::SystemEvent::ReadyAssignmentApplied(event) => encode_event_controlplane_host_ready_assignment_applied(event, &mut out),
         crate::system::SystemEvent::ReconcileAssignmentApplied(event) => encode_event_controlplane_host_reconcile_assignment_applied(event, &mut out),

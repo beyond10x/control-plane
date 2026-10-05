@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The HTTP surface of `controlplane` v1, synthesised.
