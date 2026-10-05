@@ -313,6 +313,166 @@ async fn review_is_independent_and_two_repositories_reach_observed_goal_completi
 }
 
 struct RejectGoalReview(Scripted);
+
+struct InspectionWritesOutsideScope {
+    inner: Scripted,
+    attempted: std::sync::atomic::AtomicBool,
+    output: &'static str,
+}
+impl AgentModel for InspectionWritesOutsideScope {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        if request.role == "implementor" && !self.attempted.swap(true, Ordering::SeqCst) {
+            // git diff is admitted as inspection, but --output truncates any named file.
+            // This fixture's accepted story scope is src/, never tests/.
+            return Ok(
+                json!({"action":"run","program":"git","args":["diff",format!("--output={}",self.output)]}),
+            );
+        }
+        self.inner.respond(request)
+    }
+}
+
+#[tokio::test]
+async fn inspection_commands_cannot_overwrite_tests_outside_accepted_scope() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(InspectionWritesOutsideScope {
+        inner: Scripted::new(),
+        attempted: std::sync::atomic::AtomicBool::new(false),
+        output: "tests/acceptance.rs",
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert!(model.attempted.load(Ordering::SeqCst));
+    let primary = fixture.root.join("repos/repo0");
+    let published = cmd(
+        &primary,
+        "git",
+        &["show", "refs/remotes/origin/main:tests/acceptance.rs"],
+        &[],
+    );
+    assert!(
+        published.contains("requested_answer"),
+        "An admitted inspection command erased and published acceptance tests outside src/ scope: {published:?}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn inspection_commands_cannot_write_through_repository_symlinks() {
+    let fixture = fixture(1).await;
+    let sentinel = fixture.root.join("outside-worktree.txt");
+    std::fs::write(&sentinel, "operator-owned data").unwrap();
+    let primary = fixture.root.join("repos/repo0");
+    std::os::unix::fs::symlink(&sentinel, primary.join("tests/external.txt")).unwrap();
+    cmd(&primary, "git", &["add", "tests/external.txt"], &[]);
+    cmd(
+        &primary,
+        "git",
+        &["commit", "-m", "fixture tracked context symlink"],
+        &[],
+    );
+    cmd(&primary, "git", &["push", "origin", "HEAD:main"], &[]);
+    let model = Arc::new(InspectionWritesOutsideScope {
+        inner: Scripted::new(),
+        attempted: std::sync::atomic::AtomicBool::new(false),
+        output: "tests/external.txt",
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert!(model.attempted.load(Ordering::SeqCst));
+    assert_eq!(
+        std::fs::read_to_string(sentinel).unwrap(),
+        "operator-owned data",
+        "admitted inspection wrote outside managed worktree through a tracked symlink"
+    );
+}
+
+#[tokio::test]
+async fn restart_marks_exhausted_inflight_attempt_as_blocked() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(Scripted::new());
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model,
+    );
+    supervisor.tick().await.unwrap();
+    let mut store = fixture.store.lock().await;
+    let assignment = store.query("AssignmentList").unwrap()[0].clone();
+    let id = assignment["assignment_id"].clone();
+    let base = cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &["rev-parse", "HEAD"],
+        &[],
+    )
+    .trim()
+    .to_owned();
+    // Exactly the durable transitions deliver() emits before an interrupted retry.
+    for (command, payload) in [
+        (
+            "ClaimAssignment",
+            json!({"assignment_id":id,"worktree_id":"interrupted-tree","implementor_run":"attempt-one","base_revision":base}),
+        ),
+        (
+            "BlockAssignment",
+            json!({"assignment_id":id,"reason":"first attempt interrupted"}),
+        ),
+        (
+            "RepairAssignment",
+            json!({"assignment_id":id,"reason":"retry","implementor_run":"attempt-two"}),
+        ),
+    ] {
+        assert_eq!(
+            store
+                .execute(command, payload, Actor::Supervisor)
+                .await
+                .unwrap()["outcome"],
+            "applied"
+        );
+    }
+    assert_eq!(store.query("AssignmentList").unwrap()[0]["attempt"], 2);
+    drop(store);
+    drop(supervisor);
+    drop(fixture.store);
+    let reopened = Arc::new(tokio::sync::Mutex::new(
+        Store::open(fixture.root.join("host.sqlite3"))
+            .await
+            .unwrap(),
+    ));
+    let model = Arc::new(Scripted::new());
+    let recovered = Supervisor::new(
+        reopened.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    recovered.fleet_tick().await.unwrap();
+    assert_eq!(
+        model.calls.load(Ordering::SeqCst),
+        0,
+        "exhausted attempts cannot restart model work"
+    );
+    let assignment = reopened.lock().await.query("AssignmentList").unwrap()[0].clone();
+    assert_eq!(
+        assignment["state"], "Blocked",
+        "exhausted persisted attempt must not remain falsely active after restart: {assignment}"
+    );
+    assert!(!assignment["reason"].as_str().unwrap().is_empty());
+}
 impl AgentModel for RejectGoalReview {
     fn respond(&self, request: &ModelRequest) -> Result<Value> {
         if request.role == "goal_reviewer" {
