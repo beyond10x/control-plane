@@ -185,6 +185,11 @@ impl Store {
             .map(|w| (w.data.workspace_id.0.clone(), w.data.path.clone()))
             .collect();
         for (id, path) in missing {
+            // A disconnected or moved legacy root must not prevent healthy workspaces from
+            // loading. Leave its history untouched so a later startup can retry the migration.
+            if !Path::new(&path).try_exists()? {
+                continue;
+            }
             self.add_workspace_directory(&id, Path::new(&path)).await?;
         }
         Ok(())
