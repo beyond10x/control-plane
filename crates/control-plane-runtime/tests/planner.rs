@@ -223,6 +223,69 @@ async fn existing_backlog_is_not_duplicated() {
 }
 
 #[tokio::test]
+async fn planner_can_read_aep_help_then_finish_existing_work() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["--help"],"body":null}),
+        json!({"action":"aep","args":["new","--help"],"body":null}),
+        json!({"action":"aep","args":["scope","-h"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Read CLI help and reused existing work."}),
+        json!({"approved":true,"reason":"Existing story remains authoritative."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(model.0.lock().unwrap().is_empty());
+    let goals = store.lock().await.query("GoalList").unwrap();
+    assert!(
+        goals[0]["planning_receipt"]
+            .as_str()
+            .unwrap()
+            .contains("Usage: aep plan artifact")
+    );
+}
+
+#[tokio::test]
+async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::write(repo.join("ess/system.yaml"), "invalid: specification\n").unwrap();
+    run(&repo, "git", &["add", "ess/system.yaml"], &[]);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "specification needs repair"],
+        &[],
+    );
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","--help"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Validation must still refuse."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        model.0.lock().unwrap().is_empty(),
+        "Help should reach Finish: {report:?}"
+    );
+    assert_eq!(report.queued, 0);
+    assert!(!report.blockers.is_empty());
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+}
+
+#[tokio::test]
 async fn goal_drives_plan() {
     let (_temp, store, config, _goal, _repo) = setup(false).await;
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([

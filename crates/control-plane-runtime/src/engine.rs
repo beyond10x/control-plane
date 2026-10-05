@@ -372,11 +372,7 @@ impl Planning<'_> {
                 self.record(format!("wrote specification {name}"))?;
             }
             PlannerAction::Aep { args, body } => {
-                validate_aep_args(&args)?;
-                let mutation = !matches!(
-                    args[0].as_str(),
-                    "list" | "show" | "kinds" | "lifecycle" | "relations"
-                );
+                let mutation = validate_aep_args(&args)?;
                 if mutation {
                     validate_spec(path, runner)?;
                 }
@@ -673,14 +669,15 @@ impl LoopContext for ContextClock {
     }
 }
 
-fn validate_aep_args(args: &[String]) -> Result<()> {
+// Returns whether the admitted command can mutate the planning store.
+fn validate_aep_args(args: &[String]) -> Result<bool> {
     ensure!(
         !args.is_empty() && args.len() <= 128,
         "invalid AEP argument count"
     );
-    ensure!(
+    let admitted_verb = |verb: &str| {
         matches!(
-            args[0].as_str(),
+            verb,
             "new"
                 | "body"
                 | "scope"
@@ -691,7 +688,25 @@ fn validate_aep_args(args: &[String]) -> Result<()> {
                 | "kinds"
                 | "lifecycle"
                 | "relations"
-        ),
+        )
+    };
+    let help_flag = |arg: &str| matches!(arg, "--help" | "-h");
+    let help = match args {
+        [flag] => help_flag(flag),
+        [verb, flag] => admitted_verb(verb) && help_flag(flag),
+        _ => false,
+    };
+    if help {
+        // Clap exits after printing help. No artifact kind, operands, overrides
+        // or mutation flags are admitted with this exception.
+        return Ok(false);
+    }
+    ensure!(
+        !args.iter().any(|arg| help_flag(arg)),
+        "AEP help requires exactly --help, -h, or an admitted verb followed by a help flag"
+    );
+    ensure!(
+        admitted_verb(&args[0]),
         "model cannot perform this AEP operation"
     );
     if args[0] == "new" {
@@ -721,7 +736,10 @@ fn validate_aep_args(args: &[String]) -> Result<()> {
             "use --from followed by stdin marker"
         );
     }
-    Ok(())
+    Ok(!matches!(
+        args[0].as_str(),
+        "list" | "show" | "kinds" | "lifecycle" | "relations"
+    ))
 }
 
 pub fn spec_root(root: &Path) -> Result<PathBuf> {
@@ -877,3 +895,48 @@ pub fn digest(value: &Value) -> String {
 }
 
 const PLANNER_INSTRUCTIONS: &str = "You are the control-plane planner in an isolated managed worktree. Everything runnable added to a beyond10x repository is Rust; CLIs use clap derive. Follow repository AGENTS.md. Inspect existing ESS and AEP before changes. Reuse existing relevant stories; migrate written legacy backlog preserving sources and citing source locations. New typed behavior belongs in ESS before any story. Use normal readable YAML. Only write_specification may write specification files; only aep may mutate planning artifacts, always through the AEP CLI. Aep args begin with the artifact verb. Use --from - and body for prose; record machine-readable scope. Acceptance must name conformance scenarios. Never fabricate check results, approvals, merge evidence or authority. Finish selects authoritative story ids and a summary; a separate critic and real validators decide acceptance. An empty selection never means goal completion.";
+
+#[cfg(test)]
+mod aep_help_tests {
+    use super::validate_aep_args;
+
+    #[test]
+    fn exact_help_forms_are_read_only_for_every_admitted_verb() {
+        for flag in ["--help", "-h"] {
+            assert!(!validate_aep_args(&[flag.into()]).unwrap());
+            for verb in [
+                "new",
+                "body",
+                "scope",
+                "relate",
+                "unrelate",
+                "show",
+                "list",
+                "kinds",
+                "lifecycle",
+                "relations",
+            ] {
+                assert!(!validate_aep_args(&[verb.into(), flag.into()]).unwrap());
+            }
+        }
+        assert!(validate_aep_args(&["new".into(), "story".into(), "example".into()]).unwrap());
+    }
+
+    #[test]
+    fn help_does_not_admit_overrides_evidence_or_additional_authority() {
+        for args in [
+            vec!["--help", "--store", "elsewhere"],
+            vec!["new", "--help", "--root=elsewhere"],
+            vec!["new", "evidence", "--help"],
+            vec!["new", "review"],
+            vec!["evidence", "--help"],
+            vec!["move", "--help"],
+            vec!["show", "story:example", "--help"],
+            vec!["scope", "--help", "--add", "src/"],
+            vec!["help", "new"],
+        ] {
+            let args = args.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            assert!(validate_aep_args(&args).is_err(), "{args:?}");
+        }
+    }
+}
