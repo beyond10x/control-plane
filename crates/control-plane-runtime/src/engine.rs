@@ -324,6 +324,23 @@ impl Planning<'_> {
                     line_count,
                 )?)?;
             }
+            PlannerAction::ReadBytes {
+                path: name,
+                start_byte,
+                byte_count,
+            } => {
+                let file = context_file(path, &name, &self.input.goal)?;
+                ensure!(
+                    std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
+                    "file exceeds paged read budget"
+                );
+                self.record(crate::context::bytes(
+                    &name,
+                    &std::fs::read_to_string(file)?,
+                    start_byte,
+                    byte_count,
+                )?)?;
+            }
             PlannerAction::WriteSpecification {
                 path: name,
                 contents,

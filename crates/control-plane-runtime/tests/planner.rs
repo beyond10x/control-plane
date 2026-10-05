@@ -370,6 +370,74 @@ struct RepeatedReadModel {
     calls: Mutex<usize>,
     prompts: Mutex<Vec<usize>>,
 }
+
+struct LongLineModel {
+    calls: Mutex<usize>,
+}
+impl AgentModel for LongLineModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        if request.role == "critic" {
+            return Ok(json!({"approved":true,"reason":"Complete long-line context inspected"}));
+        }
+        let mut calls = self.calls.lock().unwrap();
+        *calls += 1;
+        if *calls == 1 {
+            return Ok(
+                json!({"action":"read_range","path":"single-line.json","start_line":1,"line_count":1}),
+            );
+        }
+        if *calls == 2 {
+            anyhow::ensure!(
+                request.prompt.contains("read_bytes"),
+                "long line omitted its byte continuation instruction"
+            );
+            return Ok(
+                json!({"action":"read_bytes","path":"single-line.json","start_byte":15000,"byte_count":4096}),
+            );
+        }
+        anyhow::ensure!(
+            request.prompt.contains("Final long-line acceptance marker"),
+            "byte continuation lost the tail of a long UTF-8 line"
+        );
+        Ok(json!({"action":"finish","stories":["story:deliver"],"summary":"Read complete context"}))
+    }
+}
+
+#[tokio::test]
+async fn single_long_utf8_line_remains_retrievable_through_byte_pages() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::write(
+        repo.join("single-line.json"),
+        format!("{}Final long-line acceptance marker", "界".repeat(5000)),
+    )
+    .unwrap();
+    run(
+        &repo,
+        "git",
+        &["add", "single-line.json"],
+        &config.environment,
+    );
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Fixture long UTF-8 line"],
+        &config.environment,
+    );
+    let supervisor = Supervisor::new(
+        store,
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(LongLineModel {
+            calls: Mutex::new(0),
+        }),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(
+        report.queued, 1,
+        "long line remained inaccessible: {report:?}"
+    );
+}
 impl AgentModel for RepeatedReadModel {
     fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
         self.prompts.lock().unwrap().push(request.prompt.len());

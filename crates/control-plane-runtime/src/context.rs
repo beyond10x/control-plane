@@ -4,6 +4,43 @@ use serde_json::{Value, json};
 
 const ENTRY_BYTES: usize = 16 * 1024;
 const CONTEXT_BYTES: usize = 96 * 1024;
+const PAGE_BYTES: usize = 12 * 1024;
+
+pub fn bytes(name: &str, content: &str, start: usize, count: usize) -> Result<String> {
+    ensure!(
+        (1..=PAGE_BYTES).contains(&count),
+        "read_bytes byte_count must be 1..=12288"
+    );
+    ensure!(
+        start <= content.len() && content.is_char_boundary(start),
+        "read_bytes start_byte must be an existing UTF-8 boundary (or end of file)"
+    );
+    let reserve=format!("File {name}, UTF-8 bytes {start}..{} of {} (end exclusive)\n\nMore content available: read_bytes path={name:?} start_byte={} byte_count={count}",content.len(),content.len(),content.len()).len();
+    ensure!(
+        reserve < PAGE_BYTES,
+        "file name exceeds page metadata budget"
+    );
+    let mut end = start + count.min(PAGE_BYTES - reserve).min(content.len() - start);
+    while !content.is_char_boundary(end) {
+        end -= 1;
+    }
+    ensure!(
+        end > start || start == content.len(),
+        "byte_count is too small for the next UTF-8 character"
+    );
+    let next = if end < content.len() {
+        format!(
+            "More content available: read_bytes path={name:?} start_byte={end} byte_count={count}"
+        )
+    } else {
+        "End of file page.".into()
+    };
+    Ok(format!(
+        "File {name}, UTF-8 bytes {start}..{end} of {} (end exclusive)\n{}\n{next}",
+        content.len(),
+        &content[start..end]
+    ))
+}
 
 pub fn excerpt(text: &str, limit: usize) -> String {
     if text.len() <= limit {
@@ -74,8 +111,22 @@ pub fn page(name: &str, content: &str, start: usize, count: usize) -> Result<Str
     let total = content.lines().count();
     let mut body = String::new();
     let mut next = start;
-    for (index, line) in content.lines().enumerate().skip(start - 1).take(count) {
+    let mut offset = 0;
+    for (index, raw) in content.split_inclusive('\n').enumerate() {
+        let line_offset = offset;
+        offset += raw.len();
+        if index < start - 1 {
+            continue;
+        }
+        if index - (start - 1) >= count {
+            break;
+        }
+        let line = raw.strip_suffix('\n').unwrap_or(raw);
+        let line = line.strip_suffix('\r').unwrap_or(line);
         let rendered = format!("{}: {line}\n", index + 1);
+        if rendered.len() > PAGE_BYTES && body.is_empty() {
+            return bytes(name, content, line_offset, PAGE_BYTES);
+        }
         if body.len() + rendered.len() > 12 * 1024 && !body.is_empty() {
             break;
         }
@@ -93,4 +144,54 @@ pub fn page(name: &str, content: &str, start: usize, count: usize) -> Result<Str
             "End of file page.".into()
         }
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_line_continuation_preserves_every_utf8_byte_with_bounded_pages() {
+        let content = format!("{}tail", "界🦀".repeat(7000));
+        let mut page = page("context.json", &content, 1, 1).unwrap();
+        let mut observed = String::new();
+        loop {
+            assert!(page.len() <= PAGE_BYTES);
+            let body = page.split_once('\n').unwrap().1;
+            let (body, footer) = body.rsplit_once('\n').unwrap();
+            observed.push_str(body);
+            if footer == "End of file page." {
+                break;
+            }
+            let next = footer
+                .split("start_byte=")
+                .nth(1)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+            page = bytes("context.json", &content, next, PAGE_BYTES).unwrap();
+        }
+        assert_eq!(observed, content);
+        assert!(bytes("x", "界", 1, 12).is_err());
+        assert!(bytes("x", "界", 0, 1).is_err());
+        assert!(bytes("x", "界", 4, 12).is_err());
+        assert!(
+            bytes("x", "界", 3, 12)
+                .unwrap()
+                .contains("End of file page.")
+        );
+    }
+
+    #[test]
+    fn long_line_after_crlf_reports_original_file_byte_offset() {
+        let content = format!("first\r\n{}", "界".repeat(5000));
+        assert!(
+            page("x", &content, 2, 1)
+                .unwrap()
+                .contains("UTF-8 bytes 7..")
+        );
+    }
 }
