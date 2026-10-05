@@ -30,6 +30,13 @@ fn active(state: A) -> bool {
     )
 }
 
+fn occupies_worker(state: A) -> bool {
+    matches!(
+        state,
+        A::Implementing | A::Reviewing | A::ReadyToMerge | A::Merging
+    )
+}
+
 impl Store {
     pub(crate) fn prepare(&self, command: &str, body: &mut Value) -> Result<Option<Value>> {
         match command {
@@ -99,6 +106,7 @@ impl Store {
         if command == "StartGoal"
             && let Some(goal) = self.memory.goals.get(text(body, "goal_id")?)
         {
+            self.require_active_workspace(&goal.data.workspace_id.0)?;
             ensure!(
                 !self
                     .memory
@@ -121,6 +129,7 @@ impl Store {
                 .repositories
                 .get(text(body, "repository_id")?)
                 .context("repository not found")?;
+            self.require_active_workspace(&goal.data.workspace_id.0)?;
             ensure!(goal.state == G::Running, "goal is not running");
             ensure!(
                 repo.state == R::Registered && repo.data.workspace_id == goal.data.workspace_id,
@@ -208,11 +217,25 @@ impl Store {
                 | "MergeAssignment"
                 | "PreparePublication"
         ) {
+            self.require_active_workspace(&goal.data.workspace_id.0)?;
             ensure!(
                 goal.state == G::Running && data.goal_revision == goal.data.revision,
                 "goal is paused, terminal, or changed"
             );
             ensure!(repo.state == R::Registered, "repository is disabled");
+            if command != "ClaimAssignment" {
+                let admitted = self
+                    .memory
+                    .assignment_configs
+                    .get(&data.assignment_id.0)
+                    .context("assignment has no admitted repository configuration")?;
+                ensure!(
+                    admitted.base_branch == repo.data.base_branch
+                        && admitted.test_command == repo.data.test_command
+                        && admitted.publish_command == repo.data.publish_command,
+                    "repository configuration changed; assignment evidence is stale"
+                );
+            }
         }
         if matches!(command, "ClaimAssignment" | "RepairAssignment") {
             ensure!(
@@ -241,11 +264,15 @@ impl Store {
                         && !text(body, "base_revision")?.is_empty(),
                     "claim requires worktree and base revision"
                 );
+            }
+            if command == "ClaimAssignment"
+                || (command == "RepairAssignment" && assignment.state == A::Blocked)
+            {
                 let count = self
                     .memory
                     .assignments
                     .values()
-                    .filter(|a| a.data.goal_id == data.goal_id && active(a.state))
+                    .filter(|a| a.data.goal_id == data.goal_id && occupies_worker(a.state))
                     .count();
                 ensure!(
                     count < goal.data.max_workers as usize,
@@ -321,6 +348,8 @@ impl Store {
                     .values()
                     .any(|p| p.data.assignment_id == data.assignment_id
                         && p.data.candidate == data.candidate
+                        && p.data.target == repo.data.base_branch
+                        && p.data.expected_base == data.base_revision
                         && p.state == P::Prepared),
                 "durable publication intent is required"
             );
@@ -340,6 +369,17 @@ impl Store {
                 "confirmed publication receipt is required"
             );
         }
+        Ok(())
+    }
+
+    fn require_active_workspace(&self, id: &str) -> Result<()> {
+        ensure!(
+            self.memory
+                .workspaces
+                .get(id)
+                .is_some_and(|workspace| workspace.state == W::Registered),
+            "workspace is archived or missing"
+        );
         Ok(())
     }
 }

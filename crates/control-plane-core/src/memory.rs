@@ -8,6 +8,7 @@ use std::{
 #[derive(Clone, Default)]
 pub(crate) struct Memory {
     pub registration_receipts: BTreeMap<String, serde_json::Value>,
+    pub assignment_configs: BTreeMap<String, RepositoryRegistrationData>,
     pub assignments: BTreeMap<String, AssignmentSnapshot>,
     pub goals: BTreeMap<String, GoalSnapshot>,
     pub publications: BTreeMap<String, PublicationIntentSnapshot>,

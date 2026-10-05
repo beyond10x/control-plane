@@ -559,3 +559,92 @@ fn detached_head_remains_a_discoverable_repository() {
     );
     assert_eq!(found.path, repo);
 }
+
+#[tokio::test]
+async fn changed_repository_configuration_invalidates_all_admitted_evidence_after_restart() {
+    for (field, value) in [
+        ("base_branch", "release"),
+        ("test_command", "different-tests"),
+        ("publish_command", "different-publisher"),
+    ] {
+        let temp = scratch();
+        let db = temp.path().join("state.sqlite");
+        let path = temp.path().join("repo");
+        repository(&path);
+        let mut store = Store::open(&db).await.unwrap();
+        let ws = workspace(&mut store, temp.path()).await;
+        let repo = register_repository(&mut store, &ws, &path).await;
+        let goal = goal(&mut store, &ws).await;
+        store
+            .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+            .await
+            .unwrap();
+        let assignment = assignment(&mut store, &goal, &repo, "story:configuration").await;
+        claim(&mut store, &assignment).await.unwrap();
+        let mut config = json!({"repository_id":repo,"base_branch":"main","test_command":"cargo test","publish_command":"configured-helper"});
+        config[field] = json!(value);
+        store
+            .execute("ConfigureRepository", config, Actor::Operator)
+            .await
+            .unwrap();
+        drop(store);
+        let mut reopened = Store::open(&db).await.unwrap();
+        let result = reopened.execute("ReviewAssignment", json!({"assignment_id":assignment,"candidate":"candidate","test_revision":"candidate"}), Actor::Supervisor).await;
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("configuration changed"),
+            "changed field {field} was not checked"
+        );
+        assert_eq!(
+            reopened.query("AssignmentList").unwrap()[0]["state"],
+            "Implementing"
+        );
+    }
+}
+
+#[tokio::test]
+async fn blocked_repair_reacquires_worker_capacity() {
+    let temp = scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let mut goal_input = goal_body(&ws);
+    goal_input["max_workers"] = json!(1);
+    let goal = identity(
+        &store
+            .execute("CreateGoal", goal_input, Actor::Operator)
+            .await
+            .unwrap(),
+        "goal_id",
+    );
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let mut assignments = Vec::new();
+    for name in ["one", "two"] {
+        let path = temp.path().join(name);
+        repository(&path);
+        let repo = register_repository(&mut store, &ws, &path).await;
+        assignments.push(assignment(&mut store, &goal, &repo, name).await);
+    }
+    claim(&mut store, &assignments[0]).await.unwrap();
+    store
+        .execute(
+            "BlockAssignment",
+            json!({"assignment_id":assignments[0],"reason":"temporarily blocked"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    claim(&mut store, &assignments[1]).await.unwrap();
+    let result = store
+        .execute(
+            "RepairAssignment",
+            json!({"assignment_id":assignments[0],"reason":"resolved","implementor_run":"new-run"}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(result.unwrap_err().to_string().contains("worker limit"));
+}
