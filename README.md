@@ -36,6 +36,10 @@ Each workspace can contain several directories, including context directories wi
 
 The service starts its planner alongside the console. The planner uses the existing Codex login through the foundation LLM library and creates isolated managed worktrees. The goal page shows planning progress and concrete blockers, including unavailable repositories, dirty source trees, rejected plans and tool failures. Configure the bot's private policy with `serve --gates-policy PATH` or `B10X_GATES_POLICY`; keep policy files and credentials outside the repository.
 
+The operations dashboard refreshes live status every second while keeping goal forms and unsaved edits in place. Planner cards show the model, current stage, actual model-call waits, elapsed time and recorded blockers. Assignment state and durable activity history appear beneath them; full receipts are available through **Inspect evidence**. The server timestamp measures connection freshness, while work timestamps advance only when an operation is recorded.
+
+Planner context uses bounded repository indexes and observations. Repeated reads refresh the same observation, and file pages allow later content to be inspected without accumulating entire files in every request.
+
 The HTTP API shares the browser and CLI state:
 
 | Request | Result |
@@ -47,6 +51,8 @@ The HTTP API shares the browser and CLI state:
 | `POST /api/workspaces/{id}/directories` | Add `{ "path": "..." }` |
 | `DELETE /api/workspaces/{id}/directories/{directory}` | Remove membership |
 | `GET /api/state` | Inspect the complete local state and runtime errors |
+| `GET /workspaces/{id}/live` | Automatically refreshed operations dashboard for one workspace |
+| `GET /goals/{id}/evidence` | Inspect a goal's stored planning and execution evidence |
 
 Mutation clients obtain `csrf_token` from `GET /api/session` and send it in `x-csrf-token`. The bundled CLI handles this automatically.
 
