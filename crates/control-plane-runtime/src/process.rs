@@ -14,6 +14,28 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
+/// An observed unsuccessful process exit, distinct from cancellation and host failures.
+#[derive(Debug)]
+pub struct ProcessExit {
+    pub program: String,
+    pub args: Vec<String>,
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl std::fmt::Display for ProcessExit {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} {:?} exited {:?}:\nstdout:\n{}\nstderr:\n{}",
+            self.program, self.args, self.code, self.stdout, self.stderr
+        )
+    }
+}
+
+impl std::error::Error for ProcessExit {}
+
 #[derive(Clone, Debug)]
 pub struct ProcessRunner {
     pub environment: Vec<(String, String)>,
@@ -85,10 +107,16 @@ impl ProcessRunner {
             !interrupted,
             "{program} cancelled or exceeded process timeout"
         );
-        ensure!(
-            status.success(),
-            "{program} {args:?} exited {status}:\nstdout:\n{stdout}\nstderr:\n{stderr}"
-        );
+        if !status.success() {
+            return Err(ProcessExit {
+                program: program.to_owned(),
+                args: args.to_vec(),
+                code: status.code(),
+                stdout,
+                stderr,
+            }
+            .into());
+        }
         written.context("write command input")?;
         Ok(stdout)
     }
@@ -158,4 +186,36 @@ fn collect(mut input: impl Read) -> Result<String> {
         bail!("process output exceeded 2 MiB; refusing a truncated observation");
     }
     String::from_utf8(bytes).context("process output is not UTF-8")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn process_exit_retains_actual_status_for_syntax_recovery() {
+        let cwd = tempfile::tempdir().unwrap();
+        let runner = ProcessRunner {
+            environment: Vec::new(),
+            timeout: Duration::from_secs(10),
+            cancel: CancellationToken::new(),
+        };
+        let error = runner
+            .command(cwd.path(), "aep", &["plan", "artifact", "show"])
+            .unwrap_err();
+        let observed = error
+            .downcast_ref::<ProcessExit>()
+            .expect("process exit lost its structured status");
+        assert_eq!(observed.program, "aep");
+        assert_eq!(observed.code, Some(2));
+        assert!(observed.stderr.contains("Usage:"));
+        assert!(observed.stderr.contains("--help"));
+
+        runner.cancel.cancel();
+        let cancelled = runner.command(cwd.path(), "aep", &["--help"]).unwrap_err();
+        assert!(
+            cancelled.downcast_ref::<ProcessExit>().is_none(),
+            "cancellation must not become syntax feedback"
+        );
+    }
 }
