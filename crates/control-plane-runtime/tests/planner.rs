@@ -626,3 +626,85 @@ async fn planning_commit_is_retained_on_a_named_branch() {
         String::from_utf8_lossy(&branch.stderr)
     );
 }
+
+#[tokio::test]
+async fn nested_aep_symlinks_are_refused_before_any_model_or_cli_store_access() {
+    for relative in [
+        "planning/story/deliver.md",
+        "planning/journal.jsonl",
+        "planning/evidence",
+    ] {
+        let (fixture, store, config, _goal, _repo) = setup(true).await;
+        let primary = fixture.path().join("repos/demo");
+        let linked = primary.join(".engineering").join(relative);
+        let external = fixture.path().join("external-planning-input");
+        if linked.exists() {
+            std::fs::rename(&linked, &external).unwrap();
+        } else {
+            std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+            std::fs::create_dir(&external).unwrap();
+        }
+        std::os::unix::fs::symlink(&external, &linked).unwrap();
+        run(&primary, "git", &["add", "-A"], &[]);
+        run(
+            &primary,
+            "git",
+            &["commit", "-m", "nested linked store fixture"],
+            &[],
+        );
+        let model = Arc::new(Scripted(Mutex::new(VecDeque::new())));
+        let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model);
+        let report = supervisor.tick().await.unwrap();
+        assert!(
+            report
+                .blockers
+                .iter()
+                .any(|reason| reason.contains("AEP store symlink refused")),
+            "{relative}: {report:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unavailable_workspace_does_not_prevent_healthy_workspace_planning() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let offline = fixture.path().join("repos/offline-demo");
+    std::fs::rename(fixture.path().join("repos/demo"), &offline).unwrap();
+    let healthy = fixture.path().join("repos/healthy");
+    run(
+        fixture.path(),
+        "git",
+        &[
+            "clone",
+            offline.to_str().unwrap(),
+            healthy.to_str().unwrap(),
+        ],
+        &[],
+    );
+    let mut host = store.lock().await;
+    let workspace=host.register_workspace(&healthy,"healthy").await.unwrap()["published"][0]["payload"]["workspace_id"].clone();
+    let goal=host.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Healthy workspace","acceptance":"Verified delivery","max_workers":1,"max_attempts":1,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+    host.execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(host);
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Healthy workspace remains schedulable"}),
+        json!({"approved":true,"reason":"Existing story covers the healthy goal"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(!report.blockers.is_empty());
+    assert!(
+        store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["goal_id"] == goal && a["state"] == "Queued")
+    );
+}

@@ -60,12 +60,19 @@ impl Supervisor {
         let goals = rows(&self.store, "GoalList").await?;
         let mut report = TickReport::default();
         for goal in goals.into_iter().filter(|g| g["state"] == "Running") {
-            let repositories = rows(&self.store, "RepositoryRegistrationList")
-                .await?
-                .into_iter()
+            let all_repositories = rows(&self.store, "RepositoryRegistrationList").await?;
+            let repositories = all_repositories
+                .iter()
                 .filter(|r| r["workspace_id"] == goal["workspace_id"] && r["state"] == "Registered")
+                .cloned()
                 .collect::<Vec<_>>();
-            let assignments = rows(&self.store, "AssignmentList").await?;
+            self.retire_superseded_queue(&goal).await?;
+            let assignments = related_assignments(
+                &goal,
+                &repositories,
+                &all_repositories,
+                rows(&self.store, "AssignmentList").await?,
+            );
             let input_fingerprint =
                 fingerprint(&goal, &repositories, &assignments, self.runner()).await?;
             if goal["planning_fingerprint"] == input_fingerprint
@@ -89,14 +96,15 @@ impl Supervisor {
                     a["goal_id"] == goal["goal_id"]
                         && a["repository_id"] == repository["repository_id"]
                         && a["state"] == "Queued"
+                        && a["goal_revision"] == goal["revision"]
                 }) {
                     continue;
                 }
                 if assignments.iter().any(|a| {
-                    a["repository_id"] == repository["repository_id"]
+                    assignment_in_repository(a, repository, &all_repositories)
                         && matches!(
                             a["state"].as_str(),
-                            Some("Implementing" | "Testing" | "Reviewing" | "Merging")
+                            Some("Implementing" | "Reviewing" | "ReadyToMerge" | "Merging")
                         )
                 }) {
                     failure = Some("repository has active implementation work".to_owned());
@@ -116,7 +124,12 @@ impl Supervisor {
                     }
                 }
             }
-            let current = rows(&self.store, "AssignmentList").await?;
+            let current = related_assignments(
+                &goal,
+                &repositories,
+                &all_repositories,
+                rows(&self.store, "AssignmentList").await?,
+            );
             let final_fingerprint =
                 fingerprint(&goal, &repositories, &current, self.runner()).await?;
             let phase = if failure.is_some() {
@@ -140,6 +153,39 @@ impl Supervisor {
             }
         }
         Ok(report)
+    }
+    async fn retire_superseded_queue(&self, goal: &Value) -> Result<()> {
+        let mut store = self.store.lock().await;
+        check_goal(&store, goal)?;
+        let rows = store.query("AssignmentList")?;
+        for assignment in rows
+            .as_array()
+            .context("assignments not an array")?
+            .iter()
+            .filter(|a| {
+                a["goal_id"] == goal["goal_id"]
+                    && a["goal_revision"] != goal["revision"]
+                    && (a["state"] == "Queued"
+                        || (a["state"] == "Blocked"
+                            && a["reason"].as_str().is_some_and(|reason| {
+                                reason.starts_with("Superseded queued goal revision")
+                            })))
+            })
+        {
+            if assignment["state"] == "Queued" {
+                let outcome=store.execute("BlockAssignment",json!({"assignment_id":assignment["assignment_id"],"reason":format!("Superseded queued goal revision {} by revision {}",assignment["goal_revision"],goal["revision"])}),Actor::Supervisor).await?;
+                applied(&outcome)?;
+            }
+            let outcome = store
+                .execute(
+                    "CancelAssignment",
+                    json!({"assignment_id":assignment["assignment_id"]}),
+                    Actor::Supervisor,
+                )
+                .await?;
+            applied(&outcome)?;
+        }
+        Ok(())
     }
     async fn plan_repository(
         &self,
@@ -369,6 +415,32 @@ async fn rows(store: &SharedStore, view: &str) -> Result<Vec<Value>> {
         .cloned()
         .context("view is not an array")
 }
+fn assignment_in_repository(
+    assignment: &Value,
+    repository: &Value,
+    all_repositories: &[Value],
+) -> bool {
+    all_repositories.iter().any(|registered| {
+        registered["repository_id"] == assignment["repository_id"]
+            && registered["common_dir"] == repository["common_dir"]
+    })
+}
+fn related_assignments(
+    goal: &Value,
+    repositories: &[Value],
+    all_repositories: &[Value],
+    assignments: Vec<Value>,
+) -> Vec<Value> {
+    assignments
+        .into_iter()
+        .filter(|a| {
+            a["goal_id"] == goal["goal_id"]
+                || repositories
+                    .iter()
+                    .any(|r| assignment_in_repository(a, r, all_repositories))
+        })
+        .collect()
+}
 fn check_goal(store: &control_plane_core::Store, expected: &Value) -> Result<()> {
     let goals = store.query("GoalList")?;
     let current = goals
@@ -424,7 +496,8 @@ async fn fingerprint(
         let mut inputs=Vec::new();
         for repo in &repositories {
             let path=Path::new(text(repo,"path")?);
-            inputs.push(json!({"repository":repo,"head":runner.command(path,"git",&["rev-parse",text(repo,"base_branch")?])?,"status":runner.command(path,"git",&["status","--porcelain"])?,"diff":runner.command(path,"git",&["diff","HEAD"])?}));
+            let observation=(||->Result<Value>{Ok(json!({"head":runner.command(path,"git",&["rev-parse",text(repo,"base_branch")?])?,"status":runner.command(path,"git",&["status","--porcelain"])?,"diff":runner.command(path,"git",&["diff","HEAD"])?}))})();
+            inputs.push(json!({"repository":repo,"observation":match observation {Ok(value)=>value,Err(error)=>json!({"unavailable":format!("{error:#}")})}}));
         }
         Ok(engine::digest(&json!({"goal":goal,"repositories":inputs,"assignments":assignments})))
     }).await?

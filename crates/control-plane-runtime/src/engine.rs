@@ -73,6 +73,23 @@ struct Planning<'a> {
 }
 
 pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutput> {
+    (input.progress)("prepare-branch", &json!({"namespace":input.namespace}))?;
+    if input
+        .runner
+        .command(&input.path, "git", &["branch", "--show-current"])?
+        .trim()
+        .is_empty()
+    {
+        input.runner.command(
+            &input.path,
+            "git",
+            &[
+                "switch",
+                "-c",
+                &format!("control-plane/{}", input.namespace),
+            ],
+        )?;
+    }
     let inspection = inspect(&input.path, &input.runner)?;
     if !input.path.join(".engineering/project.yaml").exists() {
         (input.progress)("adopt", &json!({"source":input.config.aep_protocols}))?;

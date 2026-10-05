@@ -5,13 +5,17 @@
 that reconciliation on notifications and bounded polling. Persisted Goal progress
 precedes effects and makes unchanged completed or blocked planning idle across
 restarts. An interrupted planning checkout is reused by its managed-worktree id.
+Queued work from a superseded goal revision is cancelled with a retained reason
+before replanning. Unavailable repositories become durable blockers; unrelated
+workspaces keep running and do not wake each other's idle planners.
 
 A bounded Loom commission selects narrow read, ESS-source, AEP CLI, and validation
 actions. Canon evaluates the actual planning contract. A separate model context
 critiques observed specification validation and selected authoritative AEP story
 bodies. Actual ESS/AEP processes must succeed before the host accepts stories.
 Assignments retain repository-qualified story ids, goal revision, managed tree id,
-and immutable plan commit. Empty selections leave the goal running with a reason;
+and immutable plan commit, retained on a named branch in the managed checkout.
+Empty selections leave the goal running with a reason;
 implementation, publication, and final satisfaction belong to the fleet lane.
 
 `CodexAgentModel` uses the foundation LLM crate's `codex_model` login resolver.

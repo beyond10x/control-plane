@@ -33,6 +33,9 @@ impl ProcessRunner {
             !self.cancel.is_cancelled(),
             "execution cancelled before {program}"
         );
+        if program == "aep" {
+            confine_aep_store(cwd)?;
+        }
         let mut child = Command::new(program)
             .args(args)
             .current_dir(cwd)
@@ -97,6 +100,41 @@ impl ProcessRunner {
             &args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>(),
             None,
         )
+    }
+}
+
+// AEP may touch an artifact, evidence or journal selected by its store. Check the
+// complete existing tree before reads as well as writes, including adoption.
+fn confine_aep_store(cwd: &Path) -> Result<()> {
+    fn visit(path: &Path, remaining: &mut usize) -> Result<()> {
+        ensure!(
+            *remaining > 0,
+            "AEP store confinement exceeds 100000 entries"
+        );
+        *remaining -= 1;
+        let metadata = std::fs::symlink_metadata(path)?;
+        ensure!(
+            !metadata.file_type().is_symlink(),
+            "AEP store symlink refused: {}",
+            path.display()
+        );
+        ensure!(
+            metadata.is_file() || metadata.is_dir(),
+            "AEP store special file refused: {}",
+            path.display()
+        );
+        if metadata.is_dir() {
+            for entry in std::fs::read_dir(path)? {
+                visit(&entry?.path(), remaining)?;
+            }
+        }
+        Ok(())
+    }
+    let store = cwd.join(".engineering");
+    match std::fs::symlink_metadata(&store) {
+        Ok(_) => visit(&store, &mut 100_000),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 
