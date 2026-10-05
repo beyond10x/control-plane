@@ -448,3 +448,181 @@ fn process_exit_timeout_and_cancellation_are_not_successful_observations() {
             .contains("cancelled before")
     );
 }
+
+#[tokio::test]
+async fn updated_goal_replans_past_stale_queued_assignments() {
+    let (_fixture, store, config, goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Initial goal"}),
+        json!({"approved":true,"reason":"Existing story covers initial acceptance"}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Revalidated for revised acceptance"}),
+        json!({"approved":true,"reason":"Existing story also covers revised acceptance"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    assert_eq!(supervisor.tick().await.unwrap().queued, 1);
+    let update = json!({"goal_id":goal,"objective":"Deliver revised requested change","acceptance":"Revised checks pass after reviewed merge","max_workers":3,"max_attempts":3,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true});
+    assert_eq!(
+        store
+            .lock()
+            .await
+            .execute("UpdateGoal", update, Actor::Operator)
+            .await
+            .unwrap()["outcome"],
+        "applied"
+    );
+    let next = supervisor.tick().await.unwrap();
+    let assignments = store.lock().await.query("AssignmentList").unwrap();
+    assert!(
+        assignments
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["goal_revision"] == 2 && a["state"] == "Queued"),
+        "changed goal must produce current-revision work, not idle behind a stale queued assignment: {next:?}; {assignments}"
+    );
+}
+
+#[tokio::test]
+async fn unavailable_registered_repository_is_a_durable_blocker_not_a_dead_supervisor() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    std::fs::rename(
+        fixture.path().join("repos/demo"),
+        fixture.path().join("repos/offline-demo"),
+    )
+    .unwrap();
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::new())));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let result = supervisor.tick().await;
+    assert!(
+        result.is_ok(),
+        "one unavailable repository must be recorded as a blocker instead of ending Supervisor::run: {result:?}"
+    );
+    assert!(!result.unwrap().blockers.is_empty());
+    assert_eq!(
+        store.lock().await.query("GoalList").unwrap()[0]["planning_phase"],
+        "Blocked"
+    );
+}
+
+#[tokio::test]
+async fn linked_aep_store_cannot_be_mutated_outside_planning_checkout() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let primary = fixture.path().join("repos/demo");
+    let external = fixture.path().join("outside-engineering");
+    std::fs::rename(primary.join(".engineering"), &external).unwrap();
+    std::os::unix::fs::symlink(&external, primary.join(".engineering")).unwrap();
+    run(&primary, "git", &["add", "-A"], &[]);
+    run(
+        &primary,
+        "git",
+        &["commit", "-m", "linked planning store fixture"],
+        &[],
+    );
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","escape","--title","This must stay inside the isolated checkout"],"body":null}),
+        json!({"action":"finish","stories":[],"summary":"Do not approve"}),
+        json!({"approved":false,"reason":"Linked planning store must be rejected"}),
+    ]))));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model);
+    let result = supervisor.tick().await;
+    assert!(
+        !external.join("planning/story/escape.md").exists(),
+        "model-directed AEP mutation escaped the managed checkout through .engineering symlink: {result:?}"
+    );
+}
+
+struct CountedModel {
+    responses: Mutex<VecDeque<Value>>,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl AgentModel for CountedModel {
+    fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(self
+            .responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("bounded scripted response"))
+    }
+}
+
+#[tokio::test]
+async fn another_workspaces_assignment_does_not_rewake_unchanged_idle_goal() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(CountedModel {
+        responses: Mutex::new(VecDeque::from([
+            json!({"action":"finish","stories":[],"summary":"No work selected"}),
+            json!({"approved":true,"reason":"Acceptance evidence still outstanding"}),
+            json!({"action":"finish","stories":[],"summary":"No work selected"}),
+            json!({"approved":true,"reason":"Acceptance evidence still outstanding"}),
+        ])),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    assert_eq!(model.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let unrelated = fixture.path().join("repos/unrelated");
+    std::fs::create_dir_all(&unrelated).unwrap();
+    run(&unrelated, "git", &["init", "--initial-branch=main"], &[]);
+    let mut host = store.lock().await;
+    let ws = host
+        .register_workspace(&unrelated, "unrelated")
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .clone();
+    let repository = host
+        .query("RepositoryRegistrationList")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["workspace_id"] == ws)
+        .unwrap()["repository_id"]
+        .clone();
+    let other_goal = host.execute("CreateGoal", json!({"workspace_id":ws,"objective":"Unrelated objective","acceptance":"Unrelated acceptance","max_workers":1,"max_attempts":1,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}), Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+    host.execute("StartGoal", json!({"goal_id":other_goal}), Actor::Operator)
+        .await
+        .unwrap();
+    host.execute("QueueAssignment", json!({"goal_id":other_goal,"repository_id":repository,"story_id":"story:unrelated","case_id":"unrelated-case","worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1}), Actor::Supervisor).await.unwrap();
+    host.execute("PauseGoal", json!({"goal_id":other_goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(host);
+    supervisor.tick().await.unwrap();
+    assert_eq!(
+        model.calls.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "unrelated assignment changed no input of the first workspace, which must remain idle"
+    );
+}
+
+#[tokio::test]
+async fn planning_commit_is_retained_on_a_named_branch() {
+    let (_fixture, store, config, _goal, _repo) = setup(false).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","deliver","--title","Requested change","--from","-"],"body":"## Acceptance\nNamed scenario: delivery_works.\n"}),
+        json!({"action":"aep","args":["scope","story:deliver","--add","src/","--inferred"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Ready for implementation"}),
+        json!({"approved":true,"reason":"Validated specification and named acceptance"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    assert_eq!(supervisor.tick().await.unwrap().queued, 1);
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let path = Path::new(goals[0]["planning_worktree_path"].as_str().unwrap());
+    let branch = Command::new("git")
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    assert!(
+        branch.status.success(),
+        "the managed planning checkout must create a branch before its first commit, preserving a named handoff: {}",
+        String::from_utf8_lossy(&branch.stderr)
+    );
+}
