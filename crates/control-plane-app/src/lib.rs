@@ -9,7 +9,7 @@ use axum::{
     http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 pub use cli::{Cli, Client, run};
 use control_plane_core::{Actor, Store};
@@ -19,6 +19,24 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::{Mutex, Notify};
 
 pub type SharedStore = Arc<Mutex<Store>>;
+pub async fn initialize_workspaces(
+    store: &mut Store,
+    cwd: &std::path::Path,
+    roots: &[std::path::PathBuf],
+) -> Result<()> {
+    store.backfill_workspace_directories().await?;
+    let paths = if roots.is_empty() {
+        vec![cwd.to_owned()]
+    } else {
+        roots.to_vec()
+    };
+    for path in paths {
+        let canonical = path.canonicalize()?;
+        let name = canonical.file_name().unwrap_or_default().to_string_lossy();
+        store.register_workspace(&canonical, &name).await?;
+    }
+    Ok(())
+}
 #[derive(Debug)]
 struct CsrfRefused;
 impl std::fmt::Display for CsrfRefused {
@@ -56,6 +74,7 @@ impl AppState {
         let store = self.store.lock().await;
         Ok(json!({
             "workspaces":store.query("WorkspaceList")?,
+            "directories":store.query("WorkspaceDirectoryList")?,
             "repositories":store.query("RepositoryRegistrationList")?,
             "goals":store.query("GoalList")?,
             "assignments":store.query("AssignmentList")?,
@@ -96,6 +115,8 @@ impl AppState {
     }
 }
 const OPERATOR_COMMANDS: &[&str] = &[
+    "AddWorkspaceDirectory",
+    "RemoveWorkspaceDirectory",
     "ArchiveWorkspace",
     "RegisterRepository",
     "ConfigureRepository",
@@ -115,6 +136,11 @@ pub fn router(state: AppState) -> Router {
         .route("/workspaces", post(web::add_workspace))
         .route("/workspaces/{id}", get(web::workspace))
         .route("/workspaces/{id}/repositories", post(web::add_repository))
+        .route("/workspaces/{id}/directories", post(web::add_directory))
+        .route(
+            "/workspaces/{id}/directories/{directory}/remove",
+            post(web::remove_directory),
+        )
         .route("/repositories/{id}", post(web::configure_repository))
         .route("/repositories/{id}/{action}", post(web::repository_action))
         .route("/goals", post(web::create_goal))
@@ -122,7 +148,20 @@ pub fn router(state: AppState) -> Router {
         .route("/goals/{id}/{action}", post(web::goal_action))
         .route("/api/session", get(session))
         .route("/api/state", get(snapshot))
-        .route("/api/workspaces", post(add_workspace))
+        .route("/api/workspaces", get(list_workspaces).post(add_workspace))
+        .route("/api/workspaces/{id}", get(workspace_detail))
+        .route(
+            "/api/workspaces/{id}/directories",
+            get(list_directories).post(add_directory),
+        )
+        .route(
+            "/api/workspaces/{id}/directories/{directory}",
+            delete(remove_directory),
+        )
+        .route(
+            "/api/workspaces/{id}/directories/{directory}/remove",
+            post(remove_directory),
+        )
         .route("/api/commands/{command}", post(command))
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), request_guard))
@@ -189,7 +228,9 @@ async fn request_guard(
     let headers = response.headers_mut();
     headers.insert("cache-control", "no-store".parse().unwrap());
     headers.insert("x-content-type-options", "nosniff".parse().unwrap());
-    headers.insert("referrer-policy", "no-referrer".parse().unwrap());
+    // Native form navigation with no-referrer sends Origin: null in Chromium.
+    // Keep local form origins verifiable without sharing referrers cross-origin.
+    headers.insert("referrer-policy", "same-origin".parse().unwrap());
     headers.insert("content-security-policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     response
 }
@@ -243,6 +284,123 @@ fn rows<'a>(value: &'a Value, name: &str) -> Result<&'a Vec<Value>> {
     value[name]
         .as_array()
         .with_context(|| format!("missing {name} view"))
+}
+
+impl AppState {
+    async fn workspace_detail(&self, id: &str) -> Result<Value> {
+        let mut snapshot = self.snapshot().await?;
+        let workspace = rows(&snapshot, "workspaces")?
+            .iter()
+            .find(|w| field(w, "workspace_id") == id)
+            .context("workspace was not found")?
+            .clone();
+        for kind in ["directories", "repositories", "goals"] {
+            snapshot[kind] = Value::Array(
+                rows(&snapshot, kind)?
+                    .iter()
+                    .filter(|row| {
+                        field(row, "workspace_id") == id
+                            && (kind != "directories" || row["state"] == "Registered")
+                    })
+                    .cloned()
+                    .collect(),
+            );
+        }
+        let goals: Vec<_> = rows(&snapshot, "goals")?
+            .iter()
+            .map(|g| g["goal_id"].clone())
+            .collect();
+        snapshot["assignments"] = Value::Array(
+            rows(&snapshot, "assignments")?
+                .iter()
+                .filter(|a| goals.contains(&a["goal_id"]))
+                .cloned()
+                .collect(),
+        );
+        let assignments: Vec<_> = rows(&snapshot, "assignments")?
+            .iter()
+            .map(|a| a["assignment_id"].clone())
+            .collect();
+        snapshot["publications"] = Value::Array(
+            rows(&snapshot, "publications")?
+                .iter()
+                .filter(|p| assignments.contains(&p["assignment_id"]))
+                .cloned()
+                .collect(),
+        );
+        snapshot
+            .as_object_mut()
+            .expect("snapshot object")
+            .remove("workspaces");
+        snapshot["workspace"] = workspace;
+        Ok(snapshot)
+    }
+    async fn add_directory(&self, workspace: &str, input: DirectoryInput) -> Result<Value> {
+        let answer = self
+            .store
+            .lock()
+            .await
+            .add_workspace_directory(workspace, std::path::Path::new(&input.path))
+            .await?;
+        self.wake.notify_one();
+        Ok(answer)
+    }
+    async fn remove_directory(&self, workspace: &str, directory: &str) -> Result<Value> {
+        let mut store = self.store.lock().await;
+        let rows = store.query("WorkspaceDirectoryList")?;
+        ensure!(
+            rows.as_array()
+                .context("directory rows")?
+                .iter()
+                .any(|d| field(d, "directory_id") == directory
+                    && field(d, "workspace_id") == workspace),
+            "directory does not belong to this workspace"
+        );
+        let answer = store.remove_workspace_directory(directory).await?;
+        ensure!(
+            answer["outcome"] == "applied",
+            "directory removal did not apply: {answer}"
+        );
+        self.wake.notify_one();
+        Ok(answer)
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryInput {
+    path: String,
+}
+async fn list_workspaces(State(state): State<AppState>) -> Response {
+    api_answer(
+        state
+            .snapshot()
+            .await
+            .map(|v| json!({"workspaces":v["workspaces"]})),
+    )
+}
+async fn workspace_detail(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    api_answer(state.workspace_detail(&id).await)
+}
+async fn list_directories(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    api_answer(
+        state
+            .workspace_detail(&id)
+            .await
+            .map(|v| json!({"directories":v["directories"]})),
+    )
+}
+async fn add_directory(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<DirectoryInput>,
+) -> Response {
+    api_answer(state.add_directory(&id, input).await)
+}
+async fn remove_directory(
+    State(state): State<AppState>,
+    Path((id, directory)): Path<(String, String)>,
+) -> Response {
+    api_answer(state.remove_directory(&id, &directory).await)
 }
 
 #[cfg(test)]

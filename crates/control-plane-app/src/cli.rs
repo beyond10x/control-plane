@@ -22,6 +22,9 @@ pub enum Command {
         state: PathBuf,
         #[arg(long, default_value = "127.0.0.1:8787")]
         listen: SocketAddr,
+        /// Register these startup directories instead of the current directory; repeatable.
+        #[arg(long)]
+        workspace: Vec<PathBuf>,
     },
     /// Add and inspect workspaces through the running service.
     Workspace {
@@ -50,6 +53,17 @@ pub enum WorkspaceAction {
         name: Option<String>,
     },
     List,
+    Directories {
+        workspace_id: String,
+    },
+    AddDirectory {
+        workspace_id: String,
+        path: PathBuf,
+    },
+    RemoveDirectory {
+        workspace_id: String,
+        directory_id: String,
+    },
 }
 #[derive(Debug, Args)]
 pub struct GoalSettings {
@@ -213,6 +227,24 @@ impl Client {
         self.post("/api/workspaces", json!({"path":path,"name":name}))
             .await
     }
+    pub async fn directories(&self, workspace: &str) -> Result<Value> {
+        self.read(&format!("/api/workspaces/{workspace}/directories"))
+            .await
+    }
+    pub async fn add_directory(&self, workspace: &str, path: &FsPath) -> Result<Value> {
+        self.post(
+            &format!("/api/workspaces/{workspace}/directories"),
+            json!({"path":path}),
+        )
+        .await
+    }
+    pub async fn remove_directory(&self, workspace: &str, directory: &str) -> Result<Value> {
+        self.post(
+            &format!("/api/workspaces/{workspace}/directories/{directory}/remove"),
+            json!({}),
+        )
+        .await
+    }
     pub async fn command(&self, name: &str, body: Value) -> Result<Value> {
         ensure!(OPERATOR_COMMANDS.contains(&name), "not an operator command");
         self.post(&format!("/api/commands/{name}"), body).await
@@ -229,14 +261,21 @@ async fn answer(response: reqwest::Response) -> Result<Value> {
 }
 
 pub async fn run(cli: Cli) -> Result<Option<Value>> {
-    if let Command::Serve { state, listen } = cli.command {
+    if let Command::Serve {
+        state,
+        listen,
+        workspace,
+    } = cli.command
+    {
         ensure!(
             listen.ip().is_loopback(),
             "control-plane serves loopback addresses only"
         );
         let listener = tokio::net::TcpListener::bind(listen).await?;
         let address = listener.local_addr()?;
-        let store = Arc::new(Mutex::new(Store::open(state).await?));
+        let mut store = Store::open(state).await?;
+        initialize_workspaces(&mut store, &std::env::current_dir()?, &workspace).await?;
+        let store = Arc::new(Mutex::new(store));
         let app = AppState::new(store, address, Arc::new(Notify::new()));
         eprintln!("Control plane: http://{address}");
         serve(listener, app).await?;
@@ -247,7 +286,10 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         Command::Serve{..}=>unreachable!(),
         Command::Status=>client.snapshot().await?,
         Command::Workspace{action}=>match action {
-            WorkspaceAction::List=>client.snapshot().await?["workspaces"].clone(),
+            WorkspaceAction::List=>client.read("/api/workspaces").await?["workspaces"].clone(),
+            WorkspaceAction::Directories{workspace_id}=>client.directories(&workspace_id).await?,
+            WorkspaceAction::AddDirectory{workspace_id,path}=>client.add_directory(&workspace_id,&path.canonicalize()?).await?,
+            WorkspaceAction::RemoveDirectory{workspace_id,directory_id}=>client.remove_directory(&workspace_id,&directory_id).await?,
             WorkspaceAction::Add{path,name}=>{
                 let path=path.unwrap_or(std::env::current_dir()?).canonicalize()?;
                 let name=name.unwrap_or_else(||path.file_name().unwrap_or_default().to_string_lossy().into_owned());
