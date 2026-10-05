@@ -1,0 +1,762 @@
+//! One bounded planning commission. Loom proposes; trusted effects validate and mutate.
+use crate::{
+    AgentModel, ModelRequest, RuntimeConfig,
+    model::{PlannerAction, critique_schema, planner_schema},
+    process::ProcessRunner,
+};
+use anyhow::{Context, Result, bail, ensure};
+use control_plane_protocol::{
+    AttestedEvidence, EvaluationContext, EvidenceOrigin, Protocol, ProtocolKind, canon,
+};
+use loom_sdk::commission::{
+    model::{
+        behaviour::Generated,
+        json as wire,
+        primitives::{Timestamp, Uuid},
+        responsibility::*,
+    },
+    outcome::RunStore,
+    ports::{
+        authority::{AuthorityProvider, AuthorityProviderError},
+        effect::{AdmittedRequest, EffectError, EffectPort},
+        evidence::ObservationPort,
+        governor::Governor,
+    },
+};
+use loom_sdk::loom::{
+    arguments::ArgumentContext,
+    model::run::{CatalogueEntry, SelectionStrategy},
+    selection::{Choice, SelectionContext, SelectorError},
+};
+use loom_sdk::{ActionSelector, ArgumentGenerator, Loom, LoopContext, run_until_blocked};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeSet,
+    path::{Component, Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
+pub type ProgressHook = Arc<dyn Fn(&str, &Value) -> Result<()> + Send + Sync>;
+
+pub struct EngineInput {
+    pub path: PathBuf,
+    pub goal: Value,
+    pub namespace: String,
+    pub config: RuntimeConfig,
+    pub runner: ProcessRunner,
+    pub progress: ProgressHook,
+}
+
+pub struct EngineOutput {
+    pub stories: Vec<String>,
+    pub receipt: Value,
+}
+
+struct State {
+    revision: i64,
+    transcript: Vec<String>,
+    pending: Option<PlannerAction>,
+    selected: Vec<String>,
+    evidence: Vec<AttestedEvidence>,
+    plan_revision: String,
+    failure: Option<String>,
+}
+
+struct Planning<'a> {
+    input: &'a EngineInput,
+    model: &'a dyn AgentModel,
+    protocol: Protocol,
+    case_id: CaseId,
+    state: Mutex<State>,
+    started: std::time::Instant,
+}
+
+pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutput> {
+    let inspection = inspect(&input.path, &input.runner)?;
+    if !input.path.join(".engineering/project.yaml").exists() {
+        (input.progress)("adopt", &json!({"source":input.config.aep_protocols}))?;
+        input.runner.command(
+            &input.path,
+            "aep",
+            &[
+                "plan",
+                "reverse",
+                "init",
+                "--protocols",
+                &input.config.aep_protocols,
+                "--profile",
+                "development.standard",
+            ],
+        )?;
+    }
+    let scan = input.runner.command(
+        &input.path,
+        "aep",
+        &["plan", "reverse", "scan", "--format", "json"],
+    )?;
+    let backlog = input.runner.command(
+        &input.path,
+        "aep",
+        &["plan", "artifact", "list", "--format", "json"],
+    )?;
+    let planning = Planning {
+        protocol: Protocol::compile(ProtocolKind::Planning).map_err(anyhow::Error::msg)?,
+        case_id: CaseId(input.namespace.clone()),
+        input: &input,
+        model: model.as_ref(),
+        started: std::time::Instant::now(),
+        state: Mutex::new(State {
+            revision: 1,
+            transcript: vec![inspection, scan, backlog],
+            pending: None,
+            selected: Vec::new(),
+            evidence: Vec::new(),
+            plan_revision: input.namespace.clone(),
+            failure: None,
+        }),
+    };
+    let executor = Loom::new(&planning, &planning, text(&input.goal, "objective")?);
+    let commission = Commission::new(CommissionData {
+        commission_id: CommissionId(id()),
+        agent_revision_id: AgentRevisionId(id()),
+        case_id: planning.case_id.clone(),
+        principal: PrincipalId("control-plane-supervisor".into()),
+        authority_context: AuthorityContext(wire::Value::Null),
+    });
+    let mut runs = Generated::new(RunStore::new(|| RunId(id())));
+    let mut context = ContextClock {
+        max_steps: input.config.max_steps,
+    };
+    let result = run_until_blocked(
+        &planning,
+        &executor,
+        &NoAuthority,
+        &planning,
+        &commission,
+        &mut runs,
+        &mut context,
+    );
+    let state = planning
+        .state
+        .lock()
+        .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+    if let Some(error) = &state.failure {
+        bail!("{error}");
+    }
+    let end = result?;
+    ensure!(
+        matches!(end.outcome, RunOutcome::Completed(_)),
+        "planner ended without a validated plan: {:?}",
+        end.outcome
+    );
+    Ok(EngineOutput {
+        stories: state.selected.clone(),
+        receipt: json!({"namespace":input.namespace,"run_id":end.run_id.0.0,"revision":state.plan_revision,"transcript":state.transcript,"steps":end.steps}),
+    })
+}
+
+fn id() -> Uuid {
+    Uuid(uuid::Uuid::new_v4().to_string())
+}
+fn instant() -> String {
+    time::OffsetDateTime::now_utc()
+        .replace_nanosecond(0)
+        .expect("zero nanos")
+        .format(&time::format_description::well_known::Rfc3339)
+        .expect("UTC timestamp")
+}
+pub fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
+    value[key]
+        .as_str()
+        .with_context(|| format!("missing text field {key}"))
+}
+
+impl Planning<'_> {
+    fn remaining(&self) -> Result<std::time::Duration> {
+        let seconds = self.input.goal["max_minutes"]
+            .as_u64()
+            .context("invalid goal time limit")?
+            .checked_mul(60)
+            .context("goal time limit overflow")?;
+        let remaining = std::time::Duration::from_secs(seconds)
+            .checked_sub(self.started.elapsed())
+            .context("planner exceeded goal time budget")?;
+        ensure!(!remaining.is_zero(), "planner exhausted goal time budget");
+        Ok(remaining)
+    }
+    fn governor_failure(&self, error: anyhow::Error) -> GovernorError {
+        if let Ok(mut state) = self.state.lock() {
+            state.failure = Some(format!("{error:#}"));
+        }
+        GovernorError::GovernorUnavailable
+    }
+    fn decision(&self) -> Result<canon::model::Decision> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+        let case: canon::model::Case = serde_json::from_value(
+            json!({"format":"canon-case/1","id":self.case_id.0,"protocol":"engineering.plan","artifacts":{"plan":{"revision":state.plan_revision}}}),
+        )?;
+        self.protocol
+            .evaluate(
+                &case,
+                &state.evidence,
+                EvaluationContext {
+                    at: &instant(),
+                    implementor_context: None,
+                },
+            )
+            .map_err(anyhow::Error::msg)
+    }
+    fn prompt(&self) -> Result<String> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+        let text = format!(
+            "Goal: {}\nAcceptance: {}\nObserved repository context:\n{}",
+            text(&self.input.goal, "objective")?,
+            text(&self.input.goal, "acceptance")?,
+            state.transcript.join("\n")
+        );
+        ensure!(text.len() <= 1024 * 1024, "planner context exceeds 1 MiB");
+        Ok(text)
+    }
+    fn record(&self, message: String) -> Result<()> {
+        let receipt = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            state.transcript.push(message);
+            json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript})
+        };
+        (self.input.progress)("observation", &receipt)
+    }
+    fn perform(&self, action: PlannerAction) -> Result<()> {
+        let path = &self.input.path;
+        let mut bounded = self.input.runner.clone();
+        bounded.timeout = bounded.timeout.min(self.remaining()?);
+        let runner = &bounded;
+        (self.input.progress)("intent", &serde_json::to_value(&action)?)?;
+        match action {
+            PlannerAction::Read { paths } => {
+                ensure!(paths.len() <= 32, "read requests at most 32 files");
+                for name in paths {
+                    let file = confined(path, &name, false)?;
+                    let metadata = std::fs::metadata(&file)?;
+                    ensure!(metadata.len() <= 256 * 1024, "file exceeds read budget");
+                    self.record(format!("{name}:\n{}", std::fs::read_to_string(file)?))?;
+                }
+            }
+            PlannerAction::WriteSpecification {
+                path: name,
+                contents,
+            } => {
+                let root = spec_root(path)?;
+                let file = confined(path, &name, true)?;
+                ensure!(
+                    file.starts_with(&root),
+                    "writes are restricted to the specification root"
+                );
+                ensure!(
+                    specification_path(path, &root, &file),
+                    "path is not an admitted ESS source"
+                );
+                ensure!(
+                    matches!(
+                        file.extension().and_then(|s| s.to_str()),
+                        Some("yaml" | "yml")
+                    ),
+                    "specification source must be YAML"
+                );
+                ensure!(
+                    contents.len() <= 256 * 1024,
+                    "specification write exceeds budget"
+                );
+                std::fs::create_dir_all(file.parent().context("specification has no parent")?)?;
+                std::fs::write(&file, contents)?;
+                self.changed()?;
+                self.record(format!("wrote specification {name}"))?;
+            }
+            PlannerAction::Aep { args, body } => {
+                validate_aep_args(&args)?;
+                let mutation = !matches!(
+                    args[0].as_str(),
+                    "list" | "show" | "kinds" | "lifecycle" | "relations"
+                );
+                if mutation {
+                    validate_spec(path, runner)?;
+                }
+                let command = [vec!["plan".into(), "artifact".into()], args].concat();
+                let output = runner.run(path, "aep", &command, body.as_deref())?;
+                if mutation {
+                    self.changed()?;
+                }
+                self.record(output)?;
+            }
+            PlannerAction::Finish { stories, summary } => {
+                let validation = validate_spec(path, runner)?;
+                let plan_validation =
+                    runner.command(path, "aep", &["plan", "artifact", "validate"])?;
+                self.record(format!("Observed ESS validation:\n{validation}\nObserved AEP validation:\n{plan_validation}"))?;
+                let mut reviewed = Vec::new();
+                let unique: BTreeSet<_> = stories.iter().collect();
+                ensure!(unique.len() == stories.len(), "duplicate story selection");
+                for story in &stories {
+                    ensure!(
+                        story.starts_with("story:") && !story.contains(char::is_whitespace),
+                        "selected id is not an AEP story"
+                    );
+                    let item: Value = serde_json::from_str(&runner.command(
+                        path,
+                        "aep",
+                        &["plan", "artifact", "show", story, "--format", "json"],
+                    )?)?;
+                    ensure!(
+                        matches!(text(&item, "status")?, "draft" | "proposed" | "active"),
+                        "story is not available for implementation"
+                    );
+                    ensure!(
+                        item["scope"].as_array().is_some_and(|s| !s.is_empty()),
+                        "story lacks machine-readable scope"
+                    );
+                    reviewed.push(item);
+                }
+                let critic_context = format!("critic-{}", uuid::Uuid::new_v4());
+                let critique=self.model.respond(&ModelRequest { role:"critic".into(),execution_context:critic_context.clone(),model:text(&self.input.goal,"reviewer_model")?.into(),instructions:"Independently review this proposed plan against the standing goal, repository observations and ESS. Reject duplicate backlog, missing named conformance scenarios, unsafe scope, unsupported dependencies or goal claims unsupported by evidence. You cannot execute tools or grant authority.".into(),prompt:format!("{}\nSelected stories: {}\nSummary: {summary}\nActual validations:\n{validation}\n{plan_validation}",self.prompt()?,serde_json::to_string(&reviewed)?),schema:critique_schema(),timeout:self.remaining()? })?;
+                ensure!(
+                    critique["approved"] == true,
+                    "independent plan critique rejected: {}",
+                    critique["reason"]
+                );
+                ensure!(
+                    critique["reason"]
+                        .as_str()
+                        .is_some_and(|s| !s.trim().is_empty()),
+                    "critic supplied no reasoning"
+                );
+                (self.input.progress)(
+                    "plan-approved",
+                    &json!({"context":critic_context,"critique":critique}),
+                )?;
+                for item in &reviewed {
+                    let story = text(item, "id")?;
+                    (self.input.progress)(
+                        "accept-story",
+                        &json!({"story":story,"context":critic_context}),
+                    )?;
+                    if item["status"] == "draft" {
+                        runner.command(
+                            path,
+                            "aep",
+                            &["plan", "artifact", "move", story, "--to", "proposed"],
+                        )?;
+                    }
+                    if item["status"] != "active" {
+                        runner.command(
+                            path,
+                            "aep",
+                            &["plan", "artifact", "move", story, "--to", "active"],
+                        )?;
+                    }
+                }
+                runner.command(path, "aep", &["plan", "artifact", "validate"])?;
+                let ready = ready_stories(path, runner)?;
+                ensure!(
+                    stories.iter().all(|story| ready.contains(story)),
+                    "selected story has unresolved dependencies or blockers"
+                );
+                let selected = stories;
+                self.changed()?;
+                self.record(format!(
+                    "Plan validated; critic {critic_context}: {critique}"
+                ))?;
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+                state.selected = selected;
+                let revision = state.plan_revision.clone();
+                state.evidence = vec![AttestedEvidence {
+                    record: serde_json::from_value(
+                        json!({"format":"canon-evidence/1","id":format!("validation-{}",uuid::Uuid::new_v4()),"kind":"plan_validation","result":"pass","subject":"plan","subject_revision":revision}),
+                    )?,
+                    origin: EvidenceOrigin::PlanValidator {
+                        producer: "control-plane-validator".into(),
+                        observation: critic_context,
+                        revision,
+                        succeeded: true,
+                    },
+                }];
+            }
+        }
+        Ok(())
+    }
+    fn changed(&self) -> Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+        state.revision += 1;
+        state.plan_revision = format!("{}-{}", self.input.namespace, state.revision);
+        state.evidence.clear();
+        Ok(())
+    }
+}
+
+impl ActionSelector for &Planning<'_> {
+    fn select(&self, _: &SelectionContext, _: &[CatalogueEntry]) -> Result<Choice, SelectorError> {
+        let answer = (|| -> Result<PlannerAction> {
+            let response = self.model.respond(&ModelRequest {
+                role: "planner".into(),
+                execution_context: self.input.namespace.clone(),
+                model: text(&self.input.goal, "planner_model")?.into(),
+                instructions: PLANNER_INSTRUCTIONS.into(),
+                prompt: self.prompt()?,
+                schema: planner_schema(),
+                timeout: self.remaining()?,
+            })?;
+            Ok(serde_json::from_value(response)?)
+        })()
+        .map_err(|e| SelectorError::Unavailable(e.to_string()))?;
+        let action = answer.protocol_action().into();
+        self.state
+            .lock()
+            .map_err(|_| SelectorError::Unavailable("planner state poisoned".into()))?
+            .pending = Some(answer);
+        Ok(Choice {
+            action,
+            confidence: None,
+        })
+    }
+    fn strategy(&self) -> SelectionStrategy {
+        SelectionStrategy::ReasoningModel
+    }
+}
+impl ArgumentGenerator for &Planning<'_> {
+    fn generate(&self, _: &ArgumentContext, _: &CatalogueEntry) -> Result<wire::Value, String> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "planner state poisoned".to_owned())?;
+        let value = serde_json::to_string(state.pending.as_ref().ok_or("no pending selection")?)
+            .map_err(|e| e.to_string())?;
+        wire::parse(&value).map_err(|e| format!("{e:?}"))
+    }
+}
+impl Governor for Planning<'_> {
+    fn current_revision(&self, case: &CaseId) -> Result<i64, GovernorError> {
+        if case != &self.case_id {
+            return Err(GovernorError::UnknownCase);
+        }
+        self.state
+            .lock()
+            .map(|state| state.revision)
+            .map_err(|_| GovernorError::GovernorUnavailable)
+    }
+    fn frontier(&self, case: &CaseId) -> Result<Frontier<frontier_state::Issued>, GovernorError> {
+        let revision = self.current_revision(case)?;
+        let decision = self
+            .decision()
+            .map_err(|error| self.governor_failure(error))?;
+        let actions = self
+            .protocol
+            .ir()
+            .actions
+            .keys()
+            .map(|action| FrontierAction {
+                action: action.as_str().into(),
+                status: match decision
+                    .actions
+                    .as_ref()
+                    .and_then(|a| a.get(action.as_str()))
+                    .and_then(|a| a.get("status"))
+                    .and_then(Value::as_str)
+                {
+                    Some("admissible") => ActionStatus::Admissible,
+                    _ => ActionStatus::Blocked,
+                },
+                capability: None,
+                reasons: Vec::new(),
+            })
+            .collect();
+        Ok(Frontier::new(FrontierData {
+            frontier_id: FrontierId(id()),
+            case_id: case.clone(),
+            case_revision: revision,
+            claims: Vec::new(),
+            obligations: Vec::new(),
+            actions,
+        }))
+    }
+    fn completion(&self, case: &CaseId) -> Result<CompletionDetermination, GovernorError> {
+        self.current_revision(case)?;
+        let decision = self
+            .decision()
+            .map_err(|error| self.governor_failure(error))?;
+        Ok(
+            if decision
+                .outcomes
+                .as_ref()
+                .is_some_and(|o| o["accepted"]["status"] == "legitimate")
+            {
+                CompletionDetermination::Complete(CompletionDeterminationComplete {
+                    outcome: "accepted".into(),
+                })
+            } else {
+                CompletionDetermination::Open(Unit(true))
+            },
+        )
+    }
+}
+impl ObservationPort for Planning<'_> {
+    fn observe(
+        &self,
+        observation: Observation<observation_state::Reported>,
+    ) -> Result<(), GovernorError> {
+        (self.input.progress)("loom-observation",&json!({"namespace":self.input.namespace,"observation":format!("{:?}",observation.data())})).map_err(|_|GovernorError::GovernorUnavailable)
+    }
+}
+impl EffectPort for Planning<'_> {
+    fn performs(&self, action: &str) -> bool {
+        matches!(action, "repository.inspect" | "plan.edit" | "plan.validate")
+    }
+    fn invoke(
+        &self,
+        _: &Commission<commission_state::Assigned>,
+        request: &AdmittedRequest,
+    ) -> Result<EffectOutcome, EffectError> {
+        let action = self
+            .state
+            .lock()
+            .map_err(|_| EffectError::new("planner state poisoned"))?
+            .pending
+            .take()
+            .ok_or_else(|| EffectError::new("missing selected arguments"))?;
+        if action.protocol_action() != request.data().action {
+            return Err(EffectError::new("selected action changed"));
+        }
+        match self.perform(action) {
+            Ok(()) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                report: wire::Value::Text("host operation completed".into()),
+            })),
+            Err(error) => {
+                let message = error.to_string();
+                if let Ok(mut state) = self.state.lock() {
+                    state.failure = Some(message.clone());
+                }
+                Err(EffectError::new(message))
+            }
+        }
+    }
+}
+struct NoAuthority;
+impl AuthorityProvider for NoAuthority {
+    fn decide(
+        &self,
+        _: &CommissionData,
+        _: &str,
+    ) -> Result<AuthorityVerdict, AuthorityProviderError> {
+        Ok(AuthorityVerdict::Deny(AuthorityVerdictDeny {
+            reason: "planner has no publication authority".into(),
+        }))
+    }
+}
+struct ContextClock {
+    max_steps: usize,
+}
+impl LoopContext for ContextClock {
+    fn action_request_id(&mut self) -> ActionRequestId {
+        ActionRequestId(id())
+    }
+    fn observation_id(&mut self) -> ObservationId {
+        ObservationId(id())
+    }
+    fn now(&mut self) -> Timestamp {
+        Timestamp(instant())
+    }
+    fn step_budget(&self) -> Option<usize> {
+        Some(self.max_steps)
+    }
+}
+
+fn validate_aep_args(args: &[String]) -> Result<()> {
+    ensure!(
+        !args.is_empty() && args.len() <= 128,
+        "invalid AEP argument count"
+    );
+    ensure!(
+        matches!(
+            args[0].as_str(),
+            "new"
+                | "body"
+                | "scope"
+                | "relate"
+                | "unrelate"
+                | "show"
+                | "list"
+                | "kinds"
+                | "lifecycle"
+                | "relations"
+        ),
+        "model cannot perform this AEP operation"
+    );
+    if args[0] == "new" {
+        ensure!(
+            args.get(1).is_some_and(|kind| matches!(
+                kind.as_str(),
+                "story" | "epic" | "task" | "executable-system-specification"
+            )),
+            "model cannot manufacture approval, review or evidence artifacts"
+        );
+    }
+    for (index, arg) in args.iter().enumerate() {
+        ensure!(
+            !["--store", "--root", "--findings"]
+                .iter()
+                .any(|flag| arg == flag || arg.starts_with(&format!("{flag}="))),
+            "AEP path override is forbidden"
+        );
+        if arg == "--from" {
+            ensure!(
+                args.get(index + 1).is_some_and(|value| value == "-"),
+                "AEP bodies must use stdin"
+            );
+        }
+        ensure!(
+            !arg.starts_with("--from="),
+            "use --from followed by stdin marker"
+        );
+    }
+    Ok(())
+}
+
+pub fn spec_root(root: &Path) -> Result<PathBuf> {
+    let mut found = BTreeSet::new();
+    for relative in ["ess", "spec", "systems", ""] {
+        let path = root.join(relative);
+        if path.join("system.yaml").is_file() || path.join("ess-inputs.yaml").is_file() {
+            found.insert(path);
+        }
+    }
+    ensure!(
+        found.len() <= 1,
+        "multiple specification roots need explicit operator selection"
+    );
+    Ok(found.into_iter().next().unwrap_or_else(|| root.join("ess")))
+}
+pub fn specification_path(repository: &Path, spec: &Path, file: &Path) -> bool {
+    let Ok(relative) = file.strip_prefix(spec) else {
+        return false;
+    };
+    if relative
+        .components()
+        .any(|part| part.as_os_str().to_string_lossy().starts_with('.'))
+    {
+        return false;
+    }
+    if spec != repository {
+        return true;
+    }
+    matches!(
+        relative.to_str(),
+        Some("system.yaml" | "ess-inputs.yaml" | "components.yaml")
+    ) || relative.starts_with("domains")
+        || relative.starts_with("contracts")
+        || relative.starts_with("conformance")
+}
+pub fn validate_spec(root: &Path, runner: &ProcessRunner) -> Result<String> {
+    let spec = spec_root(root)?;
+    ensure!(
+        spec.join("system.yaml").is_file() || spec.join("ess-inputs.yaml").is_file(),
+        "write an ESS specification before AEP mutations"
+    );
+    runner.command(
+        root,
+        "ess",
+        &[
+            "specify",
+            "validate",
+            "--path",
+            spec.to_str().context("specification path is not UTF-8")?,
+            "--strict-requires",
+        ],
+    )
+}
+pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
+    let relative = Path::new(name);
+    ensure!(
+        !relative.as_os_str().is_empty()
+            && relative
+                .components()
+                .all(|part| matches!(part, Component::Normal(_))),
+        "path must be a normalized repository-relative path"
+    );
+    ensure!(
+        !relative.starts_with(".git"),
+        "Git administrative paths are not tool inputs"
+    );
+    let mut path = root.to_path_buf();
+    for part in relative.components() {
+        path.push(part);
+        match std::fs::symlink_metadata(&path) {
+            Ok(meta) => ensure!(
+                !meta.file_type().is_symlink(),
+                "symlink paths are not tool inputs"
+            ),
+            Err(error) if missing && error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(path)
+}
+fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
+    let files = runner.command(root, "git", &["ls-files"])?;
+    let mut context = format!("Files:\n{files}");
+    for name in ["AGENTS.md", "README.md", "TODO.md", "PLAN.md"] {
+        if root.join(name).is_file() {
+            let path = confined(root, name, false)?;
+            ensure!(
+                std::fs::metadata(&path)?.len() <= 256 * 1024,
+                "instruction file too large"
+            );
+            context.push_str(&format!("\n{name}:\n{}", std::fs::read_to_string(path)?));
+        }
+    }
+    context.push_str("\nRead relevant specification/domain files before editing. Existing TODO/PLAN sources must be migrated with citations, never duplicated or deleted.");
+    Ok(context)
+}
+fn ready_stories(root: &Path, runner: &ProcessRunner) -> Result<BTreeSet<String>> {
+    let stories: Vec<Value> = serde_json::from_str(&runner.command(
+        root,
+        "aep",
+        &["plan", "artifact", "list", "--format", "json"],
+    )?)?;
+    Ok(stories
+        .iter()
+        .filter(|item| {
+            item["kind"] == "story"
+                && item["status"] == "active"
+                && item["blocked_by"].as_array().is_none_or(|b| b.is_empty())
+                && item["relations"].as_array().is_none_or(|relations| {
+                    relations
+                        .iter()
+                        .filter(|edge| edge["relation"] == "depends_on")
+                        .all(|edge| {
+                            stories.iter().any(|target| {
+                                target["id"] == edge["target"] && target["status"] == "implemented"
+                            })
+                        })
+                })
+        })
+        .filter_map(|item| item["id"].as_str().map(str::to_owned))
+        .collect())
+}
+pub fn digest(value: &Value) -> String {
+    format!("{:x}", Sha256::digest(value.to_string().as_bytes()))
+}
+
+const PLANNER_INSTRUCTIONS: &str = "You are the control-plane planner in an isolated managed worktree. Everything runnable added to a beyond10x repository is Rust; CLIs use clap derive. Follow repository AGENTS.md. Inspect existing ESS and AEP before changes. Reuse existing relevant stories; migrate written legacy backlog preserving sources and citing source locations. New typed behavior belongs in ESS before any story. Use normal readable YAML. Only write_specification may write specification files; only aep may mutate planning artifacts, always through the AEP CLI. Aep args begin with the artifact verb. Use --from - and body for prose; record machine-readable scope. Acceptance must name conformance scenarios. Never fabricate check results, approvals, merge evidence or authority. Finish selects authoritative story ids and a summary; a separate critic and real validators decide acceptance. An empty selection never means goal completion.";
