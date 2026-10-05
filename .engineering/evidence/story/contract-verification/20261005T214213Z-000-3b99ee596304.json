@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:42:13Z",
+  "actor": "human:timo",
+  "artifact": "story:contract-verification",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check exit0: Rust suites, generated drift, 159 durable conformance, full production dependency graph",
+    "reference": "git:75ea981"
+  }
+}
