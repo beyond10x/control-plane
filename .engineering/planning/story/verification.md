@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:verification
 kind: story
-status: draft
+status: implemented
 title: Conformance, build gates and two-repository qualification
 relations:
 - decomposes: epic:bootstrap
@@ -15,7 +15,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask
-revision: 3
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T22:17:16Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
+- {from: "proposed", to: "active", at: "2026-10-05T22:17:16Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}}
+- {from: "active", to: "implemented", at: "2026-10-05T22:17:16Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 Conformance, build gates and two-repository qualification, as part of the approved standalone control-plane plan.
