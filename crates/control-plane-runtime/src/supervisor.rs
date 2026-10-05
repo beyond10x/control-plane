@@ -39,7 +39,10 @@ impl Supervisor {
     }
     pub async fn run(&self, shutdown: CancellationToken) -> Result<()> {
         loop {
-            let tick = self.tick();
+            let tick = async {
+                self.tick().await?;
+                self.fleet_tick().await
+            };
             tokio::pin!(tick);
             tokio::select! {
                 result=&mut tick=>{ result?; }
@@ -162,6 +165,16 @@ impl Supervisor {
             }
         }
         Ok(report)
+    }
+    pub async fn fleet_tick(&self) -> Result<TickReport> {
+        let _exclusive = self.tick_lock.lock().await;
+        crate::fleet::run(
+            self.store.clone(),
+            self.config.clone(),
+            self.model.clone(),
+            self.runner(),
+        )
+        .await
     }
     async fn retire_superseded_queue(&self, goal: &Value) -> Result<()> {
         let mut store = self.store.lock().await;
@@ -645,6 +658,10 @@ fn intent_label(detail: &Value) -> String {
                 .unwrap_or_default();
             format!("Reading {paths}")
         }
+        Some("read_range" | "read_bytes") => format!(
+            "Reading page of {}",
+            single_line(detail["path"].as_str().unwrap_or_default())
+        ),
         Some("write_specification") => format!(
             "Writing specification {}",
             single_line(detail["path"].as_str().unwrap_or_default())

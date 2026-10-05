@@ -87,7 +87,7 @@ impl ProcessRunner {
         );
         ensure!(
             status.success(),
-            "{program} {args:?} exited {status}: {stderr}"
+            "{program} {args:?} exited {status}:\nstdout:\n{stdout}\nstderr:\n{stderr}"
         );
         written.context("write command input")?;
         Ok(stdout)
