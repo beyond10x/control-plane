@@ -7,6 +7,8 @@ components:
     - controlplane.host
   accepts:
     commands:
+    - controlplane.host.AddWorkspaceDirectory
+    - controlplane.host.RemoveWorkspaceDirectory
     - controlplane.host.RegisterWorkspace
     - controlplane.host.ArchiveWorkspace
     - controlplane.host.RegisterRepository
@@ -35,6 +37,8 @@ components:
     - controlplane.host.RecordPlanningProgress
   publishes:
     events:
+    - controlplane.host.WorkspaceDirectoryCreated
+    - controlplane.host.WorkspaceDirectoryRemoved
     - controlplane.host.WorkspaceCreated
     - controlplane.host.ArchiveWorkspaceApplied
     - controlplane.host.RepositoryRegistrationCreated
