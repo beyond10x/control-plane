@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:53:29Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-observability",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Model-entry regression red without activity; repaired runtime17tests pass, including actual SQLite restart preserving activity",
+    "reference": ".scratch/live-model-suite.log"
+  }
+}

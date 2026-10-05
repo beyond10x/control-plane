@@ -4,6 +4,8 @@ A local workspace for autonomous engineering: add a repository or a directory of
 
 The product is a standalone Rust service and CLI. Its domain is specified in [ESS](ess/system.yaml); the engineering plan lives in [AEP](.engineering/planning/epic/bootstrap.md). Browser and CLI commands use the same durable host.
 
+The [product vision](docs/vision.md) defines the live operator experience and its delivery standard.
+
 ## Run from source
 
 Install Rust, ESS 0.53.0, AEP 0.68.0 and Worktree 0.8.2. `rust-toolchain.toml` selects the Rust version. The repository gate also needs Task 3.52.0.

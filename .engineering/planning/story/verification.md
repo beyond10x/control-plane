@@ -11,6 +11,7 @@ relations:
 - depends_on: story:operator-console
 - depends_on: story:contract-verification
 - depends_on: story:workspace-directories
+- depends_on: story:operator-observability
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask

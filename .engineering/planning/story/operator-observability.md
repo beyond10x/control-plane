@@ -1,0 +1,43 @@
+---
+format: aep.planning-md/3
+id: story:operator-observability
+kind: story
+status: active
+title: Live operational dashboard and visible autonomous activity
+relations:
+- decomposes: epic:bootstrap
+- serves: vision:autonomous-engineering
+- depends_on: story:operator-console
+scope:
+- confidence: cited
+  path: README.md
+- confidence: cited
+  path: crates/control-plane-app
+- confidence: cited
+  path: crates/control-plane-runtime
+- confidence: cited
+  path: docs/vision.md
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 3}
+- {from: "proposed", to: "active", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 4}
+---
+## Outcome
+
+Deliver the operational dashboard and automatically updating activity described in docs/vision.md. The operator can tell what the system is doing without inspecting raw JSON or manually refreshing a form page.
+
+## Existing ESS contract
+
+Use the already declared Workspace, Goal and Assignment views, Goal.planning_phase, planning_reason and planning_receipt, Assignment lifecycle and evidence fields, and RecordPlanningProgress. This work projects existing runtime facts and records observations through the existing durable receipt contract; it introduces no new domain entity. Keep receipt provenance and real observations separate from server-response freshness. Any additional domain noun must be specified before use.
+
+## Acceptance
+
+Named executable scenarios: model_wait_is_visible_before_response; planner_activity_survives_restart; live_dashboard_updates_without_resetting_forms; dashboard_distinguishes_idle_blocked_and_disconnected; workspace_activity_is_scoped; concurrent_worker_activity_is_not_lost. Observe real commands, model-call entry/exit, checks and publication results; no synthetic work events or invented percentages. A browser run must see automatic updates while a form's entered value remains intact. Show actionable blockers, elapsed time, role, repository and worktree context. Raw evidence belongs behind drill-down controls.
+
+## Scope
+
+Cited: crates/control-plane-app (dashboard, navigation, live fragment/API routes, CSS and browser integration tests); crates/control-plane-runtime (durable model/tool activity); docs/vision.md and README.md. Coordinator owns AEP and runtime progress integration. UI implementor owns the app surface. Fleet implementor coordinates its progress calls with the common receipt shape.
+
+## Authorization
+
+Operator explicitly requested live ticks/status/progress, a control-plane application look and feel, and an updated goal/agenda and docs/vision.md. This is required in the existing autonomous implementation goal, not optional follow-up work.
