@@ -7,6 +7,134 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
+#[tokio::test]
+async fn dashboard_refreshes_only_live_frame_and_allows_only_same_origin_embedding() {
+    let (_temp, state) = fixture().await;
+    let app = router(state);
+    let request = |path| {
+        Request::builder()
+            .uri(path)
+            .header("host", "127.0.0.1:8787")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let shell = app.clone().oneshot(request("/")).await.unwrap();
+    let policy = shell.headers()["content-security-policy"].to_str().unwrap();
+    assert!(policy.contains("frame-src 'self'"));
+    assert!(policy.contains("frame-ancestors 'self'"));
+    assert_eq!(shell.headers()["x-frame-options"], "SAMEORIGIN");
+    let shell = body(shell).await;
+    assert!(shell.contains("src=\"/live\""));
+    assert!(!shell.contains("http-equiv=\"refresh\""));
+    assert!(shell.contains("action=\"/workspaces\""));
+    let live = app.oneshot(request("/live")).await.unwrap();
+    assert_eq!(live.status(), StatusCode::OK);
+    let live = body(live).await;
+    assert!(live.contains("http-equiv=\"refresh\""));
+    assert!(live.contains("Server observed"));
+    assert!(live.contains("No running goals"));
+    assert!(!live.contains("<form"));
+    assert!(!live.contains("<script"));
+}
+
+#[tokio::test]
+async fn live_activity_is_durable_scoped_and_does_not_inline_model_receipts() {
+    let (temp, state) = fixture().await;
+    let mut identities = Vec::new();
+    for name in ["visible-workspace", "other-workspace"] {
+        let path = temp.path().join(name);
+        std::fs::create_dir(&path).unwrap();
+        let created = state
+            .add_workspace(WorkspaceInput {
+                path: path.to_string_lossy().into_owned(),
+                name: name.into(),
+            })
+            .await
+            .unwrap();
+        let ws = created["published"][0]["payload"]["workspace_id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let created = state.command("CreateGoal",json!({"workspace_id":ws,"objective":name,"acceptance":"verified","max_workers":2,"max_attempts":3,"max_minutes":10,"planner_model":"planner-model","implementor_model":"implementor-model","reviewer_model":"review-model","merge_authority":false})).await.unwrap();
+        let id = created["published"][0]["payload"]["goal_id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        state
+            .command("StartGoal", json!({"goal_id":id}))
+            .await
+            .unwrap();
+        let event = json!({"at":"2026-10-05T09:00:00Z","action":format!("Model waiting {name}"),"role":"planner","worktree":"isolated/plan","detail":"<script>unsafe</script>","status":"running"});
+        let receipt=json!({"last_activity":event,"activity":[event],"receipt":"MODEL-RAW-SECRET".repeat(40000)}).to_string();
+        state.store.lock().await.execute("RecordPlanningProgress",json!({"goal_id":id,"planning_revision":1,"planning_fingerprint":"fingerprint","planning_repository":"","planning_worktree_id":"plan","planning_worktree_path":"isolated/plan","planning_phase":"Planning","planning_reason":"Model request in flight","planning_receipt":receipt}),Actor::Supervisor).await.unwrap();
+        identities.push((ws, id));
+    }
+    drop(state);
+    let reopened = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let state = AppState::new(
+        Arc::new(Mutex::new(reopened)),
+        "127.0.0.1:8787".parse().unwrap(),
+        Arc::new(Notify::new()),
+    );
+    let app = router(state);
+    let request = |path: String| {
+        Request::builder()
+            .uri(path)
+            .header("host", "127.0.0.1:8787")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let html = body(
+        app.clone()
+            .oneshot(request(format!("/workspaces/{}/live", identities[0].0)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(html.contains("Model waiting visible-workspace"));
+    assert!(html.contains("2026-10-05T09:00:00Z"));
+    assert!(html.contains("since observation"));
+    assert!(html.contains("&lt;script&gt;unsafe&lt;/script&gt;"));
+    assert!(!html.contains("other-workspace"));
+    assert!(!html.contains("MODEL-RAW-SECRET"));
+    assert!(html.len() < 30000);
+    let evidence = body(
+        app.oneshot(request(format!("/goals/{}/evidence", identities[0].1)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(evidence.contains("MODEL-RAW-SECRET"));
+    assert!(!evidence.contains("other-workspace"));
+}
+
+#[test]
+fn concurrent_workers_and_blocked_stopped_states_are_distinct() {
+    let event = |action| json!({"at":"2026-10-05T09:00:00Z","action":action,"role":"implementor","worktree":"worktree","detail":"actual tool observation","status":"running","goal_revision":1});
+    let receipt=json!({"fleet":{"a":event("worker one running"),"b":event("worker two running"),"foreign":event("must not leak")}}).to_string();
+    let mut view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":"Executor unavailable","repositories":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Blocked","planning_reason":"Repository unavailable","planning_receipt":receipt}],"assignments":[{"goal_id":"g","goal_revision":1,"assignment_id":"a","story_id":"first","state":"Implementing"},{"goal_id":"g","goal_revision":1,"assignment_id":"b","story_id":"second","state":"Reviewing"}]});
+    let html = dashboard::operations(&view).unwrap();
+    assert!(html.contains("worker one running"));
+    assert!(html.contains("worker two running"));
+    assert!(!html.contains("must not leak"));
+    assert!(html.contains("Autonomous processing stopped"));
+    assert!(html.contains("Planner needs attention"));
+    assert!(html.contains("Repository unavailable"));
+    assert!(html.contains("Server freshness only"));
+    assert!(!html.contains("Connected"));
+    view["goals"][0]["state"] = json!("Paused");
+    let paused = dashboard::operations(&view).unwrap();
+    assert!(!paused.contains("worker one running"));
+    assert!(paused.contains("Paused; Start this goal to resume"));
+    view["goals"][0]["state"] = json!("Running");
+    view["goals"][0]["revision"] = json!(2);
+    assert!(
+        !dashboard::operations(&view)
+            .unwrap()
+            .contains("worker one running")
+    );
+}
+
 async fn fixture() -> (tempfile::TempDir, AppState) {
     let root = std::path::PathBuf::from(std::env::var_os("HOME").unwrap())
         .join(".cache/control-plane-console");
@@ -239,7 +367,7 @@ async fn user_content_is_escaped_in_console() {
         response.headers()["content-security-policy"]
             .to_str()
             .unwrap()
-            .contains("frame-ancestors 'none'")
+            .contains("frame-ancestors 'self'")
     );
     let html = body(response).await;
     assert!(!html.contains("<script>"));
