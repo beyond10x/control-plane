@@ -1,0 +1,961 @@
+domain: controlplane.host
+summary: Local workspace goals and assignments; AEP owns stories, Loom owns agent executions.
+entities:
+  - name: controlplane.host.Workspace
+    identity:
+      name: workspace_id
+      type: Uuid
+    fields:
+      - name: path
+        type: String
+      - name: name
+        type: String
+    lifecycle:
+      initial: Registered
+      states:
+        - Registered
+        - Archived
+      terminal:
+        - Archived
+      transitions:
+        - name: archive
+          from:
+            - Registered
+          to: Archived
+    relations:
+      - name: repositories
+        kind: owns
+        target: controlplane.host.RepositoryRegistration
+        cardinality: many
+        via: workspace_id
+      - name: goals
+        kind: owns
+        target: controlplane.host.Goal
+        cardinality: many
+        via: workspace_id
+  - name: controlplane.host.RepositoryRegistration
+    identity:
+      name: repository_id
+      type: Uuid
+    fields:
+      - name: workspace_id
+        type: Uuid
+      - name: name
+        type: String
+      - name: path
+        type: String
+      - name: common_dir
+        type: String
+      - name: base_branch
+        type: String
+      - name: test_command
+        type: String
+      - name: publish_command
+        type: String
+    lifecycle:
+      initial: Registered
+      states:
+        - Registered
+        - Disabled
+      terminal: []
+      transitions:
+        - name: disable
+          from:
+            - Registered
+          to: Disabled
+        - name: enable
+          from:
+            - Disabled
+          to: Registered
+  - name: controlplane.host.Goal
+    identity:
+      name: goal_id
+      type: Uuid
+    fields:
+      - name: workspace_id
+        type: Uuid
+      - name: objective
+        type: String
+      - name: acceptance
+        type: String
+      - name: max_workers
+        type: Integer
+      - name: max_attempts
+        type: Integer
+      - name: max_minutes
+        type: Integer
+      - name: planner_model
+        type: String
+      - name: implementor_model
+        type: String
+      - name: reviewer_model
+        type: String
+      - name: merge_authority
+        type: Boolean
+    lifecycle:
+      initial: Paused
+      states:
+        - Paused
+        - Running
+        - Satisfied
+        - Cancelled
+      terminal:
+        - Satisfied
+        - Cancelled
+      transitions:
+        - name: start
+          from:
+            - Paused
+          to: Running
+        - name: pause
+          from:
+            - Running
+          to: Paused
+        - name: satisfy
+          from:
+            - Running
+          to: Satisfied
+        - name: cancel
+          from:
+            - Running
+            - Paused
+          to: Cancelled
+    relations:
+      - name: assignments
+        kind: owns
+        target: controlplane.host.Assignment
+        cardinality: many
+        via: goal_id
+  - name: controlplane.host.Assignment
+    identity:
+      name: assignment_id
+      type: Uuid
+    fields:
+      - name: goal_id
+        type: Uuid
+      - name: repository_id
+        type: Uuid
+      - name: story_id
+        type: String
+      - name: case_id
+        type: String
+      - name: worktree_id
+        type: String
+      - name: candidate
+        type: String
+      - name: attempt
+        type: Integer
+      - name: reason
+        type: String
+      - name: implementor_run
+        type: String
+      - name: reviewer_run
+        type: String
+    lifecycle:
+      initial: Queued
+      states:
+        - Queued
+        - Implementing
+        - Reviewing
+        - ReadyToMerge
+        - Merging
+        - Merged
+        - Blocked
+        - Cancelled
+      terminal:
+        - Merged
+        - Cancelled
+      transitions:
+        - name: claim
+          from:
+            - Queued
+          to: Implementing
+        - name: review
+          from:
+            - Implementing
+          to: Reviewing
+        - name: repair
+          from:
+            - Reviewing
+            - Blocked
+          to: Implementing
+        - name: ready
+          from:
+            - Reviewing
+          to: ReadyToMerge
+        - name: merge
+          from:
+            - ReadyToMerge
+          to: Merging
+        - name: complete
+          from:
+            - Merging
+          to: Merged
+        - name: block
+          from:
+            - Queued
+            - Implementing
+            - Reviewing
+            - ReadyToMerge
+            - Merging
+          to: Blocked
+        - name: cancel
+          from:
+            - Queued
+            - Implementing
+            - Reviewing
+            - ReadyToMerge
+            - Blocked
+          to: Cancelled
+    relations:
+      - name: repository
+        kind: references
+        target: controlplane.host.RepositoryRegistration
+        cardinality: one
+        via: repository_id
+actors:
+  - name: controlplane.host.Operator
+    may:
+      - controlplane.host.RegisterWorkspace
+      - controlplane.host.ArchiveWorkspace
+      - controlplane.host.RegisterRepository
+      - controlplane.host.DisableRepositoryRegistration
+      - controlplane.host.EnableRepositoryRegistration
+      - controlplane.host.CreateGoal
+      - controlplane.host.StartGoal
+      - controlplane.host.PauseGoal
+      - controlplane.host.CancelGoal
+  - name: controlplane.host.Supervisor
+    may:
+      - controlplane.host.RegisterWorkspace
+      - controlplane.host.ArchiveWorkspace
+      - controlplane.host.RegisterRepository
+      - controlplane.host.DisableRepositoryRegistration
+      - controlplane.host.EnableRepositoryRegistration
+      - controlplane.host.CreateGoal
+      - controlplane.host.StartGoal
+      - controlplane.host.PauseGoal
+      - controlplane.host.SatisfyGoal
+      - controlplane.host.CancelGoal
+      - controlplane.host.QueueAssignment
+      - controlplane.host.ClaimAssignment
+      - controlplane.host.ReviewAssignment
+      - controlplane.host.RepairAssignment
+      - controlplane.host.ReadyAssignment
+      - controlplane.host.MergeAssignment
+      - controlplane.host.CompleteAssignment
+      - controlplane.host.BlockAssignment
+      - controlplane.host.CancelAssignment
+errors:
+  - name: controlplane.host.WorkspaceStateConflict
+    summary: The command cannot act in the current state.
+    fields:
+      - name: state
+        type: controlplane.host.Workspace.State
+  - name: controlplane.host.WorkspaceNotFound
+    summary: The requested identity is not held.
+    fields: []
+  - name: controlplane.host.RepositoryRegistrationStateConflict
+    summary: The command cannot act in the current state.
+    fields:
+      - name: state
+        type: controlplane.host.RepositoryRegistration.State
+  - name: controlplane.host.RepositoryRegistrationNotFound
+    summary: The requested identity is not held.
+    fields: []
+  - name: controlplane.host.GoalStateConflict
+    summary: The command cannot act in the current state.
+    fields:
+      - name: state
+        type: controlplane.host.Goal.State
+  - name: controlplane.host.GoalNotFound
+    summary: The requested identity is not held.
+    fields: []
+  - name: controlplane.host.AssignmentStateConflict
+    summary: The command cannot act in the current state.
+    fields:
+      - name: state
+        type: controlplane.host.Assignment.State
+  - name: controlplane.host.AssignmentNotFound
+    summary: The requested identity is not held.
+    fields: []
+commands:
+  - name: controlplane.host.RegisterWorkspace
+    input:
+      - name: path
+        type: String
+      - name: name
+        type: String
+    outcomes:
+      - name: created
+        creates: controlplane.host.Workspace
+        instance: workspace_id
+        sets:
+          path: input.path
+          name: input.name
+        emits:
+          - controlplane.host.WorkspaceCreated
+        payload:
+          controlplane.host.WorkspaceCreated:
+            path: input.path
+            name: input.name
+            workspace_id:
+              generated: true
+  - name: controlplane.host.ArchiveWorkspace
+    input:
+      - name: workspace_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Workspace.archive
+        instance: workspace_id
+        emits:
+          - controlplane.host.ArchiveWorkspaceApplied
+        payload:
+          controlplane.host.ArchiveWorkspaceApplied:
+            workspace_id: input.workspace_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.WorkspaceStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.WorkspaceNotFound
+  - name: controlplane.host.RegisterRepository
+    input:
+      - name: workspace_id
+        type: Uuid
+      - name: name
+        type: String
+      - name: path
+        type: String
+      - name: common_dir
+        type: String
+      - name: base_branch
+        type: String
+      - name: test_command
+        type: String
+      - name: publish_command
+        type: String
+    outcomes:
+      - name: created
+        creates: controlplane.host.RepositoryRegistration
+        instance: repository_id
+        sets:
+          workspace_id: input.workspace_id
+          name: input.name
+          path: input.path
+          common_dir: input.common_dir
+          base_branch: input.base_branch
+          test_command: input.test_command
+          publish_command: input.publish_command
+        emits:
+          - controlplane.host.RepositoryRegistrationCreated
+        payload:
+          controlplane.host.RepositoryRegistrationCreated:
+            workspace_id: input.workspace_id
+            name: input.name
+            path: input.path
+            common_dir: input.common_dir
+            base_branch: input.base_branch
+            test_command: input.test_command
+            publish_command: input.publish_command
+            repository_id:
+              generated: true
+  - name: controlplane.host.DisableRepositoryRegistration
+    input:
+      - name: repository_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.RepositoryRegistration.disable
+        instance: repository_id
+        emits:
+          - controlplane.host.DisableRepositoryRegistrationApplied
+        payload:
+          controlplane.host.DisableRepositoryRegistrationApplied:
+            repository_id: input.repository_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.RepositoryRegistrationStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.RepositoryRegistrationNotFound
+  - name: controlplane.host.EnableRepositoryRegistration
+    input:
+      - name: repository_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.RepositoryRegistration.enable
+        instance: repository_id
+        emits:
+          - controlplane.host.EnableRepositoryRegistrationApplied
+        payload:
+          controlplane.host.EnableRepositoryRegistrationApplied:
+            repository_id: input.repository_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.RepositoryRegistrationStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.RepositoryRegistrationNotFound
+  - name: controlplane.host.CreateGoal
+    input:
+      - name: workspace_id
+        type: Uuid
+      - name: objective
+        type: String
+      - name: acceptance
+        type: String
+      - name: max_workers
+        type: Integer
+      - name: max_attempts
+        type: Integer
+      - name: max_minutes
+        type: Integer
+      - name: planner_model
+        type: String
+      - name: implementor_model
+        type: String
+      - name: reviewer_model
+        type: String
+      - name: merge_authority
+        type: Boolean
+    outcomes:
+      - name: created
+        creates: controlplane.host.Goal
+        instance: goal_id
+        sets:
+          workspace_id: input.workspace_id
+          objective: input.objective
+          acceptance: input.acceptance
+          max_workers: input.max_workers
+          max_attempts: input.max_attempts
+          max_minutes: input.max_minutes
+          planner_model: input.planner_model
+          implementor_model: input.implementor_model
+          reviewer_model: input.reviewer_model
+          merge_authority: input.merge_authority
+        emits:
+          - controlplane.host.GoalCreated
+        payload:
+          controlplane.host.GoalCreated:
+            workspace_id: input.workspace_id
+            objective: input.objective
+            acceptance: input.acceptance
+            max_workers: input.max_workers
+            max_attempts: input.max_attempts
+            max_minutes: input.max_minutes
+            planner_model: input.planner_model
+            implementor_model: input.implementor_model
+            reviewer_model: input.reviewer_model
+            merge_authority: input.merge_authority
+            goal_id:
+              generated: true
+  - name: controlplane.host.StartGoal
+    input:
+      - name: goal_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Goal.start
+        instance: goal_id
+        emits:
+          - controlplane.host.StartGoalApplied
+        payload:
+          controlplane.host.StartGoalApplied:
+            goal_id: input.goal_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.GoalStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.GoalNotFound
+  - name: controlplane.host.PauseGoal
+    input:
+      - name: goal_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Goal.pause
+        instance: goal_id
+        emits:
+          - controlplane.host.PauseGoalApplied
+        payload:
+          controlplane.host.PauseGoalApplied:
+            goal_id: input.goal_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.GoalStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.GoalNotFound
+  - name: controlplane.host.SatisfyGoal
+    input:
+      - name: goal_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Goal.satisfy
+        instance: goal_id
+        emits:
+          - controlplane.host.SatisfyGoalApplied
+        payload:
+          controlplane.host.SatisfyGoalApplied:
+            goal_id: input.goal_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.GoalStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.GoalNotFound
+  - name: controlplane.host.CancelGoal
+    input:
+      - name: goal_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Goal.cancel
+        instance: goal_id
+        emits:
+          - controlplane.host.CancelGoalApplied
+        payload:
+          controlplane.host.CancelGoalApplied:
+            goal_id: input.goal_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.GoalStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.GoalNotFound
+  - name: controlplane.host.QueueAssignment
+    input:
+      - name: goal_id
+        type: Uuid
+      - name: repository_id
+        type: Uuid
+      - name: story_id
+        type: String
+      - name: case_id
+        type: String
+      - name: worktree_id
+        type: String
+      - name: candidate
+        type: String
+      - name: attempt
+        type: Integer
+      - name: reason
+        type: String
+      - name: implementor_run
+        type: String
+      - name: reviewer_run
+        type: String
+    outcomes:
+      - name: created
+        creates: controlplane.host.Assignment
+        instance: assignment_id
+        sets:
+          goal_id: input.goal_id
+          repository_id: input.repository_id
+          story_id: input.story_id
+          case_id: input.case_id
+          worktree_id: input.worktree_id
+          candidate: input.candidate
+          attempt: input.attempt
+          reason: input.reason
+          implementor_run: input.implementor_run
+          reviewer_run: input.reviewer_run
+        emits:
+          - controlplane.host.AssignmentCreated
+        payload:
+          controlplane.host.AssignmentCreated:
+            goal_id: input.goal_id
+            repository_id: input.repository_id
+            story_id: input.story_id
+            case_id: input.case_id
+            worktree_id: input.worktree_id
+            candidate: input.candidate
+            attempt: input.attempt
+            reason: input.reason
+            implementor_run: input.implementor_run
+            reviewer_run: input.reviewer_run
+            assignment_id:
+              generated: true
+  - name: controlplane.host.ClaimAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.claim
+        instance: assignment_id
+        emits:
+          - controlplane.host.ClaimAssignmentApplied
+        payload:
+          controlplane.host.ClaimAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.ReviewAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.review
+        instance: assignment_id
+        emits:
+          - controlplane.host.ReviewAssignmentApplied
+        payload:
+          controlplane.host.ReviewAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.RepairAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.repair
+        instance: assignment_id
+        emits:
+          - controlplane.host.RepairAssignmentApplied
+        payload:
+          controlplane.host.RepairAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.ReadyAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.ready
+        instance: assignment_id
+        emits:
+          - controlplane.host.ReadyAssignmentApplied
+        payload:
+          controlplane.host.ReadyAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.MergeAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.merge
+        instance: assignment_id
+        emits:
+          - controlplane.host.MergeAssignmentApplied
+        payload:
+          controlplane.host.MergeAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.CompleteAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.complete
+        instance: assignment_id
+        emits:
+          - controlplane.host.CompleteAssignmentApplied
+        payload:
+          controlplane.host.CompleteAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.BlockAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.block
+        instance: assignment_id
+        emits:
+          - controlplane.host.BlockAssignmentApplied
+        payload:
+          controlplane.host.BlockAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+  - name: controlplane.host.CancelAssignment
+    input:
+      - name: assignment_id
+        type: Uuid
+    outcomes:
+      - name: applied
+        moves: controlplane.host.Assignment.cancel
+        instance: assignment_id
+        emits:
+          - controlplane.host.CancelAssignmentApplied
+        payload:
+          controlplane.host.CancelAssignmentApplied:
+            assignment_id: input.assignment_id
+      - name: wrong-state
+        wrong_state: true
+        error: controlplane.host.AssignmentStateConflict
+      - name: not-found
+        unknown_instance: true
+        error: controlplane.host.AssignmentNotFound
+events:
+  - name: controlplane.host.WorkspaceCreated
+    fields:
+      - name: workspace_id
+        type: Uuid
+      - name: path
+        type: String
+      - name: name
+        type: String
+  - name: controlplane.host.ArchiveWorkspaceApplied
+    fields:
+      - name: workspace_id
+        type: Uuid
+  - name: controlplane.host.RepositoryRegistrationCreated
+    fields:
+      - name: repository_id
+        type: Uuid
+      - name: workspace_id
+        type: Uuid
+      - name: name
+        type: String
+      - name: path
+        type: String
+      - name: common_dir
+        type: String
+      - name: base_branch
+        type: String
+      - name: test_command
+        type: String
+      - name: publish_command
+        type: String
+  - name: controlplane.host.DisableRepositoryRegistrationApplied
+    fields:
+      - name: repository_id
+        type: Uuid
+  - name: controlplane.host.EnableRepositoryRegistrationApplied
+    fields:
+      - name: repository_id
+        type: Uuid
+  - name: controlplane.host.GoalCreated
+    fields:
+      - name: goal_id
+        type: Uuid
+      - name: workspace_id
+        type: Uuid
+      - name: objective
+        type: String
+      - name: acceptance
+        type: String
+      - name: max_workers
+        type: Integer
+      - name: max_attempts
+        type: Integer
+      - name: max_minutes
+        type: Integer
+      - name: planner_model
+        type: String
+      - name: implementor_model
+        type: String
+      - name: reviewer_model
+        type: String
+      - name: merge_authority
+        type: Boolean
+  - name: controlplane.host.StartGoalApplied
+    fields:
+      - name: goal_id
+        type: Uuid
+  - name: controlplane.host.PauseGoalApplied
+    fields:
+      - name: goal_id
+        type: Uuid
+  - name: controlplane.host.SatisfyGoalApplied
+    fields:
+      - name: goal_id
+        type: Uuid
+  - name: controlplane.host.CancelGoalApplied
+    fields:
+      - name: goal_id
+        type: Uuid
+  - name: controlplane.host.AssignmentCreated
+    fields:
+      - name: assignment_id
+        type: Uuid
+      - name: goal_id
+        type: Uuid
+      - name: repository_id
+        type: Uuid
+      - name: story_id
+        type: String
+      - name: case_id
+        type: String
+      - name: worktree_id
+        type: String
+      - name: candidate
+        type: String
+      - name: attempt
+        type: Integer
+      - name: reason
+        type: String
+      - name: implementor_run
+        type: String
+      - name: reviewer_run
+        type: String
+  - name: controlplane.host.ClaimAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.ReviewAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.RepairAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.ReadyAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.MergeAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.CompleteAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.BlockAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+  - name: controlplane.host.CancelAssignmentApplied
+    fields:
+      - name: assignment_id
+        type: Uuid
+views:
+  - name: controlplane.host.WorkspaceList
+    source: controlplane.host.Workspace
+    consistency: read_your_writes
+    fields:
+      - name: workspace_id
+        type: Uuid
+      - name: path
+        type: String
+      - name: name
+        type: String
+      - name: state
+        type: controlplane.host.Workspace.State
+  - name: controlplane.host.RepositoryRegistrationList
+    source: controlplane.host.RepositoryRegistration
+    consistency: read_your_writes
+    fields:
+      - name: repository_id
+        type: Uuid
+      - name: workspace_id
+        type: Uuid
+      - name: name
+        type: String
+      - name: path
+        type: String
+      - name: common_dir
+        type: String
+      - name: base_branch
+        type: String
+      - name: test_command
+        type: String
+      - name: publish_command
+        type: String
+      - name: state
+        type: controlplane.host.RepositoryRegistration.State
+  - name: controlplane.host.GoalList
+    source: controlplane.host.Goal
+    consistency: read_your_writes
+    fields:
+      - name: goal_id
+        type: Uuid
+      - name: workspace_id
+        type: Uuid
+      - name: objective
+        type: String
+      - name: acceptance
+        type: String
+      - name: max_workers
+        type: Integer
+      - name: max_attempts
+        type: Integer
+      - name: max_minutes
+        type: Integer
+      - name: planner_model
+        type: String
+      - name: implementor_model
+        type: String
+      - name: reviewer_model
+        type: String
+      - name: merge_authority
+        type: Boolean
+      - name: state
+        type: controlplane.host.Goal.State
+  - name: controlplane.host.AssignmentList
+    source: controlplane.host.Assignment
+    consistency: read_your_writes
+    fields:
+      - name: assignment_id
+        type: Uuid
+      - name: goal_id
+        type: Uuid
+      - name: repository_id
+        type: Uuid
+      - name: story_id
+        type: String
+      - name: case_id
+        type: String
+      - name: worktree_id
+        type: String
+      - name: candidate
+        type: String
+      - name: attempt
+        type: Integer
+      - name: reason
+        type: String
+      - name: implementor_run
+        type: String
+      - name: reviewer_run
+        type: String
+      - name: state
+        type: controlplane.host.Assignment.State

@@ -1,0 +1,25 @@
+# generated from controlplane v1
+# model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
+# contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+# do not edit: regenerate with `ess synthesize --layout crate`
+
+[package]
+name = "controlplane"
+description = "The `controlplane` specification, v1, synthesised as one crate; its HTTP surface is the `server` feature."
+version = "1.0.0"
+edition = "2021"
+
+[features]
+server = ["dep:clap", "dep:uuid", "dep:time"]
+
+[dependencies]
+clap = { version = "=4.6.7", features = ["derive"], optional = true }
+uuid = { version = "=1.26.1", features = ["v4"], optional = true }
+time = { version = "=0.3.45", features = ["formatting"], optional = true }
+
+[[bin]]
+name = "control-plane-server"
+path = "src/bin/control-plane-server.rs"
+required-features = ["server"]
+
+[workspace]
