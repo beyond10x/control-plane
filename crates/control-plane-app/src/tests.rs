@@ -979,3 +979,145 @@ async fn service_persists_repository_tool_refusal_and_keeps_operator_controls_av
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn restored_service_preserves_inactive_goals_while_resuming_running_goal() {
+    use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
+    struct NoRepositoryModel;
+    impl AgentModel for NoRepositoryModel {
+        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            anyhow::bail!("a workspace with no repositories must not invoke a model")
+        }
+    }
+    let scratch =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/app-runtime-review");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let temp = tempfile::tempdir_in(scratch).unwrap();
+    let inactive = temp.path().join("inactive");
+    let active = temp.path().join("active");
+    std::fs::create_dir_all(&inactive).unwrap();
+    std::fs::create_dir_all(&active).unwrap();
+    // A bare fixture has no working repository inventory and prevents Git from
+    // discovering the enclosing review checkout through these scratch paths.
+    for path in [&inactive, &active] {
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--bare"])
+                .arg(path)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+    }
+    let database = temp.path().join("host.sqlite");
+
+    let mut store = Store::open(&database).await.unwrap();
+    let ws_inactive = store
+        .register_workspace(&inactive, "inactive")
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .clone();
+    let ws_active = store.register_workspace(&active, "active").await.unwrap()["published"][0]["payload"]["workspace_id"].clone();
+    let make_goal = |workspace: Value| json!({"workspace_id":workspace,"objective":"Preserve explicit operator lifecycle","acceptance":"No unapproved work starts","max_workers":1,"max_attempts":1,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false});
+    let paused = store
+        .execute(
+            "CreateGoal",
+            make_goal(ws_inactive.clone()),
+            Actor::Operator,
+        )
+        .await
+        .unwrap()["published"][0]["payload"]["goal_id"]
+        .clone();
+    store
+        .execute("StartGoal", json!({"goal_id":paused}), Actor::Operator)
+        .await
+        .unwrap();
+    store
+        .execute("PauseGoal", json!({"goal_id":paused}), Actor::Operator)
+        .await
+        .unwrap();
+    let cancelled = store
+        .execute("CreateGoal", make_goal(ws_inactive), Actor::Operator)
+        .await
+        .unwrap()["published"][0]["payload"]["goal_id"]
+        .clone();
+    store
+        .execute("CancelGoal", json!({"goal_id":cancelled}), Actor::Operator)
+        .await
+        .unwrap();
+    let running = store
+        .execute("CreateGoal", make_goal(ws_active), Actor::Operator)
+        .await
+        .unwrap()["published"][0]["payload"]["goal_id"]
+        .clone();
+    store
+        .execute("StartGoal", json!({"goal_id":running}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(store);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let shared = Arc::new(Mutex::new(Store::open(&database).await.unwrap()));
+    let state = AppState::new(shared.clone(), address, Arc::new(Notify::new()));
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let server = tokio::spawn(serve_with_runtime(
+        listener,
+        state,
+        RuntimeConfig {
+            poll_interval: std::time::Duration::from_secs(3600),
+            ..RuntimeConfig::default()
+        },
+        Arc::new(NoRepositoryModel),
+        shutdown.clone(),
+    ));
+    let client = Client::new(&format!("http://{address}")).unwrap();
+    let progressed = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let view = client.snapshot().await.unwrap();
+            if view["goals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|g| g["goal_id"] == running && g["planning_phase"] == "Queued")
+            {
+                break view;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    shutdown.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(3), server)
+        .await
+        .expect("graceful shutdown stalled")
+        .unwrap()
+        .unwrap();
+    let view = progressed.expect("persisted running goal did not resume on service startup");
+    assert!(view["runtime_error"].is_null());
+    let goals = view["goals"].as_array().unwrap();
+    for (id, expected) in [(&paused, "Paused"), (&cancelled, "Cancelled")] {
+        let row = goals.iter().find(|row| row["goal_id"] == *id).unwrap();
+        assert_eq!(row["state"], expected);
+        assert_eq!(
+            row["planning_phase"], "Idle",
+            "inactive goal was processed on restart"
+        );
+        assert_eq!(row["planning_receipt"], "");
+    }
+    assert_eq!(
+        goals.iter().find(|row| row["goal_id"] == running).unwrap()["state"],
+        "Running"
+    );
+    assert_eq!(view["assignments"], json!([]));
+    assert!(
+        client.snapshot().await.is_err(),
+        "shutdown left the HTTP listener active"
+    );
+    drop(shared);
+    assert!(
+        Store::open(&database).await.is_ok(),
+        "shutdown retained the durable-store lock"
+    );
+}
