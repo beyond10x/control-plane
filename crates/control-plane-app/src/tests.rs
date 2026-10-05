@@ -784,3 +784,198 @@ async fn explicit_startup_paths_do_not_register_cwd_or_grant_authority() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn service_start_wakes_real_supervisor_and_exposes_durable_planning_reason() {
+    use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
+    struct UnusedModel;
+    impl AgentModel for UnusedModel {
+        fn respond(&self, _request: &ModelRequest) -> anyhow::Result<Value> {
+            anyhow::bail!("empty repository inventory must not call the model")
+        }
+    }
+    let (temp, state) = fixture().await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = AppState::new(state.store.clone(), address, state.wake.clone());
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let server = tokio::spawn(serve_with_runtime(
+        listener,
+        app,
+        RuntimeConfig {
+            poll_interval: std::time::Duration::from_secs(3600),
+            ..RuntimeConfig::default()
+        },
+        Arc::new(UnusedModel),
+        shutdown.clone(),
+    ));
+    let client = Client::new(&format!("http://{address}")).unwrap();
+    let workspace = client.add_workspace(temp.path(), "runtime").await.unwrap();
+    let workspace = workspace["published"][0]["payload"]["workspace_id"]
+        .as_str()
+        .unwrap();
+    let make = || json!({"workspace_id":workspace,"objective":"User objective","acceptance":"Verified result","max_workers":3,"max_attempts":3,"max_minutes":60,"planner_model":"gpt-5.6-sol","implementor_model":"gpt-5.6-sol","reviewer_model":"gpt-5.6-sol","merge_authority":false});
+    let goal = client.command("CreateGoal", make()).await.unwrap();
+    let goal = goal["published"][0]["payload"]["goal_id"].as_str().unwrap();
+    let cancelled = client.command("CreateGoal", make()).await.unwrap();
+    let cancelled = cancelled["published"][0]["payload"]["goal_id"]
+        .as_str()
+        .unwrap();
+    client
+        .command("CancelGoal", json!({"goal_id":cancelled}))
+        .await
+        .unwrap();
+    let before = client.snapshot().await.unwrap();
+    assert!(
+        before["goals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|g| g["planning_phase"] == "Idle")
+    );
+    client
+        .command("StartGoal", json!({"goal_id":goal}))
+        .await
+        .unwrap();
+    let progressed = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let view = client.snapshot().await.unwrap();
+            let row = view["goals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|g| g["goal_id"] == goal)
+                .unwrap();
+            if !field(row, "planning_reason").is_empty() {
+                break view;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    shutdown.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(3), server)
+        .await
+        .expect("service did not shut down")
+        .unwrap()
+        .unwrap();
+    let view = progressed.expect("started goal stayed idle: service did not run the supervisor");
+    let row = view["goals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["goal_id"] == goal)
+        .unwrap();
+    assert_eq!(row["state"], "Running");
+    assert_eq!(row["merge_authority"], false);
+    assert!(field(row, "planning_reason").contains("No ready story selected"));
+    assert_eq!(
+        view["goals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["goal_id"] == cancelled)
+            .unwrap()["state"],
+        "Cancelled"
+    );
+    let html = web::workspace(
+        State(AppState::new(
+            state.store.clone(),
+            address,
+            state.wake.clone(),
+        )),
+        Path(workspace.to_owned()),
+    )
+    .await;
+    assert!(body(html).await.contains("No ready story selected"));
+}
+
+#[tokio::test]
+async fn service_persists_repository_tool_refusal_and_keeps_operator_controls_available() {
+    use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
+    struct UnexpectedModel;
+    impl AgentModel for UnexpectedModel {
+        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            anyhow::bail!("repository checks must happen before model execution")
+        }
+    }
+    let (temp, state) = fixture().await;
+    let repository = temp.path().join("repository");
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .arg(&repository)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let registered = state
+        .add_workspace(WorkspaceInput {
+            path: repository.to_string_lossy().into_owned(),
+            name: "offline repository".into(),
+        })
+        .await
+        .unwrap();
+    let workspace = registered["published"][0]["payload"]["workspace_id"]
+        .as_str()
+        .unwrap();
+    std::fs::rename(&repository, temp.path().join("disconnected")).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = AppState::new(state.store.clone(), address, state.wake.clone());
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let server = tokio::spawn(serve_with_runtime(
+        listener,
+        app,
+        RuntimeConfig::default(),
+        Arc::new(UnexpectedModel),
+        shutdown.clone(),
+    ));
+    let client = Client::new(&format!("http://{address}")).unwrap();
+    let result=client.command("CreateGoal",json!({"workspace_id":workspace,"objective":"User objective","acceptance":"Verified result","max_workers":3,"max_attempts":3,"max_minutes":60,"planner_model":"gpt-5.6-sol","implementor_model":"gpt-5.6-sol","reviewer_model":"gpt-5.6-sol","merge_authority":false})).await.unwrap();
+    let goal = result["published"][0]["payload"]["goal_id"]
+        .as_str()
+        .unwrap();
+    client
+        .command("StartGoal", json!({"goal_id":goal}))
+        .await
+        .unwrap();
+    let blocked = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let view = client.snapshot().await.unwrap();
+            if view["goals"][0]["planning_phase"] == "Blocked" {
+                break view["goals"][0].clone();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    client
+        .command("CancelGoal", json!({"goal_id":goal}))
+        .await
+        .unwrap();
+    shutdown.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(3), server)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let blocked = blocked.expect("repository tool failure was not persisted");
+    assert!(!field(&blocked, "planning_reason").is_empty());
+    assert_eq!(
+        state.store.lock().await.query("GoalList").unwrap()[0]["state"],
+        "Cancelled"
+    );
+    assert!(
+        state
+            .store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}

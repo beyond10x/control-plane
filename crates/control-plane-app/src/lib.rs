@@ -51,6 +51,7 @@ pub struct AppState {
     pub wake: Arc<Notify>,
     listen: SocketAddr,
     csrf: String,
+    runtime_error: Arc<Mutex<Option<String>>>,
 }
 impl AppState {
     pub fn new(store: SharedStore, listen: SocketAddr, wake: Arc<Notify>) -> Self {
@@ -59,6 +60,7 @@ impl AppState {
             listen,
             wake,
             csrf: uuid::Uuid::new_v4().to_string(),
+            runtime_error: Arc::new(Mutex::new(None)),
         }
     }
     fn host_allowed(&self, host: &str) -> bool {
@@ -79,6 +81,7 @@ impl AppState {
             "goals":store.query("GoalList")?,
             "assignments":store.query("AssignmentList")?,
             "publications":store.query("PublicationIntentList")?,
+            "runtime_error":self.runtime_error.lock().await.clone(),
         }))
     }
     async fn command(&self, command: &str, body: Value) -> Result<Value> {
@@ -170,6 +173,12 @@ pub fn router(state: AppState) -> Router {
 
 /// The listener must already be loopback-bound. Reusable by the supervisor bootstrap.
 pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result<()> {
+    check_listener(&listener, &state)?;
+    axum::serve(listener, router(state)).await?;
+    Ok(())
+}
+
+fn check_listener(listener: &tokio::net::TcpListener, state: &AppState) -> Result<()> {
     let address = listener.local_addr()?;
     ensure!(
         address.ip().is_loopback(),
@@ -179,8 +188,47 @@ pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> Result
         address == state.listen,
         "application authority must match the bound listener"
     );
-    axum::serve(listener, router(state)).await?;
     Ok(())
+}
+
+/// Production service: one durable Store, operator surface and supervised runtime.
+/// Ordinary planner refusals are persisted by the runtime; a fatal runtime error leaves the
+/// console available for inspection and reports why autonomous processing stopped.
+pub async fn serve_with_runtime(
+    listener: tokio::net::TcpListener,
+    state: AppState,
+    config: control_plane_runtime::RuntimeConfig,
+    model: Arc<dyn control_plane_runtime::AgentModel>,
+    shutdown: tokio_util::sync::CancellationToken,
+) -> Result<()> {
+    check_listener(&listener, &state)?;
+    let supervisor = control_plane_runtime::Supervisor::new(
+        state.store.clone(),
+        state.wake.clone(),
+        config,
+        model,
+    );
+    let runtime_shutdown = shutdown.clone();
+    let server_shutdown = shutdown.clone();
+    let runtime_error = state.runtime_error.clone();
+    let runtime = async {
+        if let Err(error) = supervisor.run(runtime_shutdown).await {
+            let message = format!(
+                "Autonomous processing stopped: {error:#}. Restart the service after resolving this problem."
+            );
+            eprintln!("{message}");
+            *runtime_error.lock().await = Some(message);
+        }
+    };
+    let server = async {
+        let result = axum::serve(listener, router(state))
+            .with_graceful_shutdown(server_shutdown.cancelled_owned())
+            .await;
+        shutdown.cancel();
+        result
+    };
+    let (result, ()) = tokio::join!(server, runtime);
+    result.map_err(Into::into)
 }
 
 async fn request_guard(

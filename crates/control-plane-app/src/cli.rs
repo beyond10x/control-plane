@@ -25,6 +25,9 @@ pub enum Command {
         /// Register these startup directories instead of the current directory; repeatable.
         #[arg(long)]
         workspace: Vec<PathBuf>,
+        /// Private Gates policy for trusted planner commits; otherwise inherit B10X_GATES_POLICY.
+        #[arg(long)]
+        gates_policy: Option<PathBuf>,
     },
     /// Add and inspect workspaces through the running service.
     Workspace {
@@ -265,6 +268,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         state,
         listen,
         workspace,
+        gates_policy,
     } = cli.command
     {
         ensure!(
@@ -277,8 +281,34 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         initialize_workspaces(&mut store, &std::env::current_dir()?, &workspace).await?;
         let store = Arc::new(Mutex::new(store));
         let app = AppState::new(store, address, Arc::new(Notify::new()));
+        let mut config = control_plane_runtime::RuntimeConfig::default();
+        if let Some(policy) = gates_policy {
+            config.environment.push((
+                "B10X_GATES_POLICY".into(),
+                policy
+                    .canonicalize()?
+                    .to_str()
+                    .context("Gates policy path must be UTF-8")?
+                    .into(),
+            ));
+        }
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        let signal_shutdown = shutdown.clone();
+        let signals = tokio::spawn(async move {
+            shutdown_signal().await;
+            signal_shutdown.cancel();
+        });
         eprintln!("Control plane: http://{address}");
-        serve(listener, app).await?;
+        let result = serve_with_runtime(
+            listener,
+            app,
+            config,
+            Arc::new(control_plane_runtime::CodexAgentModel::default()),
+            shutdown,
+        )
+        .await;
+        signals.abort();
+        result?;
         return Ok(None);
     }
     let client = Client::new(&cli.url)?;
@@ -321,4 +351,22 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         }
     };
     Ok(Some(value))
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = terminate.recv() => {} }
+            }
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }
