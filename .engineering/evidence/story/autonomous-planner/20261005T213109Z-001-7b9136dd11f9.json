@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:31:09Z",
+  "actor": "human:timo",
+  "artifact": "story:autonomous-planner",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test --locked -p control-plane-runtime: 16 passed, 0 failed",
+    "reference": "git:8aef6d0c1338d22c41c1b3f70a423d47889260da"
+  }
+}

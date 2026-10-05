@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-05T21:31:09Z",
+  "actor": "human:timo",
+  "artifact": "story:autonomous-planner",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:autonomous-planner-review-1",
+    "review": "review-result:autonomous-planner-review-1",
+    "outcome": "fixed"
+  }
+}
