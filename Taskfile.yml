@@ -1,0 +1,23 @@
+version: '3'
+
+tasks:
+  check:
+    desc: Validate the specification, plan, generated contracts and implementation
+    cmds:
+      - ess specify validate --path ess --strict-requires
+      - aep plan artifact validate
+      - cargo fmt --all --check
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+      - cargo test --workspace --locked
+      - cargo run --locked -p control-plane-xtask -- generated-check
+      - cargo run --locked -p control-plane-xtask -- conformance
+
+  generate:
+    desc: Regenerate contracts from the ESS source
+    cmds:
+      - cargo run --locked -p control-plane-xtask -- generate
+
+  run:
+    desc: Start the local control plane
+    cmds:
+      - cargo run --locked -p control-plane-app -- serve {{.CLI_ARGS}}
