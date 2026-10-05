@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -47,6 +47,20 @@ pub enum GoalState {
     Running,
     /// `Satisfied`.
     Satisfied,
+}
+
+/// The states of `controlplane.host.PublicationIntent`, as runtime values.
+///
+/// Synthesised from the lifecycle, so the two cannot disagree. Which *moves* are legal is not
+/// carried here — it is carried by `PublicationIntent<S>`, where an undeclared move does not compile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublicationIntentState {
+    /// `Confirmed`.
+    Confirmed,
+    /// `Prepared`.
+    Prepared,
+    /// `Uncertain`.
+    Uncertain,
 }
 
 /// The states of `controlplane.host.RepositoryRegistration`, as runtime values.
@@ -105,6 +119,16 @@ pub struct AssignmentData {
     pub implementor_run: String,
     /// `reviewer_run` — `String`.
     pub reviewer_run: String,
+    /// `goal_revision` — `Integer`.
+    pub goal_revision: i64,
+    /// `base_revision` — `String`.
+    pub base_revision: String,
+    /// `test_revision` — `String`.
+    pub test_revision: String,
+    /// `review_revision` — `String`.
+    pub review_revision: String,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
 }
 
 /// The states of `controlplane.host.Assignment`, at the type level.
@@ -243,6 +267,14 @@ impl Assignment<assignment_state::Blocked> {
             state: core::marker::PhantomData,
         }
     }
+
+    /// `reconcile` — `Blocked` → `Merged`. Taken by the `applied` outcome of `controlplane.host.ReconcileAssignment`.
+    pub fn reconcile(self) -> Assignment<assignment_state::Merged> {
+        Assignment {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
 }
 
 impl Assignment<assignment_state::Implementing> {
@@ -282,6 +314,14 @@ impl Assignment<assignment_state::Merging> {
 
     /// `block` — `Merging` → `Blocked`. Taken by the `applied` outcome of `controlplane.host.BlockAssignment`.
     pub fn block(self) -> Assignment<assignment_state::Blocked> {
+        Assignment {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+
+    /// `reconcile` — `Merging` → `Merged`. Taken by the `applied` outcome of `controlplane.host.ReconcileAssignment`.
+    pub fn reconcile(self) -> Assignment<assignment_state::Merged> {
         Assignment {
             data: self.data,
             state: core::marker::PhantomData,
@@ -534,6 +574,10 @@ pub struct GoalData {
     pub reviewer_model: String,
     /// `merge_authority` — `Boolean`.
     pub merge_authority: bool,
+    /// `revision` — `Integer`.
+    pub revision: i64,
+    /// `satisfaction_receipt` — `String`.
+    pub satisfaction_receipt: String,
 }
 
 /// The states of `controlplane.host.Goal`, at the type level.
@@ -747,6 +791,210 @@ impl AnyGoal {
             },
             Self::Satisfied(instance) => GoalSnapshot {
                 state: GoalState::Satisfied,
+                data: instance.into_data(),
+            },
+        }
+    }
+}
+
+/// What PublicationIntent — `controlplane.host.PublicationIntent` — holds, apart from where it is in its lifecycle.
+///
+/// The identity and every declared field. The state is deliberately not one: inside the domain it
+/// is carried by the type parameter of [`PublicationIntent<S>`], and at a boundary by [`PublicationIntentSnapshot::state`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentData {
+    /// The identity: `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `assignment_id` — `Uuid`.
+    ///
+    /// Carries `publications`: `controlplane.host.Assignment` owns many `controlplane.host.PublicationIntent`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `target` — `String`.
+    pub target: String,
+    /// `expected_base` — `String`.
+    pub expected_base: String,
+    /// `receipt` — `String`.
+    pub receipt: String,
+}
+
+/// The states of `controlplane.host.PublicationIntent`, at the type level.
+///
+/// One marker type per declared state, sealed: a state the lifecycle does not declare cannot
+/// implement [`Marker`](publication_intent_state::Marker), so [`PublicationIntent<S>`](PublicationIntent) can only ever rest in a real state.
+pub mod publication_intent_state {
+    /// Closes [`Marker`] over the declared states.
+    mod sealed {
+        /// Implemented only by the marker types beside this module.
+        pub trait Sealed {}
+        impl Sealed for super::Confirmed {}
+        impl Sealed for super::Prepared {}
+        impl Sealed for super::Uncertain {}
+    }
+
+    /// A declared state of `PublicationIntent`, as a type.
+    pub trait Marker: sealed::Sealed {
+        /// The same state, as the runtime value.
+        const STATE: super::PublicationIntentState;
+    }
+
+    /// `Confirmed`. Terminal: an instance may rest here forever.
+    pub struct Confirmed;
+
+    impl Marker for Confirmed {
+        const STATE: super::PublicationIntentState = super::PublicationIntentState::Confirmed;
+    }
+
+    /// `Prepared`. Where a new instance starts.
+    pub struct Prepared;
+
+    impl Marker for Prepared {
+        const STATE: super::PublicationIntentState = super::PublicationIntentState::Prepared;
+    }
+
+    /// `Uncertain`.
+    pub struct Uncertain;
+
+    impl Marker for Uncertain {
+        const STATE: super::PublicationIntentState = super::PublicationIntentState::Uncertain;
+    }
+}
+
+/// PublicationIntent — `controlplane.host.PublicationIntent` — with its lifecycle state carried by the type.
+///
+/// The one constructor rests in `Prepared`, and the only way to change `S` is a method generated from
+/// a declared transition. A move the specification does not declare is therefore not an error
+/// case: it does not compile. Where the state is data — wire, storage — use [`PublicationIntentSnapshot`]
+/// and [`PublicationIntentSnapshot::refine`].
+pub struct PublicationIntent<S: publication_intent_state::Marker> {
+    data: PublicationIntentData,
+    state: core::marker::PhantomData<S>,
+}
+
+impl<S: publication_intent_state::Marker> PublicationIntent<S> {
+    /// The state this instance rests in, as the runtime value.
+    pub fn state(&self) -> PublicationIntentState {
+        S::STATE
+    }
+
+    /// What it holds.
+    pub fn data(&self) -> &PublicationIntentData {
+        &self.data
+    }
+
+    /// Hands the data back, giving up the typed state.
+    pub fn into_data(self) -> PublicationIntentData {
+        self.data
+    }
+}
+
+impl PublicationIntent<publication_intent_state::Prepared> {
+    /// A new instance, resting in `Prepared` — the only state the lifecycle starts one in.
+    pub fn new(data: PublicationIntentData) -> Self {
+        Self {
+            data,
+            state: core::marker::PhantomData,
+        }
+    }
+}
+
+impl PublicationIntent<publication_intent_state::Prepared> {
+    /// `uncertain` — `Prepared` → `Uncertain`. Taken by the `applied` outcome of `controlplane.host.MarkPublicationUncertain`.
+    pub fn uncertain(self) -> PublicationIntent<publication_intent_state::Uncertain> {
+        PublicationIntent {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+
+    /// `confirm` — `Prepared` → `Confirmed`. Taken by the `applied` outcome of `controlplane.host.ConfirmPublication`.
+    pub fn confirm(self) -> PublicationIntent<publication_intent_state::Confirmed> {
+        PublicationIntent {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+}
+
+impl PublicationIntent<publication_intent_state::Uncertain> {
+    /// `confirm` — `Uncertain` → `Confirmed`. Taken by the `applied` outcome of `controlplane.host.ConfirmPublication`.
+    pub fn confirm(self) -> PublicationIntent<publication_intent_state::Confirmed> {
+        PublicationIntent {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+}
+
+/// `controlplane.host.PublicationIntent` as it crosses a boundary: the state as a value beside the data.
+///
+/// Wire and storage know states only at runtime; [`PublicationIntentSnapshot::refine`] is the one door back
+/// into the typed lifecycle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentSnapshot {
+    /// Where the instance is in its lifecycle.
+    pub state: PublicationIntentState,
+    /// What it holds.
+    pub data: PublicationIntentData,
+}
+
+/// An `PublicationIntent` in whichever declared state it was found.
+pub enum AnyPublicationIntent {
+    /// Resting in `Confirmed`.
+    Confirmed(PublicationIntent<publication_intent_state::Confirmed>),
+    /// Resting in `Prepared`.
+    Prepared(PublicationIntent<publication_intent_state::Prepared>),
+    /// Resting in `Uncertain`.
+    Uncertain(PublicationIntent<publication_intent_state::Uncertain>),
+}
+
+impl PublicationIntentSnapshot {
+    /// Refines the runtime state into the typed one.
+    ///
+    /// Total: every declared state has an arm, and an undeclared state cannot reach here because
+    /// `PublicationIntentState` cannot spell one.
+    pub fn refine(self) -> AnyPublicationIntent {
+        match self.state {
+            PublicationIntentState::Confirmed => AnyPublicationIntent::Confirmed(PublicationIntent {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+            PublicationIntentState::Prepared => AnyPublicationIntent::Prepared(PublicationIntent {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+            PublicationIntentState::Uncertain => AnyPublicationIntent::Uncertain(PublicationIntent {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+        }
+    }
+}
+
+impl AnyPublicationIntent {
+    /// The state, as the runtime value.
+    pub fn state(&self) -> PublicationIntentState {
+        match self {
+            Self::Confirmed(_) => PublicationIntentState::Confirmed,
+            Self::Prepared(_) => PublicationIntentState::Prepared,
+            Self::Uncertain(_) => PublicationIntentState::Uncertain,
+        }
+    }
+
+    /// Back to the boundary shape.
+    pub fn snapshot(self) -> PublicationIntentSnapshot {
+        match self {
+            Self::Confirmed(instance) => PublicationIntentSnapshot {
+                state: PublicationIntentState::Confirmed,
+                data: instance.into_data(),
+            },
+            Self::Prepared(instance) => PublicationIntentSnapshot {
+                state: PublicationIntentState::Prepared,
+                data: instance.into_data(),
+            },
+            Self::Uncertain(instance) => PublicationIntentSnapshot {
+                state: PublicationIntentState::Uncertain,
                 data: instance.into_data(),
             },
         }
@@ -1133,6 +1381,8 @@ pub enum ArchiveWorkspaceOutcome {
 pub struct BlockAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
 }
 
 /// Everything `controlplane.host.BlockAssignment` can result in — one variant per declared outcome.
@@ -1232,6 +1482,12 @@ pub enum CancelGoalOutcome {
 pub struct ClaimAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `worktree_id` — `String`.
+    pub worktree_id: String,
+    /// `implementor_run` — `String`.
+    pub implementor_run: String,
+    /// `base_revision` — `String`.
+    pub base_revision: String,
 }
 
 /// Everything `controlplane.host.ClaimAssignment` can result in — one variant per declared outcome.
@@ -1265,6 +1521,8 @@ pub enum ClaimAssignmentOutcome {
 pub struct CompleteAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
 }
 
 /// Everything `controlplane.host.CompleteAssignment` can result in — one variant per declared outcome.
@@ -1288,6 +1546,75 @@ pub enum CompleteAssignmentOutcome {
     NotFound {
         /// Why it was refused: `controlplane.host.AssignmentNotFound`.
         error: AssignmentNotFound,
+    },
+}
+
+/// ConfigureRepository — the input of `controlplane.host.ConfigureRepository`.
+///
+/// Everything it can result in is [`ConfigureRepositoryOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigureRepository {
+    /// `repository_id` — `Uuid`.
+    pub repository_id: crate::primitives::Uuid,
+    /// `base_branch` — `String`.
+    pub base_branch: String,
+    /// `test_command` — `String`.
+    pub test_command: String,
+    /// `publish_command` — `String`.
+    pub publish_command: String,
+}
+
+/// Everything `controlplane.host.ConfigureRepository` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigureRepositoryOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.ConfigureRepositoryApplied` this outcome publishes.
+        configure_repository_applied: ConfigureRepositoryApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.RepositoryRegistrationNotFound`.
+        error: RepositoryRegistrationNotFound,
+    },
+}
+
+/// ConfirmPublication — the input of `controlplane.host.ConfirmPublication`.
+///
+/// Everything it can result in is [`ConfirmPublicationOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmPublication {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `receipt` — `String`.
+    pub receipt: String,
+}
+
+/// Everything `controlplane.host.ConfirmPublication` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfirmPublicationOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.ConfirmPublicationApplied` this outcome publishes.
+        confirm_publication_applied: ConfirmPublicationApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.PublicationIntentNotFound`.
+        error: PublicationIntentNotFound,
+    },
+    /// `wrong-state` — from a state no declared move starts in.
+    WrongState {
+        /// Why it was refused: `controlplane.host.PublicationIntentStateConflict`.
+        error: PublicationIntentStateConflict,
     },
 }
 
@@ -1398,6 +1725,39 @@ pub enum EnableRepositoryRegistrationOutcome {
     },
 }
 
+/// MarkPublicationUncertain — the input of `controlplane.host.MarkPublicationUncertain`.
+///
+/// Everything it can result in is [`MarkPublicationUncertainOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkPublicationUncertain {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+}
+
+/// Everything `controlplane.host.MarkPublicationUncertain` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkPublicationUncertainOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.MarkPublicationUncertainApplied` this outcome publishes.
+        mark_publication_uncertain_applied: MarkPublicationUncertainApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.PublicationIntentNotFound`.
+        error: PublicationIntentNotFound,
+    },
+    /// `wrong-state` — from a state no declared move starts in.
+    WrongState {
+        /// Why it was refused: `controlplane.host.PublicationIntentStateConflict`.
+        error: PublicationIntentStateConflict,
+    },
+}
+
 /// MergeAssignment — the input of `controlplane.host.MergeAssignment`.
 ///
 /// Everything it can result in is [`MergeAssignmentOutcome`].
@@ -1464,6 +1824,35 @@ pub enum PauseGoalOutcome {
     },
 }
 
+/// PreparePublication — the input of `controlplane.host.PreparePublication`.
+///
+/// Everything it can result in is [`PreparePublicationOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparePublication {
+    /// `assignment_id` — `Uuid`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `target` — `String`.
+    pub target: String,
+    /// `expected_base` — `String`.
+    pub expected_base: String,
+}
+
+/// Everything `controlplane.host.PreparePublication` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreparePublicationOutcome {
+    /// `created` — otherwise.
+    Created {
+        /// The `controlplane.host.PublicationIntentCreated` this outcome publishes.
+        publication_intent_created: PublicationIntentCreated,
+    },
+}
+
 /// QueueAssignment — the input of `controlplane.host.QueueAssignment`.
 ///
 /// Everything it can result in is [`QueueAssignmentOutcome`].
@@ -1489,6 +1878,8 @@ pub struct QueueAssignment {
     pub implementor_run: String,
     /// `reviewer_run` — `String`.
     pub reviewer_run: String,
+    /// `goal_revision` — `Integer`.
+    pub goal_revision: i64,
 }
 
 /// Everything `controlplane.host.QueueAssignment` can result in — one variant per declared outcome.
@@ -1512,6 +1903,10 @@ pub enum QueueAssignmentOutcome {
 pub struct ReadyAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reviewer_run` — `String`.
+    pub reviewer_run: String,
+    /// `review_revision` — `String`.
+    pub review_revision: String,
 }
 
 /// Everything `controlplane.host.ReadyAssignment` can result in — one variant per declared outcome.
@@ -1535,6 +1930,41 @@ pub enum ReadyAssignmentOutcome {
     NotFound {
         /// Why it was refused: `controlplane.host.AssignmentNotFound`.
         error: AssignmentNotFound,
+    },
+}
+
+/// ReconcileAssignment — the input of `controlplane.host.ReconcileAssignment`.
+///
+/// Everything it can result in is [`ReconcileAssignmentOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReconcileAssignment {
+    /// `assignment_id` — `Uuid`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
+}
+
+/// Everything `controlplane.host.ReconcileAssignment` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReconcileAssignmentOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.ReconcileAssignmentApplied` this outcome publishes.
+        reconcile_assignment_applied: ReconcileAssignmentApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.AssignmentNotFound`.
+        error: AssignmentNotFound,
+    },
+    /// `wrong-state` — from a state no declared move starts in.
+    WrongState {
+        /// Why it was refused: `controlplane.host.AssignmentStateConflict`.
+        error: AssignmentStateConflict,
     },
 }
 
@@ -1605,6 +2035,10 @@ pub enum RegisterWorkspaceOutcome {
 pub struct RepairAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
+    /// `implementor_run` — `String`.
+    pub implementor_run: String,
 }
 
 /// Everything `controlplane.host.RepairAssignment` can result in — one variant per declared outcome.
@@ -1638,6 +2072,10 @@ pub enum RepairAssignmentOutcome {
 pub struct ReviewAssignment {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `test_revision` — `String`.
+    pub test_revision: String,
 }
 
 /// Everything `controlplane.host.ReviewAssignment` can result in — one variant per declared outcome.
@@ -1671,6 +2109,8 @@ pub enum ReviewAssignmentOutcome {
 pub struct SatisfyGoal {
     /// `goal_id` — `Uuid`.
     pub goal_id: crate::primitives::Uuid,
+    /// `satisfaction_receipt` — `String`.
+    pub satisfaction_receipt: String,
 }
 
 /// Everything `controlplane.host.SatisfyGoal` can result in — one variant per declared outcome.
@@ -1730,6 +2170,52 @@ pub enum StartGoalOutcome {
     },
 }
 
+/// UpdateGoal — the input of `controlplane.host.UpdateGoal`.
+///
+/// Everything it can result in is [`UpdateGoalOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateGoal {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+    /// `objective` — `String`.
+    pub objective: String,
+    /// `acceptance` — `String`.
+    pub acceptance: String,
+    /// `max_workers` — `Integer`.
+    pub max_workers: i64,
+    /// `max_attempts` — `Integer`.
+    pub max_attempts: i64,
+    /// `max_minutes` — `Integer`.
+    pub max_minutes: i64,
+    /// `planner_model` — `String`.
+    pub planner_model: String,
+    /// `implementor_model` — `String`.
+    pub implementor_model: String,
+    /// `reviewer_model` — `String`.
+    pub reviewer_model: String,
+    /// `merge_authority` — `Boolean`.
+    pub merge_authority: bool,
+}
+
+/// Everything `controlplane.host.UpdateGoal` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateGoalOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.UpdateGoalApplied` this outcome publishes.
+        update_goal_applied: UpdateGoalApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.GoalNotFound`.
+        error: GoalNotFound,
+    },
+}
+
 /// ArchiveWorkspaceApplied — the event `controlplane.host.ArchiveWorkspaceApplied`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveWorkspaceApplied {
@@ -1762,6 +2248,8 @@ pub struct AssignmentCreated {
     pub implementor_run: String,
     /// `reviewer_run` — `String`.
     pub reviewer_run: String,
+    /// `goal_revision` — `Integer`.
+    pub goal_revision: i64,
 }
 
 /// BlockAssignmentApplied — the event `controlplane.host.BlockAssignmentApplied`.
@@ -1769,6 +2257,8 @@ pub struct AssignmentCreated {
 pub struct BlockAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
 }
 
 /// CancelAssignmentApplied — the event `controlplane.host.CancelAssignmentApplied`.
@@ -1790,6 +2280,12 @@ pub struct CancelGoalApplied {
 pub struct ClaimAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `worktree_id` — `String`.
+    pub worktree_id: String,
+    /// `implementor_run` — `String`.
+    pub implementor_run: String,
+    /// `base_revision` — `String`.
+    pub base_revision: String,
 }
 
 /// CompleteAssignmentApplied — the event `controlplane.host.CompleteAssignmentApplied`.
@@ -1797,6 +2293,30 @@ pub struct ClaimAssignmentApplied {
 pub struct CompleteAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
+}
+
+/// ConfigureRepositoryApplied — the event `controlplane.host.ConfigureRepositoryApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigureRepositoryApplied {
+    /// `repository_id` — `Uuid`.
+    pub repository_id: crate::primitives::Uuid,
+    /// `base_branch` — `String`.
+    pub base_branch: String,
+    /// `test_command` — `String`.
+    pub test_command: String,
+    /// `publish_command` — `String`.
+    pub publish_command: String,
+}
+
+/// ConfirmPublicationApplied — the event `controlplane.host.ConfirmPublicationApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmPublicationApplied {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `receipt` — `String`.
+    pub receipt: String,
 }
 
 /// DisableRepositoryRegistrationApplied — the event `controlplane.host.DisableRepositoryRegistrationApplied`.
@@ -1840,6 +2360,13 @@ pub struct GoalCreated {
     pub merge_authority: bool,
 }
 
+/// MarkPublicationUncertainApplied — the event `controlplane.host.MarkPublicationUncertainApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkPublicationUncertainApplied {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+}
+
 /// MergeAssignmentApplied — the event `controlplane.host.MergeAssignmentApplied`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeAssignmentApplied {
@@ -1854,11 +2381,39 @@ pub struct PauseGoalApplied {
     pub goal_id: crate::primitives::Uuid,
 }
 
+/// PublicationIntentCreated — the event `controlplane.host.PublicationIntentCreated`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentCreated {
+    /// `assignment_id` — `Uuid`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `target` — `String`.
+    pub target: String,
+    /// `expected_base` — `String`.
+    pub expected_base: String,
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+}
+
 /// ReadyAssignmentApplied — the event `controlplane.host.ReadyAssignmentApplied`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadyAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reviewer_run` — `String`.
+    pub reviewer_run: String,
+    /// `review_revision` — `String`.
+    pub review_revision: String,
+}
+
+/// ReconcileAssignmentApplied — the event `controlplane.host.ReconcileAssignmentApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReconcileAssignmentApplied {
+    /// `assignment_id` — `Uuid`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
 }
 
 /// RepairAssignmentApplied — the event `controlplane.host.RepairAssignmentApplied`.
@@ -1866,6 +2421,10 @@ pub struct ReadyAssignmentApplied {
 pub struct RepairAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
+    /// `implementor_run` — `String`.
+    pub implementor_run: String,
 }
 
 /// RepositoryRegistrationCreated — the event `controlplane.host.RepositoryRegistrationCreated`.
@@ -1894,6 +2453,10 @@ pub struct RepositoryRegistrationCreated {
 pub struct ReviewAssignmentApplied {
     /// `assignment_id` — `Uuid`.
     pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `test_revision` — `String`.
+    pub test_revision: String,
 }
 
 /// SatisfyGoalApplied — the event `controlplane.host.SatisfyGoalApplied`.
@@ -1901,6 +2464,8 @@ pub struct ReviewAssignmentApplied {
 pub struct SatisfyGoalApplied {
     /// `goal_id` — `Uuid`.
     pub goal_id: crate::primitives::Uuid,
+    /// `satisfaction_receipt` — `String`.
+    pub satisfaction_receipt: String,
 }
 
 /// StartGoalApplied — the event `controlplane.host.StartGoalApplied`.
@@ -1908,6 +2473,31 @@ pub struct SatisfyGoalApplied {
 pub struct StartGoalApplied {
     /// `goal_id` — `Uuid`.
     pub goal_id: crate::primitives::Uuid,
+}
+
+/// UpdateGoalApplied — the event `controlplane.host.UpdateGoalApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateGoalApplied {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+    /// `objective` — `String`.
+    pub objective: String,
+    /// `acceptance` — `String`.
+    pub acceptance: String,
+    /// `max_workers` — `Integer`.
+    pub max_workers: i64,
+    /// `max_attempts` — `Integer`.
+    pub max_attempts: i64,
+    /// `max_minutes` — `Integer`.
+    pub max_minutes: i64,
+    /// `planner_model` — `String`.
+    pub planner_model: String,
+    /// `implementor_model` — `String`.
+    pub implementor_model: String,
+    /// `reviewer_model` — `String`.
+    pub reviewer_model: String,
+    /// `merge_authority` — `Boolean`.
+    pub merge_authority: bool,
 }
 
 /// WorkspaceCreated — the event `controlplane.host.WorkspaceCreated`.
@@ -1949,6 +2539,17 @@ pub struct GoalNotFound;
 pub struct GoalStateConflict {
     /// `state` — `controlplane.host.Goal.State`.
     pub state: GoalState,
+}
+
+/// The declared error `controlplane.host.PublicationIntentNotFound`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentNotFound;
+
+/// The declared error `controlplane.host.PublicationIntentStateConflict`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentStateConflict {
+    /// `state` — `controlplane.host.PublicationIntent.State`.
+    pub state: PublicationIntentState,
 }
 
 /// The declared error `controlplane.host.RepositoryRegistrationNotFound`.
@@ -2010,6 +2611,16 @@ pub struct AssignmentList {
     pub implementor_run: String,
     /// `reviewer_run` — `String`.
     pub reviewer_run: String,
+    /// `goal_revision` — `Integer`.
+    pub goal_revision: i64,
+    /// `base_revision` — `String`.
+    pub base_revision: String,
+    /// `test_revision` — `String`.
+    pub test_revision: String,
+    /// `review_revision` — `String`.
+    pub review_revision: String,
+    /// `merge_receipt` — `String`.
+    pub merge_receipt: String,
     /// `state` — `controlplane.host.Assignment.State`.
     pub state: AssignmentState,
 }
@@ -2043,8 +2654,35 @@ pub struct GoalList {
     pub reviewer_model: String,
     /// `merge_authority` — `Boolean`.
     pub merge_authority: bool,
+    /// `revision` — `Integer`.
+    pub revision: i64,
+    /// `satisfaction_receipt` — `String`.
+    pub satisfaction_receipt: String,
     /// `state` — `controlplane.host.Goal.State`.
     pub state: GoalState,
+}
+
+/// PublicationIntentList — one row of the view `controlplane.host.PublicationIntentList`.
+///
+/// Projects `controlplane.host.PublicationIntent` at `read_your_writes` consistency.
+/// The specification fully determines every row, so its query is generated over the storage port —
+/// see the plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntentList {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `assignment_id` — `Uuid`.
+    pub assignment_id: crate::primitives::Uuid,
+    /// `candidate` — `String`.
+    pub candidate: String,
+    /// `target` — `String`.
+    pub target: String,
+    /// `expected_base` — `String`.
+    pub expected_base: String,
+    /// `receipt` — `String`.
+    pub receipt: String,
+    /// `state` — `controlplane.host.PublicationIntent.State`.
+    pub state: PublicationIntentState,
 }
 
 /// RepositoryRegistrationList — one row of the view `controlplane.host.RepositoryRegistrationList`.
@@ -2162,6 +2800,28 @@ pub mod obligations {
         fn complete_assignment(&mut self, input: super::CompleteAssignment) -> Result<super::CompleteAssignmentOutcome, crate::obligation::UnmetObligation>;
     }
 
+    /// The behaviour `controlplane.host.ConfigureRepository` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait ConfigureRepositoryBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.ConfigureRepository`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn configure_repository(&mut self, input: super::ConfigureRepository) -> Result<super::ConfigureRepositoryOutcome, crate::obligation::UnmetObligation>;
+    }
+
+    /// The behaviour `controlplane.host.ConfirmPublication` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait ConfirmPublicationBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.ConfirmPublication`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn confirm_publication(&mut self, input: super::ConfirmPublication) -> Result<super::ConfirmPublicationOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The behaviour `controlplane.host.CreateGoal` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -2195,6 +2855,17 @@ pub mod obligations {
         fn enable_repository_registration(&mut self, input: super::EnableRepositoryRegistration) -> Result<super::EnableRepositoryRegistrationOutcome, crate::obligation::UnmetObligation>;
     }
 
+    /// The behaviour `controlplane.host.MarkPublicationUncertain` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait MarkPublicationUncertainBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.MarkPublicationUncertain`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn mark_publication_uncertain(&mut self, input: super::MarkPublicationUncertain) -> Result<super::MarkPublicationUncertainOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The behaviour `controlplane.host.MergeAssignment` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -2217,6 +2888,17 @@ pub mod obligations {
         fn pause_goal(&mut self, input: super::PauseGoal) -> Result<super::PauseGoalOutcome, crate::obligation::UnmetObligation>;
     }
 
+    /// The behaviour `controlplane.host.PreparePublication` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait PreparePublicationBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.PreparePublication`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn prepare_publication(&mut self, input: super::PreparePublication) -> Result<super::PreparePublicationOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The behaviour `controlplane.host.QueueAssignment` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -2237,6 +2919,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
         fn ready_assignment(&mut self, input: super::ReadyAssignment) -> Result<super::ReadyAssignmentOutcome, crate::obligation::UnmetObligation>;
+    }
+
+    /// The behaviour `controlplane.host.ReconcileAssignment` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait ReconcileAssignmentBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.ReconcileAssignment`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn reconcile_assignment(&mut self, input: super::ReconcileAssignment) -> Result<super::ReconcileAssignmentOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `controlplane.host.RegisterRepository` — generated.
@@ -2305,6 +2998,17 @@ pub mod obligations {
         fn start_goal(&mut self, input: super::StartGoal) -> Result<super::StartGoalOutcome, crate::obligation::UnmetObligation>;
     }
 
+    /// The behaviour `controlplane.host.UpdateGoal` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait UpdateGoalBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.UpdateGoal`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn update_goal(&mut self, input: super::UpdateGoal) -> Result<super::UpdateGoalOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The query `controlplane.host.AssignmentList` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -2325,6 +3029,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
         fn goal_list(&self) -> Result<Vec<super::GoalList>, crate::obligation::UnmetObligation>;
+    }
+
+    /// The query `controlplane.host.PublicationIntentList` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage port. Implement it yourself to replace that query.
+    pub trait PublicationIntentListQuery {
+        /// Serves `controlplane.host.PublicationIntentList` rows at the view's declared consistency.
+        ///
+        /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
+        fn publication_intent_list(&self) -> Result<Vec<super::PublicationIntentList>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `controlplane.host.RepositoryRegistrationList` — generated.

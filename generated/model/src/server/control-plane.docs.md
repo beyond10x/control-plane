@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-contract digest slice-sha256/2:c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+contract digest slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 do not edit: regenerate with `ess generate`
 -->
 
@@ -33,8 +33,13 @@ It holds:
 - `reason` — `String`
 - `implementor_run` — `String`
 - `reviewer_run` — `String`
+- `goal_revision` — `Integer`
+- `base_revision` — `String`
+- `test_revision` — `String`
+- `review_revision` — `String`
+- `merge_receipt` — `String`
 
-It references at most one [`RepositoryRegistration`](#repositoryregistration), as `repository`, carried by `Assignment.repository_id`. Its `goal_id` is what [`Goal`](#goal) owns it by, as `assignments`.
+It references at most one [`RepositoryRegistration`](#repositoryregistration), as `repository`, carried by `Assignment.repository_id`. It owns any number of [`PublicationIntent`](#publicationintent), as `publications`, carried by `PublicationIntent.assignment_id`. Its `goal_id` is what [`Goal`](#goal) owns it by, as `assignments`.
 
 No invariant is declared, so nothing here constrains an instance at rest.
 
@@ -62,6 +67,8 @@ stateDiagram-v2
     Queued --> Cancelled: cancel (CancelAssignment)
     ReadyToMerge --> Cancelled: cancel (CancelAssignment)
     Reviewing --> Cancelled: cancel (CancelAssignment)
+    Blocked --> Merged: reconcile (ReconcileAssignment)
+    Merging --> Merged: reconcile (ReconcileAssignment)
     Cancelled --> [*]
     Merged --> [*]
 ```
@@ -76,12 +83,12 @@ Each move is taken by a declared command outcome, and a move nothing takes is re
 - `complete` — taken by `controlplane.host.CompleteAssignment` on its `applied` outcome
 - `block` — taken by `controlplane.host.BlockAssignment` on its `applied` outcome
 - `cancel` — taken by `controlplane.host.CancelAssignment` on its `applied` outcome
+- `reconcile` — taken by `controlplane.host.ReconcileAssignment` on its `applied` outcome
 
 An instance is brought into existence by `controlplane.host.QueueAssignment` on its `created` outcome.
 
 Illegal transitions are illegal by absence: no rule forbids them, there is simply no arrow, because a rule would be a second place for the same truth to live. A diagram cannot show an absence, so the pairs it does not connect are listed here, derived from the same transitions — anything named below is a move this specification does not permit.
 
-- `Blocked` may not become `Merged`
 - `Blocked` may not become `Merging`
 - `Blocked` may not become `Queued`
 - `Blocked` may not become `ReadyToMerge`
@@ -141,6 +148,8 @@ It holds:
 - `implementor_model` — `String`
 - `reviewer_model` — `String`
 - `merge_authority` — `Boolean`
+- `revision` — `Integer`
+- `satisfaction_receipt` — `String`
 
 It owns any number of [`Assignment`](#assignment), as `assignments`, carried by `Assignment.goal_id`. Its `workspace_id` is what [`Workspace`](#workspace) owns it by, as `goals`.
 
@@ -182,6 +191,52 @@ Illegal transitions are illegal by absence: no rule forbids them, there is simpl
 - `Satisfied` may not become `Running`
 
 One view projects it: [`GoalList`](#goallist).
+
+### `PublicationIntent`
+
+`controlplane.host.PublicationIntent`.
+
+An instance is identified by `publication_id`, a `Uuid`. The name is part of the model and not a convention: a view projects the identity under that name, so a projection inventing its own would disagree with the view.
+
+It holds:
+
+- `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `target` — `String`
+- `expected_base` — `String`
+- `receipt` — `String`
+
+Its `assignment_id` is what [`Assignment`](#assignment) owns it by, as `publications`.
+
+No invariant is declared, so nothing here constrains an instance at rest.
+
+Its state is a `controlplane.host.PublicationIntent.State`, one of `Confirmed`, `Prepared` and `Uncertain`. That enum is synthesised from the lifecycle rather than declared beside it, so the states a view's filter compares and the states drawn below cannot disagree.
+
+An instance is created in `Prepared`. `Confirmed` is terminal, so an instance may rest there forever. That is declared rather than inferred from having no way out: an entity that cannot leave a state is either finished or stuck, and only its author knows which.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Prepared
+    Prepared --> Uncertain: uncertain (MarkPublicationUncertain)
+    Prepared --> Confirmed: confirm (ConfirmPublication)
+    Uncertain --> Confirmed: confirm (ConfirmPublication)
+    Confirmed --> [*]
+```
+
+Each move is taken by a declared command outcome, and a move nothing takes is refused as `missing_causation` rather than left as a state change nobody can trigger:
+
+- `uncertain` — taken by `controlplane.host.MarkPublicationUncertain` on its `applied` outcome
+- `confirm` — taken by `controlplane.host.ConfirmPublication` on its `applied` outcome
+
+An instance is brought into existence by `controlplane.host.PreparePublication` on its `created` outcome.
+
+Illegal transitions are illegal by absence: no rule forbids them, there is simply no arrow, because a rule would be a second place for the same truth to live. A diagram cannot show an absence, so the pairs it does not connect are listed here, derived from the same transitions — anything named below is a move this specification does not permit.
+
+- `Confirmed` may not become `Prepared`
+- `Confirmed` may not become `Uncertain`
+- `Uncertain` may not become `Prepared`
+
+One view projects it: [`PublicationIntentList`](#publicationintentlist).
 
 ### `RepositoryRegistration`
 
@@ -288,6 +343,11 @@ It exposes:
 - `reason` — `String`
 - `implementor_run` — `String`
 - `reviewer_run` — `String`
+- `goal_revision` — `Integer`
+- `base_revision` — `String`
+- `test_revision` — `String`
+- `review_revision` — `String`
+- `merge_receipt` — `String`
 - `state` — `controlplane.host.Assignment.State`
 
 It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
@@ -317,7 +377,33 @@ It exposes:
 - `implementor_model` — `String`
 - `reviewer_model` — `String`
 - `merge_authority` — `Boolean`
+- `revision` — `Integer`
+- `satisfaction_receipt` — `String`
 - `state` — `controlplane.host.Goal.State`
+
+It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
+
+**Read-your-writes**: it is current the moment the command that changed it returns. A caller that has just created an invoice and cannot see it in here has been told a lie about what it did.
+
+A generated scenario asserts it once, immediately after the command: a view promising this and not keeping the promise has to fail the suite rather than be retried until it passes.
+
+### `PublicationIntentList`
+
+`controlplane.host.PublicationIntentList`.
+
+It reads [`PublicationIntent`](#publicationintent).
+
+It contains every instance of that entity: no filter narrows it, which is a decision somebody made and not a line somebody omitted.
+
+It exposes:
+
+- `publication_id` — `Uuid`
+- `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `target` — `String`
+- `expected_base` — `String`
+- `receipt` — `String`
+- `state` — `controlplane.host.PublicationIntent.State`
 
 It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
 
@@ -397,10 +483,11 @@ It has three outcomes.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `reason` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Implementing`, `Merging`, `Queued`, `ReadyToMerge` and `Reviewing` to `Blocked`, along the declared move `block`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.BlockAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Implementing`, `Merging`, `Queued`, `ReadyToMerge` and `Reviewing` to `Blocked`, along the declared move `block`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.BlockAssignmentApplied`. It sets `reason` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled` and `Merged`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
@@ -445,10 +532,13 @@ It has three outcomes.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `worktree_id` — `String`
+- `implementor_run` — `String`
+- `base_revision` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Queued` to `Implementing`, along the declared move `claim`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ClaimAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Queued` to `Implementing`, along the declared move `claim`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ClaimAssignmentApplied`. It sets `worktree_id` from `input.worktree_id`, `attempt` from `its previous value plus 1`, `implementor_run` from `input.implementor_run` and `base_revision` from `input.base_revision`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled`, `Implementing`, `Merged`, `Merging`, `ReadyToMerge` and `Reviewing`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
@@ -461,14 +551,49 @@ It has three outcomes.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `merge_receipt` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Merging` to `Merged`, along the declared move `complete`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.CompleteAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Merging` to `Merged`, along the declared move `complete`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.CompleteAssignmentApplied`. It sets `merge_receipt` from `input.merge_receipt`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled`, `Implementing`, `Merged`, `Queued`, `ReadyToMerge` and `Reviewing`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.AssignmentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+### `ConfigureRepository`
+
+`controlplane.host.ConfigureRepository`.
+
+It takes:
+
+- `repository_id` — `Uuid`
+- `base_branch` — `String`
+- `test_command` — `String`
+- `publish_command` — `String`
+
+It has two outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It changes a `controlplane.host.RepositoryRegistration` without moving it along its lifecycle. The instance is the one named by the input field `repository_id`. It emits `controlplane.host.ConfigureRepositoryApplied`. It sets `base_branch` from `input.base_branch`, `test_command` from `input.test_command` and `publish_command` from `input.publish_command`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.RepositoryRegistrationNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+### `ConfirmPublication`
+
+`controlplane.host.ConfirmPublication`.
+
+It takes:
+
+- `publication_id` — `Uuid`
+- `receipt` — `String`
+
+It has three outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.PublicationIntent` from `Prepared` and `Uncertain` to `Confirmed`, along the declared move `confirm`. The instance is the one named by the input field `publication_id`. It emits `controlplane.host.ConfirmPublicationApplied`. It sets `receipt` from `input.receipt`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 ### `CreateGoal`
 
@@ -489,7 +614,7 @@ It takes:
 
 It has one outcome.
 
-**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Goal`, which starts in `Paused`. The new instance's identity is published as `goal_id` on `controlplane.host.GoalCreated`. It emits `controlplane.host.GoalCreated`. It sets `workspace_id` from `input.workspace_id`, `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model` and `merge_authority` from `input.merge_authority`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Goal`, which starts in `Paused`. The new instance's identity is published as `goal_id` on `controlplane.host.GoalCreated`. It emits `controlplane.host.GoalCreated`. It sets `workspace_id` from `input.workspace_id`, `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `"1"` and `satisfaction_receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 ### `DisableRepositoryRegistration`
 
@@ -523,6 +648,22 @@ It has three outcomes.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.RepositoryRegistrationNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
+### `MarkPublicationUncertain`
+
+`controlplane.host.MarkPublicationUncertain`.
+
+It takes:
+
+- `publication_id` — `Uuid`
+
+It has three outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.PublicationIntent` from `Prepared` to `Uncertain`, along the declared move `uncertain`. The instance is the one named by the input field `publication_id`. It emits `controlplane.host.MarkPublicationUncertainApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed` and `Uncertain`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+
 ### `MergeAssignment`
 
 `controlplane.host.MergeAssignment`.
@@ -555,6 +696,21 @@ It has three outcomes.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
+### `PreparePublication`
+
+`controlplane.host.PreparePublication`.
+
+It takes:
+
+- `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `target` — `String`
+- `expected_base` — `String`
+
+It has one outcome.
+
+**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.PublicationIntent`, which starts in `Prepared`. The new instance's identity is published as `publication_id` on `controlplane.host.PublicationIntentCreated`. It emits `controlplane.host.PublicationIntentCreated`. It sets `assignment_id` from `input.assignment_id`, `candidate` from `input.candidate`, `target` from `input.target`, `expected_base` from `input.expected_base` and `receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
 ### `QueueAssignment`
 
 `controlplane.host.QueueAssignment`.
@@ -571,10 +727,11 @@ It takes:
 - `reason` — `String`
 - `implementor_run` — `String`
 - `reviewer_run` — `String`
+- `goal_revision` — `Integer`
 
 It has one outcome.
 
-**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Assignment`, which starts in `Queued`. The new instance's identity is published as `assignment_id` on `controlplane.host.AssignmentCreated`. It emits `controlplane.host.AssignmentCreated`. It sets `goal_id` from `input.goal_id`, `repository_id` from `input.repository_id`, `story_id` from `input.story_id`, `case_id` from `input.case_id`, `worktree_id` from `input.worktree_id`, `candidate` from `input.candidate`, `attempt` from `input.attempt`, `reason` from `input.reason`, `implementor_run` from `input.implementor_run` and `reviewer_run` from `input.reviewer_run`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Assignment`, which starts in `Queued`. The new instance's identity is published as `assignment_id` on `controlplane.host.AssignmentCreated`. It emits `controlplane.host.AssignmentCreated`. It sets `goal_id` from `input.goal_id`, `repository_id` from `input.repository_id`, `story_id` from `input.story_id`, `case_id` from `input.case_id`, `worktree_id` from `input.worktree_id`, `candidate` from `input.candidate`, `attempt` from `input.attempt`, `reason` from `input.reason`, `implementor_run` from `input.implementor_run`, `reviewer_run` from `input.reviewer_run`, `goal_revision` from `input.goal_revision`, `base_revision` from `""`, `test_revision` from `""`, `review_revision` from `""` and `merge_receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 ### `ReadyAssignment`
 
@@ -583,14 +740,33 @@ It has one outcome.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `reviewer_run` — `String`
+- `review_revision` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Reviewing` to `ReadyToMerge`, along the declared move `ready`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ReadyAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Reviewing` to `ReadyToMerge`, along the declared move `ready`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ReadyAssignmentApplied`. It sets `reviewer_run` from `input.reviewer_run` and `review_revision` from `input.review_revision`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled`, `Implementing`, `Merged`, `Merging`, `Queued` and `ReadyToMerge`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.AssignmentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+### `ReconcileAssignment`
+
+`controlplane.host.ReconcileAssignment`.
+
+It takes:
+
+- `assignment_id` — `Uuid`
+- `merge_receipt` — `String`
+
+It has three outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Blocked` and `Merging` to `Merged`, along the declared move `reconcile`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ReconcileAssignmentApplied`. It sets `merge_receipt` from `input.merge_receipt`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.AssignmentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Cancelled`, `Implementing`, `Merged`, `Queued`, `ReadyToMerge` and `Reviewing`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 ### `RegisterRepository`
 
@@ -630,10 +806,12 @@ It has one outcome.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `reason` — `String`
+- `implementor_run` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Blocked` and `Reviewing` to `Implementing`, along the declared move `repair`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.RepairAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Blocked` and `Reviewing` to `Implementing`, along the declared move `repair`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.RepairAssignmentApplied`. It sets `attempt` from `its previous value plus 1`, `reason` from `input.reason`, `implementor_run` from `input.implementor_run`, `reviewer_run` from `""`, `test_revision` from `""` and `review_revision` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Cancelled`, `Implementing`, `Merged`, `Merging`, `Queued` and `ReadyToMerge`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
@@ -646,10 +824,12 @@ It has three outcomes.
 It takes:
 
 - `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `test_revision` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Implementing` to `Reviewing`, along the declared move `review`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ReviewAssignmentApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Implementing` to `Reviewing`, along the declared move `review`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.ReviewAssignmentApplied`. It sets `candidate` from `input.candidate` and `test_revision` from `input.test_revision`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled`, `Merged`, `Merging`, `Queued`, `ReadyToMerge` and `Reviewing`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
@@ -662,10 +842,11 @@ It has three outcomes.
 It takes:
 
 - `goal_id` — `Uuid`
+- `satisfaction_receipt` — `String`
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Goal` from `Running` to `Satisfied`, along the declared move `satisfy`. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.SatisfyGoalApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Goal` from `Running` to `Satisfied`, along the declared move `satisfy`. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.SatisfyGoalApplied`. It sets `satisfaction_receipt` from `input.satisfaction_receipt`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Goal` in `Cancelled`, `Paused` and `Satisfied`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.GoalStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
@@ -684,6 +865,29 @@ It has three outcomes.
 **`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Goal` from `Paused` to `Running`, along the declared move `start`. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.StartGoalApplied`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Goal` in `Cancelled`, `Running` and `Satisfied`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.GoalStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+### `UpdateGoal`
+
+`controlplane.host.UpdateGoal`.
+
+It takes:
+
+- `goal_id` — `Uuid`
+- `objective` — `String`
+- `acceptance` — `String`
+- `max_workers` — `Integer`
+- `max_attempts` — `Integer`
+- `max_minutes` — `Integer`
+- `planner_model` — `String`
+- `implementor_model` — `String`
+- `reviewer_model` — `String`
+- `merge_authority` — `Boolean`
+
+It has two outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It changes a `controlplane.host.Goal` without moving it along its lifecycle. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.UpdateGoalApplied`. It sets `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `its previous value plus 1` and `satisfaction_receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
@@ -718,6 +922,7 @@ It carries:
 - `reason` — `String`
 - `implementor_run` — `String`
 - `reviewer_run` — `String`
+- `goal_revision` — `Integer`
 
 Emitted by `controlplane.host.QueueAssignment` on its `created` outcome.
 
@@ -730,6 +935,7 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `reason` — `String`
 
 Emitted by `controlplane.host.BlockAssignment` on its `applied` outcome.
 
@@ -766,6 +972,9 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `worktree_id` — `String`
+- `implementor_run` — `String`
+- `base_revision` — `String`
 
 Emitted by `controlplane.host.ClaimAssignment` on its `applied` outcome.
 
@@ -778,8 +987,37 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `merge_receipt` — `String`
 
 Emitted by `controlplane.host.CompleteAssignment` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `ConfigureRepositoryApplied`
+
+`controlplane.host.ConfigureRepositoryApplied`.
+
+It carries:
+
+- `repository_id` — `Uuid`
+- `base_branch` — `String`
+- `test_command` — `String`
+- `publish_command` — `String`
+
+Emitted by `controlplane.host.ConfigureRepository` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `ConfirmPublicationApplied`
+
+`controlplane.host.ConfirmPublicationApplied`.
+
+It carries:
+
+- `publication_id` — `Uuid`
+- `receipt` — `String`
+
+Emitted by `controlplane.host.ConfirmPublication` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
@@ -829,6 +1067,18 @@ Emitted by `controlplane.host.CreateGoal` on its `created` outcome.
 
 Nothing in this system reacts to it.
 
+### `MarkPublicationUncertainApplied`
+
+`controlplane.host.MarkPublicationUncertainApplied`.
+
+It carries:
+
+- `publication_id` — `Uuid`
+
+Emitted by `controlplane.host.MarkPublicationUncertain` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
 ### `MergeAssignmentApplied`
 
 `controlplane.host.MergeAssignmentApplied`.
@@ -853,6 +1103,22 @@ Emitted by `controlplane.host.PauseGoal` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
+### `PublicationIntentCreated`
+
+`controlplane.host.PublicationIntentCreated`.
+
+It carries:
+
+- `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `target` — `String`
+- `expected_base` — `String`
+- `publication_id` — `Uuid`
+
+Emitted by `controlplane.host.PreparePublication` on its `created` outcome.
+
+Nothing in this system reacts to it.
+
 ### `ReadyAssignmentApplied`
 
 `controlplane.host.ReadyAssignmentApplied`.
@@ -860,8 +1126,23 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `reviewer_run` — `String`
+- `review_revision` — `String`
 
 Emitted by `controlplane.host.ReadyAssignment` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `ReconcileAssignmentApplied`
+
+`controlplane.host.ReconcileAssignmentApplied`.
+
+It carries:
+
+- `assignment_id` — `Uuid`
+- `merge_receipt` — `String`
+
+Emitted by `controlplane.host.ReconcileAssignment` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
@@ -872,6 +1153,8 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `reason` — `String`
+- `implementor_run` — `String`
 
 Emitted by `controlplane.host.RepairAssignment` on its `applied` outcome.
 
@@ -903,6 +1186,8 @@ Nothing in this system reacts to it.
 It carries:
 
 - `assignment_id` — `Uuid`
+- `candidate` — `String`
+- `test_revision` — `String`
 
 Emitted by `controlplane.host.ReviewAssignment` on its `applied` outcome.
 
@@ -915,6 +1200,7 @@ Nothing in this system reacts to it.
 It carries:
 
 - `goal_id` — `Uuid`
+- `satisfaction_receipt` — `String`
 
 Emitted by `controlplane.host.SatisfyGoal` on its `applied` outcome.
 
@@ -929,6 +1215,27 @@ It carries:
 - `goal_id` — `Uuid`
 
 Emitted by `controlplane.host.StartGoal` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `UpdateGoalApplied`
+
+`controlplane.host.UpdateGoalApplied`.
+
+It carries:
+
+- `goal_id` — `Uuid`
+- `objective` — `String`
+- `acceptance` — `String`
+- `max_workers` — `Integer`
+- `max_attempts` — `Integer`
+- `max_minutes` — `Integer`
+- `planner_model` — `String`
+- `implementor_model` — `String`
+- `reviewer_model` — `String`
+- `merge_authority` — `Boolean`
+
+Emitted by `controlplane.host.UpdateGoal` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
@@ -966,6 +1273,8 @@ Reported by `controlplane.host.MergeAssignment` on its `not-found` outcome.
 
 Reported by `controlplane.host.ReadyAssignment` on its `not-found` outcome.
 
+Reported by `controlplane.host.ReconcileAssignment` on its `not-found` outcome.
+
 Reported by `controlplane.host.RepairAssignment` on its `not-found` outcome.
 
 Reported by `controlplane.host.ReviewAssignment` on its `not-found` outcome.
@@ -990,6 +1299,8 @@ Reported by `controlplane.host.MergeAssignment` on its `wrong-state` outcome.
 
 Reported by `controlplane.host.ReadyAssignment` on its `wrong-state` outcome.
 
+Reported by `controlplane.host.ReconcileAssignment` on its `wrong-state` outcome.
+
 Reported by `controlplane.host.RepairAssignment` on its `wrong-state` outcome.
 
 Reported by `controlplane.host.ReviewAssignment` on its `wrong-state` outcome.
@@ -1008,6 +1319,8 @@ Reported by `controlplane.host.SatisfyGoal` on its `not-found` outcome.
 
 Reported by `controlplane.host.StartGoal` on its `not-found` outcome.
 
+Reported by `controlplane.host.UpdateGoal` on its `not-found` outcome.
+
 ### `GoalStateConflict`
 
 The command cannot act in the current state.
@@ -1024,11 +1337,31 @@ Reported by `controlplane.host.SatisfyGoal` on its `wrong-state` outcome.
 
 Reported by `controlplane.host.StartGoal` on its `wrong-state` outcome.
 
+### `PublicationIntentNotFound`
+
+It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
+
+Reported by `controlplane.host.ConfirmPublication` on its `not-found` outcome.
+
+Reported by `controlplane.host.MarkPublicationUncertain` on its `not-found` outcome.
+
+### `PublicationIntentStateConflict`
+
+It carries:
+
+- `state` — `controlplane.host.PublicationIntent.State`
+
+Reported by `controlplane.host.ConfirmPublication` on its `wrong-state` outcome.
+
+Reported by `controlplane.host.MarkPublicationUncertain` on its `wrong-state` outcome.
+
 ### `RepositoryRegistrationNotFound`
 
 The requested identity is not held.
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
+
+Reported by `controlplane.host.ConfigureRepository` on its `not-found` outcome.
 
 Reported by `controlplane.host.DisableRepositoryRegistration` on its `not-found` outcome.
 
@@ -1072,15 +1405,15 @@ An actor is who may ask this context for something. Every grant below points at 
 
 `controlplane.host.Operator`.
 
-It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace) and [`StartGoal`](#startgoal).
+It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`ConfigureRepository`](#configurerepository), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`StartGoal`](#startgoal) and [`UpdateGoal`](#updategoal).
 
 ### `Supervisor`
 
 `controlplane.host.Supervisor`.
 
-It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`CompleteAssignment`](#completeassignment), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
+It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`CompleteAssignment`](#completeassignment), [`ConfirmPublication`](#confirmpublication), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MarkPublicationUncertain`](#markpublicationuncertain), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`PreparePublication`](#preparepublication), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`ReconcileAssignment`](#reconcileassignment), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
 
 
 ---
 
-Generated from controlplane v1 · model digest `8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57` · contract digest `slice-sha256/2:c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a` · contract digest `slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d`. Do not edit this file; change the specification and regenerate it with `ess generate`.

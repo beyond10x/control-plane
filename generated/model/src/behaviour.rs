@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -54,6 +54,24 @@ pub trait GoalStorage {
     /// Every stored instance, in the order the store keeps them: the order a generated query
     /// answers an unordered view in.
     fn list(&self) -> Vec<crate::host::GoalSnapshot>;
+}
+
+/// Where `controlplane.host.PublicationIntent` is stored — a port the implementor provides.
+///
+/// Keyed by the identity `publication_id`. Generated network entries supply an ephemeral implementation; durable storage remains a port.
+pub trait PublicationIntentStorage {
+    /// The instance with this identity, or `None` where none is stored.
+    fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::PublicationIntentSnapshot>;
+
+    /// Stores this instance under its identity, replacing what was held.
+    fn put(&mut self, snapshot: crate::host::PublicationIntentSnapshot);
+
+    /// Removes the instance with this identity.
+    fn delete(&mut self, identity: &crate::primitives::Uuid);
+
+    /// Every stored instance, in the order the store keeps them: the order a generated query
+    /// answers an unordered view in.
+    fn list(&self) -> Vec<crate::host::PublicationIntentSnapshot>;
 }
 
 /// Where `controlplane.host.RepositoryRegistration` is stored — a port the implementor provides.
@@ -178,8 +196,9 @@ where
             crate::host::AnyAssignment::Reviewing(instance) => crate::host::AnyAssignment::Blocked(instance.block()),
             _ => return Ok(crate::host::BlockAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::BlockAssignmentOutcome::Applied { block_assignment_applied: crate::host::BlockAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.reason = input.reason.clone();
+        let answer = crate::host::BlockAssignmentOutcome::Applied { block_assignment_applied: crate::host::BlockAssignmentApplied { assignment_id: input.assignment_id.clone(), reason: input.reason.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -251,12 +270,17 @@ where
         };
         let _ = &held;
         let held_state = held.state;
+        let before = held.data.clone();
         let moved = match held.refine() {
             crate::host::AnyAssignment::Queued(instance) => crate::host::AnyAssignment::Implementing(instance.claim()),
             _ => return Ok(crate::host::ClaimAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::ClaimAssignmentOutcome::Applied { claim_assignment_applied: crate::host::ClaimAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.worktree_id = input.worktree_id.clone();
+        next.data.attempt = before.attempt + 1;
+        next.data.implementor_run = input.implementor_run.clone();
+        next.data.base_revision = input.base_revision.clone();
+        let answer = crate::host::ClaimAssignmentOutcome::Applied { claim_assignment_applied: crate::host::ClaimAssignmentApplied { assignment_id: input.assignment_id.clone(), worktree_id: input.worktree_id.clone(), implementor_run: input.implementor_run.clone(), base_revision: input.base_revision.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -279,9 +303,58 @@ where
             crate::host::AnyAssignment::Merging(instance) => crate::host::AnyAssignment::Merged(instance.complete()),
             _ => return Ok(crate::host::CompleteAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::CompleteAssignmentOutcome::Applied { complete_assignment_applied: crate::host::CompleteAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.merge_receipt = input.merge_receipt.clone();
+        let answer = crate::host::CompleteAssignmentOutcome::Applied { complete_assignment_applied: crate::host::CompleteAssignmentApplied { assignment_id: input.assignment_id.clone(), merge_receipt: input.merge_receipt.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
+/// `controlplane.host.ConfigureRepository`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::ConfigureRepositoryBehavior for Generated<P>
+where
+    P: RepositoryRegistrationStorage,
+{
+    fn configure_repository(&mut self, input: crate::host::ConfigureRepository) -> Result<crate::host::ConfigureRepositoryOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = RepositoryRegistrationStorage::get(&self.ports, &input.repository_id) else {
+            return Ok(crate::host::ConfigureRepositoryOutcome::NotFound { error: crate::host::RepositoryRegistrationNotFound });
+        };
+        let _ = &held;
+        let mut next = held;
+        next.data.base_branch = input.base_branch.clone();
+        next.data.test_command = input.test_command.clone();
+        next.data.publish_command = input.publish_command.clone();
+        let answer = crate::host::ConfigureRepositoryOutcome::Applied { configure_repository_applied: crate::host::ConfigureRepositoryApplied { repository_id: input.repository_id.clone(), base_branch: input.base_branch.clone(), test_command: input.test_command.clone(), publish_command: input.publish_command.clone() } };
+        RepositoryRegistrationStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
+/// `controlplane.host.ConfirmPublication`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::ConfirmPublicationBehavior for Generated<P>
+where
+    P: PublicationIntentStorage,
+{
+    fn confirm_publication(&mut self, input: crate::host::ConfirmPublication) -> Result<crate::host::ConfirmPublicationOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = PublicationIntentStorage::get(&self.ports, &input.publication_id) else {
+            return Ok(crate::host::ConfirmPublicationOutcome::NotFound { error: crate::host::PublicationIntentNotFound });
+        };
+        let _ = &held;
+        let held_state = held.state;
+        let moved = match held.refine() {
+            crate::host::AnyPublicationIntent::Prepared(instance) => crate::host::AnyPublicationIntent::Confirmed(instance.confirm()),
+            crate::host::AnyPublicationIntent::Uncertain(instance) => crate::host::AnyPublicationIntent::Confirmed(instance.confirm()),
+            _ => return Ok(crate::host::ConfirmPublicationOutcome::WrongState { error: crate::host::PublicationIntentStateConflict { state: held_state } }),
+        };
+        let mut next = moved.snapshot();
+        next.data.receipt = input.receipt.clone();
+        let answer = crate::host::ConfirmPublicationOutcome::Applied { confirm_publication_applied: crate::host::ConfirmPublicationApplied { publication_id: input.publication_id.clone(), receipt: input.receipt.clone() } };
+        PublicationIntentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
 }
@@ -307,6 +380,8 @@ where
             implementor_model: input.implementor_model.clone(),
             reviewer_model: input.reviewer_model.clone(),
             merge_authority: input.merge_authority.clone(),
+            revision: 1,
+            satisfaction_receipt: "".to_owned(),
         };
         let answer = crate::host::CreateGoalOutcome::Created { goal_created: crate::host::GoalCreated { goal_id: identity.clone(), workspace_id: input.workspace_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
         GoalStorage::put(&mut self.ports, crate::host::AnyGoal::Paused(crate::host::Goal::new(data)).snapshot());
@@ -362,6 +437,30 @@ where
     }
 }
 
+/// `controlplane.host.MarkPublicationUncertain`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::MarkPublicationUncertainBehavior for Generated<P>
+where
+    P: PublicationIntentStorage,
+{
+    fn mark_publication_uncertain(&mut self, input: crate::host::MarkPublicationUncertain) -> Result<crate::host::MarkPublicationUncertainOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = PublicationIntentStorage::get(&self.ports, &input.publication_id) else {
+            return Ok(crate::host::MarkPublicationUncertainOutcome::NotFound { error: crate::host::PublicationIntentNotFound });
+        };
+        let _ = &held;
+        let held_state = held.state;
+        let moved = match held.refine() {
+            crate::host::AnyPublicationIntent::Prepared(instance) => crate::host::AnyPublicationIntent::Uncertain(instance.uncertain()),
+            _ => return Ok(crate::host::MarkPublicationUncertainOutcome::WrongState { error: crate::host::PublicationIntentStateConflict { state: held_state } }),
+        };
+        let next = moved.snapshot();
+        let answer = crate::host::MarkPublicationUncertainOutcome::Applied { mark_publication_uncertain_applied: crate::host::MarkPublicationUncertainApplied { publication_id: input.publication_id.clone() } };
+        PublicationIntentStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.MergeAssignment`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::MergeAssignmentBehavior for Generated<P>
 where
@@ -410,6 +509,29 @@ where
     }
 }
 
+/// `controlplane.host.PreparePublication`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::PreparePublicationBehavior for Generated<P>
+where
+    P: TryContext + PublicationIntentStorage,
+{
+    fn prepare_publication(&mut self, input: crate::host::PreparePublication) -> Result<crate::host::PreparePublicationOutcome, UnmetObligation> {
+        let _ = &input;
+        // `created`: the default.
+        let identity: crate::primitives::Uuid = self.ports.try_generate_uuid()?;
+        let data = crate::host::PublicationIntentData {
+            publication_id: identity.clone(),
+            assignment_id: input.assignment_id.clone(),
+            candidate: input.candidate.clone(),
+            target: input.target.clone(),
+            expected_base: input.expected_base.clone(),
+            receipt: "".to_owned(),
+        };
+        let answer = crate::host::PreparePublicationOutcome::Created { publication_intent_created: crate::host::PublicationIntentCreated { assignment_id: input.assignment_id.clone(), candidate: input.candidate.clone(), target: input.target.clone(), expected_base: input.expected_base.clone(), publication_id: identity.clone() } };
+        PublicationIntentStorage::put(&mut self.ports, crate::host::AnyPublicationIntent::Prepared(crate::host::PublicationIntent::new(data)).snapshot());
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.QueueAssignment`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::QueueAssignmentBehavior for Generated<P>
 where
@@ -431,8 +553,13 @@ where
             reason: input.reason.clone(),
             implementor_run: input.implementor_run.clone(),
             reviewer_run: input.reviewer_run.clone(),
+            goal_revision: input.goal_revision.clone(),
+            base_revision: "".to_owned(),
+            test_revision: "".to_owned(),
+            review_revision: "".to_owned(),
+            merge_receipt: "".to_owned(),
         };
-        let answer = crate::host::QueueAssignmentOutcome::Created { assignment_created: crate::host::AssignmentCreated { assignment_id: identity.clone(), goal_id: input.goal_id.clone(), repository_id: input.repository_id.clone(), story_id: input.story_id.clone(), case_id: input.case_id.clone(), worktree_id: input.worktree_id.clone(), candidate: input.candidate.clone(), attempt: input.attempt.clone(), reason: input.reason.clone(), implementor_run: input.implementor_run.clone(), reviewer_run: input.reviewer_run.clone() } };
+        let answer = crate::host::QueueAssignmentOutcome::Created { assignment_created: crate::host::AssignmentCreated { assignment_id: identity.clone(), goal_id: input.goal_id.clone(), repository_id: input.repository_id.clone(), story_id: input.story_id.clone(), case_id: input.case_id.clone(), worktree_id: input.worktree_id.clone(), candidate: input.candidate.clone(), attempt: input.attempt.clone(), reason: input.reason.clone(), implementor_run: input.implementor_run.clone(), reviewer_run: input.reviewer_run.clone(), goal_revision: input.goal_revision.clone() } };
         AssignmentStorage::put(&mut self.ports, crate::host::AnyAssignment::Queued(crate::host::Assignment::new(data)).snapshot());
         return Ok(answer);
     }
@@ -455,8 +582,36 @@ where
             crate::host::AnyAssignment::Reviewing(instance) => crate::host::AnyAssignment::ReadyToMerge(instance.ready()),
             _ => return Ok(crate::host::ReadyAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::ReadyAssignmentOutcome::Applied { ready_assignment_applied: crate::host::ReadyAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.reviewer_run = input.reviewer_run.clone();
+        next.data.review_revision = input.review_revision.clone();
+        let answer = crate::host::ReadyAssignmentOutcome::Applied { ready_assignment_applied: crate::host::ReadyAssignmentApplied { assignment_id: input.assignment_id.clone(), reviewer_run: input.reviewer_run.clone(), review_revision: input.review_revision.clone() } };
+        AssignmentStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
+/// `controlplane.host.ReconcileAssignment`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::ReconcileAssignmentBehavior for Generated<P>
+where
+    P: AssignmentStorage,
+{
+    fn reconcile_assignment(&mut self, input: crate::host::ReconcileAssignment) -> Result<crate::host::ReconcileAssignmentOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::ReconcileAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        let held_state = held.state;
+        let moved = match held.refine() {
+            crate::host::AnyAssignment::Blocked(instance) => crate::host::AnyAssignment::Merged(instance.reconcile()),
+            crate::host::AnyAssignment::Merging(instance) => crate::host::AnyAssignment::Merged(instance.reconcile()),
+            _ => return Ok(crate::host::ReconcileAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
+        };
+        let mut next = moved.snapshot();
+        next.data.merge_receipt = input.merge_receipt.clone();
+        let answer = crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied: crate::host::ReconcileAssignmentApplied { assignment_id: input.assignment_id.clone(), merge_receipt: input.merge_receipt.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -520,13 +675,20 @@ where
         };
         let _ = &held;
         let held_state = held.state;
+        let before = held.data.clone();
         let moved = match held.refine() {
             crate::host::AnyAssignment::Blocked(instance) => crate::host::AnyAssignment::Implementing(instance.repair()),
             crate::host::AnyAssignment::Reviewing(instance) => crate::host::AnyAssignment::Implementing(instance.repair()),
             _ => return Ok(crate::host::RepairAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::RepairAssignmentOutcome::Applied { repair_assignment_applied: crate::host::RepairAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.attempt = before.attempt + 1;
+        next.data.reason = input.reason.clone();
+        next.data.implementor_run = input.implementor_run.clone();
+        next.data.reviewer_run = "".to_owned();
+        next.data.test_revision = "".to_owned();
+        next.data.review_revision = "".to_owned();
+        let answer = crate::host::RepairAssignmentOutcome::Applied { repair_assignment_applied: crate::host::RepairAssignmentApplied { assignment_id: input.assignment_id.clone(), reason: input.reason.clone(), implementor_run: input.implementor_run.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -549,8 +711,10 @@ where
             crate::host::AnyAssignment::Implementing(instance) => crate::host::AnyAssignment::Reviewing(instance.review()),
             _ => return Ok(crate::host::ReviewAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::ReviewAssignmentOutcome::Applied { review_assignment_applied: crate::host::ReviewAssignmentApplied { assignment_id: input.assignment_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.candidate = input.candidate.clone();
+        next.data.test_revision = input.test_revision.clone();
+        let answer = crate::host::ReviewAssignmentOutcome::Applied { review_assignment_applied: crate::host::ReviewAssignmentApplied { assignment_id: input.assignment_id.clone(), candidate: input.candidate.clone(), test_revision: input.test_revision.clone() } };
         AssignmentStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -573,8 +737,9 @@ where
             crate::host::AnyGoal::Running(instance) => crate::host::AnyGoal::Satisfied(instance.satisfy()),
             _ => return Ok(crate::host::SatisfyGoalOutcome::WrongState { error: crate::host::GoalStateConflict { state: held_state } }),
         };
-        let next = moved.snapshot();
-        let answer = crate::host::SatisfyGoalOutcome::Applied { satisfy_goal_applied: crate::host::SatisfyGoalApplied { goal_id: input.goal_id.clone() } };
+        let mut next = moved.snapshot();
+        next.data.satisfaction_receipt = input.satisfaction_receipt.clone();
+        let answer = crate::host::SatisfyGoalOutcome::Applied { satisfy_goal_applied: crate::host::SatisfyGoalApplied { goal_id: input.goal_id.clone(), satisfaction_receipt: input.satisfaction_receipt.clone() } };
         GoalStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -604,6 +769,37 @@ where
     }
 }
 
+/// `controlplane.host.UpdateGoal`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::UpdateGoalBehavior for Generated<P>
+where
+    P: GoalStorage,
+{
+    fn update_goal(&mut self, input: crate::host::UpdateGoal) -> Result<crate::host::UpdateGoalOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+            return Ok(crate::host::UpdateGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+        };
+        let _ = &held;
+        let before = held.data.clone();
+        let mut next = held;
+        next.data.objective = input.objective.clone();
+        next.data.acceptance = input.acceptance.clone();
+        next.data.max_workers = input.max_workers.clone();
+        next.data.max_attempts = input.max_attempts.clone();
+        next.data.max_minutes = input.max_minutes.clone();
+        next.data.planner_model = input.planner_model.clone();
+        next.data.implementor_model = input.implementor_model.clone();
+        next.data.reviewer_model = input.reviewer_model.clone();
+        next.data.merge_authority = input.merge_authority.clone();
+        next.data.revision = before.revision + 1;
+        next.data.satisfaction_receipt = "".to_owned();
+        let answer = crate::host::UpdateGoalOutcome::Applied { update_goal_applied: crate::host::UpdateGoalApplied { goal_id: input.goal_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
+        GoalStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.AssignmentList`, generated: every row is one the specification fully determines from the stored `controlplane.host.Assignment`s.
 impl<P> crate::host::obligations::AssignmentListQuery for Generated<P>
 where
@@ -625,6 +821,11 @@ where
                 reason: held.data.reason,
                 implementor_run: held.data.implementor_run,
                 reviewer_run: held.data.reviewer_run,
+                goal_revision: held.data.goal_revision,
+                base_revision: held.data.base_revision,
+                test_revision: held.data.test_revision,
+                review_revision: held.data.review_revision,
+                merge_receipt: held.data.merge_receipt,
                 state: held.state,
             })
             .collect())
@@ -652,6 +853,30 @@ where
                 implementor_model: held.data.implementor_model,
                 reviewer_model: held.data.reviewer_model,
                 merge_authority: held.data.merge_authority,
+                revision: held.data.revision,
+                satisfaction_receipt: held.data.satisfaction_receipt,
+                state: held.state,
+            })
+            .collect())
+    }
+}
+
+/// `controlplane.host.PublicationIntentList`, generated: every row is one the specification fully determines from the stored `controlplane.host.PublicationIntent`s.
+impl<P> crate::host::obligations::PublicationIntentListQuery for Generated<P>
+where
+    P: PublicationIntentStorage,
+{
+    fn publication_intent_list(&self) -> Result<Vec<crate::host::PublicationIntentList>, UnmetObligation> {
+        let admitted = PublicationIntentStorage::list(&self.ports);
+        Ok(admitted
+            .into_iter()
+            .map(|held| crate::host::PublicationIntentList {
+                publication_id: held.data.publication_id,
+                assignment_id: held.data.assignment_id,
+                candidate: held.data.candidate,
+                target: held.data.target,
+                expected_base: held.data.expected_base,
+                receipt: held.data.receipt,
                 state: held.state,
             })
             .collect())

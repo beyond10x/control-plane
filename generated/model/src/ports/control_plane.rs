@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! control-plane — the `control-plane` component of `controlplane` v1.
@@ -32,18 +32,28 @@ pub enum PublishedEvent {
     ClaimAssignmentApplied(crate::host::ClaimAssignmentApplied),
     /// `controlplane.host.CompleteAssignmentApplied`.
     CompleteAssignmentApplied(crate::host::CompleteAssignmentApplied),
+    /// `controlplane.host.ConfigureRepositoryApplied`.
+    ConfigureRepositoryApplied(crate::host::ConfigureRepositoryApplied),
+    /// `controlplane.host.ConfirmPublicationApplied`.
+    ConfirmPublicationApplied(crate::host::ConfirmPublicationApplied),
     /// `controlplane.host.DisableRepositoryRegistrationApplied`.
     DisableRepositoryRegistrationApplied(crate::host::DisableRepositoryRegistrationApplied),
     /// `controlplane.host.EnableRepositoryRegistrationApplied`.
     EnableRepositoryRegistrationApplied(crate::host::EnableRepositoryRegistrationApplied),
     /// `controlplane.host.GoalCreated`.
     GoalCreated(crate::host::GoalCreated),
+    /// `controlplane.host.MarkPublicationUncertainApplied`.
+    MarkPublicationUncertainApplied(crate::host::MarkPublicationUncertainApplied),
     /// `controlplane.host.MergeAssignmentApplied`.
     MergeAssignmentApplied(crate::host::MergeAssignmentApplied),
     /// `controlplane.host.PauseGoalApplied`.
     PauseGoalApplied(crate::host::PauseGoalApplied),
+    /// `controlplane.host.PublicationIntentCreated`.
+    PublicationIntentCreated(crate::host::PublicationIntentCreated),
     /// `controlplane.host.ReadyAssignmentApplied`.
     ReadyAssignmentApplied(crate::host::ReadyAssignmentApplied),
+    /// `controlplane.host.ReconcileAssignmentApplied`.
+    ReconcileAssignmentApplied(crate::host::ReconcileAssignmentApplied),
     /// `controlplane.host.RepairAssignmentApplied`.
     RepairAssignmentApplied(crate::host::RepairAssignmentApplied),
     /// `controlplane.host.RepositoryRegistrationCreated`.
@@ -54,6 +64,8 @@ pub enum PublishedEvent {
     SatisfyGoalApplied(crate::host::SatisfyGoalApplied),
     /// `controlplane.host.StartGoalApplied`.
     StartGoalApplied(crate::host::StartGoalApplied),
+    /// `controlplane.host.UpdateGoalApplied`.
+    UpdateGoalApplied(crate::host::UpdateGoalApplied),
     /// `controlplane.host.WorkspaceCreated`.
     WorkspaceCreated(crate::host::WorkspaceCreated),
 }
@@ -88,7 +100,7 @@ impl<B> ControlPlane<B> {
 
 impl<B> ControlPlane<B>
 where
-    B: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    B: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     /// Accepts `controlplane.host.ArchiveWorkspace`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
@@ -192,6 +204,39 @@ where
         Ok(outcome)
     }
 
+    /// Accepts `controlplane.host.ConfigureRepository`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn configure_repository(&mut self, input: crate::host::ConfigureRepository) -> Result<crate::host::ConfigureRepositoryOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.configure_repository(input)?;
+        match &outcome {
+            crate::host::ConfigureRepositoryOutcome::Applied { configure_repository_applied, .. } => {
+                self.outbox.push(PublishedEvent::ConfigureRepositoryApplied(configure_repository_applied.clone()));
+            }
+            crate::host::ConfigureRepositoryOutcome::NotFound { .. } => {}
+        }
+        Ok(outcome)
+    }
+
+    /// Accepts `controlplane.host.ConfirmPublication`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn confirm_publication(&mut self, input: crate::host::ConfirmPublication) -> Result<crate::host::ConfirmPublicationOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.confirm_publication(input)?;
+        match &outcome {
+            crate::host::ConfirmPublicationOutcome::Applied { confirm_publication_applied, .. } => {
+                self.outbox.push(PublishedEvent::ConfirmPublicationApplied(confirm_publication_applied.clone()));
+            }
+            crate::host::ConfirmPublicationOutcome::NotFound { .. } => {}
+            crate::host::ConfirmPublicationOutcome::WrongState { .. } => {}
+        }
+        Ok(outcome)
+    }
+
     /// Accepts `controlplane.host.CreateGoal`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
@@ -241,6 +286,23 @@ where
         Ok(outcome)
     }
 
+    /// Accepts `controlplane.host.MarkPublicationUncertain`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn mark_publication_uncertain(&mut self, input: crate::host::MarkPublicationUncertain) -> Result<crate::host::MarkPublicationUncertainOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.mark_publication_uncertain(input)?;
+        match &outcome {
+            crate::host::MarkPublicationUncertainOutcome::Applied { mark_publication_uncertain_applied, .. } => {
+                self.outbox.push(PublishedEvent::MarkPublicationUncertainApplied(mark_publication_uncertain_applied.clone()));
+            }
+            crate::host::MarkPublicationUncertainOutcome::NotFound { .. } => {}
+            crate::host::MarkPublicationUncertainOutcome::WrongState { .. } => {}
+        }
+        Ok(outcome)
+    }
+
     /// Accepts `controlplane.host.MergeAssignment`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
@@ -275,6 +337,21 @@ where
         Ok(outcome)
     }
 
+    /// Accepts `controlplane.host.PreparePublication`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn prepare_publication(&mut self, input: crate::host::PreparePublication) -> Result<crate::host::PreparePublicationOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.prepare_publication(input)?;
+        match &outcome {
+            crate::host::PreparePublicationOutcome::Created { publication_intent_created, .. } => {
+                self.outbox.push(PublishedEvent::PublicationIntentCreated(publication_intent_created.clone()));
+            }
+        }
+        Ok(outcome)
+    }
+
     /// Accepts `controlplane.host.QueueAssignment`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
@@ -303,6 +380,23 @@ where
             }
             crate::host::ReadyAssignmentOutcome::WrongState { .. } => {}
             crate::host::ReadyAssignmentOutcome::NotFound { .. } => {}
+        }
+        Ok(outcome)
+    }
+
+    /// Accepts `controlplane.host.ReconcileAssignment`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn reconcile_assignment(&mut self, input: crate::host::ReconcileAssignment) -> Result<crate::host::ReconcileAssignmentOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.reconcile_assignment(input)?;
+        match &outcome {
+            crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied, .. } => {
+                self.outbox.push(PublishedEvent::ReconcileAssignmentApplied(reconcile_assignment_applied.clone()));
+            }
+            crate::host::ReconcileAssignmentOutcome::NotFound { .. } => {}
+            crate::host::ReconcileAssignmentOutcome::WrongState { .. } => {}
         }
         Ok(outcome)
     }
@@ -405,6 +499,22 @@ where
         Ok(outcome)
     }
 
+    /// Accepts `controlplane.host.UpdateGoal`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn update_goal(&mut self, input: crate::host::UpdateGoal) -> Result<crate::host::UpdateGoalOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.update_goal(input)?;
+        match &outcome {
+            crate::host::UpdateGoalOutcome::Applied { update_goal_applied, .. } => {
+                self.outbox.push(PublishedEvent::UpdateGoalApplied(update_goal_applied.clone()));
+            }
+            crate::host::UpdateGoalOutcome::NotFound { .. } => {}
+        }
+        Ok(outcome)
+    }
+
     /// Serves `controlplane.host.AssignmentList` at `read_your_writes` consistency, from the owed projection.
     pub fn assignment_list(&self) -> Result<Vec<crate::host::AssignmentList>, crate::obligation::UnmetObligation> {
         self.behaviors.assignment_list()
@@ -413,6 +523,11 @@ where
     /// Serves `controlplane.host.GoalList` at `read_your_writes` consistency, from the owed projection.
     pub fn goal_list(&self) -> Result<Vec<crate::host::GoalList>, crate::obligation::UnmetObligation> {
         self.behaviors.goal_list()
+    }
+
+    /// Serves `controlplane.host.PublicationIntentList` at `read_your_writes` consistency, from the owed projection.
+    pub fn publication_intent_list(&self) -> Result<Vec<crate::host::PublicationIntentList>, crate::obligation::UnmetObligation> {
+        self.behaviors.publication_intent_list()
     }
 
     /// Serves `controlplane.host.RepositoryRegistrationList` at `read_your_writes` consistency, from the owed projection.

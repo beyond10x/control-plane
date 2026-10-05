@@ -2,8 +2,8 @@
   "provenance": {
     "system": "controlplane",
     "specification_version": "v1",
-    "source_digest": "8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57",
-    "contract_digest": "c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed"
+    "source_digest": "d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a",
+    "contract_digest": "d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d"
   },
   "scope": {
     "profile": "component-skeletons",
@@ -20,6 +20,13 @@
     {
       "kind": "domain_type",
       "source": "controlplane.host.Goal.State",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "controlplane.host.PublicationIntent.State",
       "disposition": {
         "disposition": "generated"
       }
@@ -48,6 +55,13 @@
     {
       "kind": "entity_lifecycle",
       "source": "controlplane.host.Goal",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "entity_lifecycle",
+      "source": "controlplane.host.PublicationIntent",
       "disposition": {
         "disposition": "generated"
       }
@@ -152,6 +166,34 @@
     },
     {
       "kind": "command_contract",
+      "source": "controlplane.host.ConfigureRepository",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.ConfigureRepository",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "controlplane.host.ConfirmPublication",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.ConfirmPublication",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
       "source": "controlplane.host.CreateGoal",
       "disposition": {
         "disposition": "generated"
@@ -194,6 +236,20 @@
     },
     {
       "kind": "command_contract",
+      "source": "controlplane.host.MarkPublicationUncertain",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.MarkPublicationUncertain",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
       "source": "controlplane.host.MergeAssignment",
       "disposition": {
         "disposition": "generated"
@@ -222,6 +278,20 @@
     },
     {
       "kind": "command_contract",
+      "source": "controlplane.host.PreparePublication",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.PreparePublication",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
       "source": "controlplane.host.QueueAssignment",
       "disposition": {
         "disposition": "generated"
@@ -244,6 +314,20 @@
     {
       "kind": "command_behavior",
       "source": "controlplane.host.ReadyAssignment",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "controlplane.host.ReconcileAssignment",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.ReconcileAssignment",
       "disposition": {
         "disposition": "generated"
       }
@@ -328,6 +412,20 @@
     {
       "kind": "command_behavior",
       "source": "controlplane.host.StartGoal",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "controlplane.host.UpdateGoal",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "controlplane.host.UpdateGoal",
       "disposition": {
         "disposition": "generated"
       }
@@ -383,6 +481,20 @@
     },
     {
       "kind": "event_type",
+      "source": "controlplane.host.ConfigureRepositoryApplied",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "controlplane.host.ConfirmPublicationApplied",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
       "source": "controlplane.host.DisableRepositoryRegistrationApplied",
       "disposition": {
         "disposition": "generated"
@@ -404,6 +516,13 @@
     },
     {
       "kind": "event_type",
+      "source": "controlplane.host.MarkPublicationUncertainApplied",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
       "source": "controlplane.host.MergeAssignmentApplied",
       "disposition": {
         "disposition": "generated"
@@ -418,7 +537,21 @@
     },
     {
       "kind": "event_type",
+      "source": "controlplane.host.PublicationIntentCreated",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
       "source": "controlplane.host.ReadyAssignmentApplied",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "controlplane.host.ReconcileAssignmentApplied",
       "disposition": {
         "disposition": "generated"
       }
@@ -460,6 +593,13 @@
     },
     {
       "kind": "event_type",
+      "source": "controlplane.host.UpdateGoalApplied",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
       "source": "controlplane.host.WorkspaceCreated",
       "disposition": {
         "disposition": "generated"
@@ -489,6 +629,20 @@
     {
       "kind": "error_type",
       "source": "controlplane.host.GoalStateConflict",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "error_type",
+      "source": "controlplane.host.PublicationIntentNotFound",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "error_type",
+      "source": "controlplane.host.PublicationIntentStateConflict",
       "disposition": {
         "disposition": "generated"
       }
@@ -545,6 +699,20 @@
     {
       "kind": "view_query",
       "source": "controlplane.host.GoalList",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_type",
+      "source": "controlplane.host.PublicationIntentList",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_query",
+      "source": "controlplane.host.PublicationIntentList",
       "disposition": {
         "disposition": "generated"
       }

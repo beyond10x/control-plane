@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `control-plane` component of `controlplane` v1, on the wire.
@@ -35,21 +35,28 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/host/commands/CancelGoal"),
     ("POST", "/host/commands/ClaimAssignment"),
     ("POST", "/host/commands/CompleteAssignment"),
+    ("POST", "/host/commands/ConfigureRepository"),
+    ("POST", "/host/commands/ConfirmPublication"),
     ("POST", "/host/commands/CreateGoal"),
     ("POST", "/host/commands/DisableRepositoryRegistration"),
     ("POST", "/host/commands/EnableRepositoryRegistration"),
+    ("POST", "/host/commands/MarkPublicationUncertain"),
     ("POST", "/host/commands/MergeAssignment"),
     ("POST", "/host/commands/PauseGoal"),
+    ("POST", "/host/commands/PreparePublication"),
     ("POST", "/host/commands/QueueAssignment"),
     ("POST", "/host/commands/ReadyAssignment"),
+    ("POST", "/host/commands/ReconcileAssignment"),
     ("POST", "/host/commands/RegisterRepository"),
     ("POST", "/host/commands/RegisterWorkspace"),
     ("POST", "/host/commands/RepairAssignment"),
     ("POST", "/host/commands/ReviewAssignment"),
     ("POST", "/host/commands/SatisfyGoal"),
     ("POST", "/host/commands/StartGoal"),
+    ("POST", "/host/commands/UpdateGoal"),
     ("GET", "/host/views/AssignmentList"),
     ("GET", "/host/views/GoalList"),
+    ("GET", "/host/views/PublicationIntentList"),
     ("GET", "/host/views/RepositoryRegistrationList"),
     ("GET", "/host/views/WorkspaceList"),
     ("GET", "/openapi.json"),
@@ -63,8 +70,8 @@ pub const ROUTES: &[(&str, &str)] = &[
 /// Everything outside `runtime` is the same in every language this plan is emitted into, and
 /// `cargo xtask synth --check` starts both and compares them.
 pub const STARTUP: &[&str] = &[
-    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"controlplane\",\"version\":\"v1\",\"model_digest\":\"8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57\",\"contract_digest\":\"c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed\",\"components\":[\"control-plane\"],\"capabilities\":{\"generated\":85,\"obligations\":0,\"refused\":0}",
-    "{\"log\":\"ess/1\",\"event\":\"surface.serving\",\"component\":\"control-plane\",\"reached_by\":\"network\",\"transport\":\"http/1.1\",\"routes\":25,\"paths\":[{\"method\":\"GET\",\"path\":\"/docs\",\"serves\":\"documentation\",\"name\":\"docs\"},{\"method\":\"POST\",\"path\":\"/host/commands/ArchiveWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.ArchiveWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/BlockAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.BlockAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/ClaimAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ClaimAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CompleteAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CompleteAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CreateGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CreateGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/DisableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.DisableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/EnableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.EnableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/MergeAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.MergeAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/PauseGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.PauseGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/QueueAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.QueueAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReadyAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReadyAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterRepository\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterRepository\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/RepairAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.RepairAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReviewAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReviewAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/SatisfyGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.SatisfyGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/StartGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.StartGoal\"},{\"method\":\"GET\",\"path\":\"/host/views/AssignmentList\",\"serves\":\"view\",\"name\":\"controlplane.host.AssignmentList\"},{\"method\":\"GET\",\"path\":\"/host/views/GoalList\",\"serves\":\"view\",\"name\":\"controlplane.host.GoalList\"},{\"method\":\"GET\",\"path\":\"/host/views/RepositoryRegistrationList\",\"serves\":\"view\",\"name\":\"controlplane.host.RepositoryRegistrationList\"},{\"method\":\"GET\",\"path\":\"/host/views/WorkspaceList\",\"serves\":\"view\",\"name\":\"controlplane.host.WorkspaceList\"},{\"method\":\"GET\",\"path\":\"/openapi.json\",\"serves\":\"contract\",\"name\":\"openapi\"}]",
+    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"controlplane\",\"version\":\"v1\",\"model_digest\":\"d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a\",\"contract_digest\":\"d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d\",\"components\":[\"control-plane\"],\"capabilities\":{\"generated\":109,\"obligations\":0,\"refused\":0}",
+    "{\"log\":\"ess/1\",\"event\":\"surface.serving\",\"component\":\"control-plane\",\"reached_by\":\"network\",\"transport\":\"http/1.1\",\"routes\":32,\"paths\":[{\"method\":\"GET\",\"path\":\"/docs\",\"serves\":\"documentation\",\"name\":\"docs\"},{\"method\":\"POST\",\"path\":\"/host/commands/ArchiveWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.ArchiveWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/BlockAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.BlockAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/ClaimAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ClaimAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CompleteAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CompleteAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ConfigureRepository\",\"serves\":\"command\",\"name\":\"controlplane.host.ConfigureRepository\"},{\"method\":\"POST\",\"path\":\"/host/commands/ConfirmPublication\",\"serves\":\"command\",\"name\":\"controlplane.host.ConfirmPublication\"},{\"method\":\"POST\",\"path\":\"/host/commands/CreateGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CreateGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/DisableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.DisableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/EnableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.EnableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/MarkPublicationUncertain\",\"serves\":\"command\",\"name\":\"controlplane.host.MarkPublicationUncertain\"},{\"method\":\"POST\",\"path\":\"/host/commands/MergeAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.MergeAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/PauseGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.PauseGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/PreparePublication\",\"serves\":\"command\",\"name\":\"controlplane.host.PreparePublication\"},{\"method\":\"POST\",\"path\":\"/host/commands/QueueAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.QueueAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReadyAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReadyAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReconcileAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReconcileAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterRepository\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterRepository\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/RepairAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.RepairAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReviewAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReviewAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/SatisfyGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.SatisfyGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/StartGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.StartGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/UpdateGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.UpdateGoal\"},{\"method\":\"GET\",\"path\":\"/host/views/AssignmentList\",\"serves\":\"view\",\"name\":\"controlplane.host.AssignmentList\"},{\"method\":\"GET\",\"path\":\"/host/views/GoalList\",\"serves\":\"view\",\"name\":\"controlplane.host.GoalList\"},{\"method\":\"GET\",\"path\":\"/host/views/PublicationIntentList\",\"serves\":\"view\",\"name\":\"controlplane.host.PublicationIntentList\"},{\"method\":\"GET\",\"path\":\"/host/views/RepositoryRegistrationList\",\"serves\":\"view\",\"name\":\"controlplane.host.RepositoryRegistrationList\"},{\"method\":\"GET\",\"path\":\"/host/views/WorkspaceList\",\"serves\":\"view\",\"name\":\"controlplane.host.WorkspaceList\"},{\"method\":\"GET\",\"path\":\"/openapi.json\",\"serves\":\"contract\",\"name\":\"openapi\"}]",
     "{\"log\":\"ess/1\",\"event\":\"system.ready\",\"system\":\"controlplane\",\"surfaces\":1",
 ];
 
@@ -103,7 +110,7 @@ fn announce(address: &std::net::SocketAddr) {
 /// What binding the address refuses: the address is taken, or the port is privileged.
 pub fn serve<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, address: &str, authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>) -> std::io::Result<()>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 { serve_with_static(system, address, authenticate, None) }
 
 /// Serves the declared surface, with files only for paths outside its route table.
@@ -112,7 +119,7 @@ where
 /// Returns a listener or static-root error before announcing readiness.
 pub fn serve_with_static<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, address: &str, authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>, static_root: Option<&std::path::Path>) -> std::io::Result<()>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let static_root = static_root.map(std::fs::canonicalize).transpose()?;
     if static_root.as_ref().is_some_and(|root| !root.is_dir()) { return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "static root is not a directory")); }
@@ -165,7 +172,7 @@ where
 /// or is an actor the specification does not grant the command.
 pub fn dispatch<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, caller: Option<&crate::actor::Caller>, request: &http::Request) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     match request.path.as_str() {
         "/docs" => {
@@ -228,6 +235,24 @@ where
             }
             serve_controlplane_host_complete_assignment(system, &request.body)
         }
+        "/host/commands/ConfigureRepository" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.ConfigureRepository") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_configure_repository(system, &request.body)
+        }
+        "/host/commands/ConfirmPublication" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.ConfirmPublication") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_confirm_publication(system, &request.body)
+        }
         "/host/commands/CreateGoal" => {
             if request.method != "POST" {
                 return http::method_not_allowed("POST");
@@ -255,6 +280,15 @@ where
             }
             serve_controlplane_host_enable_repository_registration(system, &request.body)
         }
+        "/host/commands/MarkPublicationUncertain" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.MarkPublicationUncertain") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_mark_publication_uncertain(system, &request.body)
+        }
         "/host/commands/MergeAssignment" => {
             if request.method != "POST" {
                 return http::method_not_allowed("POST");
@@ -273,6 +307,15 @@ where
             }
             serve_controlplane_host_pause_goal(system, &request.body)
         }
+        "/host/commands/PreparePublication" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.PreparePublication") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_prepare_publication(system, &request.body)
+        }
         "/host/commands/QueueAssignment" => {
             if request.method != "POST" {
                 return http::method_not_allowed("POST");
@@ -290,6 +333,15 @@ where
                 return not_granted(actor);
             }
             serve_controlplane_host_ready_assignment(system, &request.body)
+        }
+        "/host/commands/ReconcileAssignment" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.ReconcileAssignment") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_reconcile_assignment(system, &request.body)
         }
         "/host/commands/RegisterRepository" => {
             if request.method != "POST" {
@@ -345,6 +397,15 @@ where
             }
             serve_controlplane_host_start_goal(system, &request.body)
         }
+        "/host/commands/UpdateGoal" => {
+            if request.method != "POST" {
+                return http::method_not_allowed("POST");
+            }
+            if let Err(actor) = admit(caller, "controlplane.host.UpdateGoal") {
+                return not_granted(actor);
+            }
+            serve_controlplane_host_update_goal(system, &request.body)
+        }
         "/host/views/AssignmentList" => {
             if request.method != "GET" {
                 return http::method_not_allowed("GET");
@@ -356,6 +417,12 @@ where
                 return http::method_not_allowed("GET");
             }
             http::answer(run_controlplane_host_goal_list(system))
+        }
+        "/host/views/PublicationIntentList" => {
+            if request.method != "GET" {
+                return http::method_not_allowed("GET");
+            }
+            http::answer(run_controlplane_host_publication_intent_list(system))
         }
         "/host/views/RepositoryRegistrationList" => {
             if request.method != "GET" {
@@ -401,7 +468,7 @@ where
 /// the command runs (the route's `403`).
 pub fn handle<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, caller: Option<&crate::actor::Caller>, name: &str, input: json::Value) -> Result<json::Value, entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let answered = match name {
         "controlplane.host.ArchiveWorkspace" => match admit(caller, "controlplane.host.ArchiveWorkspace") {
@@ -429,6 +496,14 @@ where
             Ok(()) => run_controlplane_host_complete_assignment(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
+        "controlplane.host.ConfigureRepository" => match admit(caller, "controlplane.host.ConfigureRepository") {
+            Ok(()) => run_controlplane_host_configure_repository(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
+        "controlplane.host.ConfirmPublication" => match admit(caller, "controlplane.host.ConfirmPublication") {
+            Ok(()) => run_controlplane_host_confirm_publication(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
         "controlplane.host.CreateGoal" => match admit(caller, "controlplane.host.CreateGoal") {
             Ok(()) => run_controlplane_host_create_goal(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
@@ -442,6 +517,10 @@ where
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "controlplane.host.GoalList" => run_controlplane_host_goal_list(system),
+        "controlplane.host.MarkPublicationUncertain" => match admit(caller, "controlplane.host.MarkPublicationUncertain") {
+            Ok(()) => run_controlplane_host_mark_publication_uncertain(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
         "controlplane.host.MergeAssignment" => match admit(caller, "controlplane.host.MergeAssignment") {
             Ok(()) => run_controlplane_host_merge_assignment(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
@@ -450,12 +529,21 @@ where
             Ok(()) => run_controlplane_host_pause_goal(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
+        "controlplane.host.PreparePublication" => match admit(caller, "controlplane.host.PreparePublication") {
+            Ok(()) => run_controlplane_host_prepare_publication(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
+        "controlplane.host.PublicationIntentList" => run_controlplane_host_publication_intent_list(system),
         "controlplane.host.QueueAssignment" => match admit(caller, "controlplane.host.QueueAssignment") {
             Ok(()) => run_controlplane_host_queue_assignment(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "controlplane.host.ReadyAssignment" => match admit(caller, "controlplane.host.ReadyAssignment") {
             Ok(()) => run_controlplane_host_ready_assignment(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
+        "controlplane.host.ReconcileAssignment" => match admit(caller, "controlplane.host.ReconcileAssignment") {
+            Ok(()) => run_controlplane_host_reconcile_assignment(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "controlplane.host.RegisterRepository" => match admit(caller, "controlplane.host.RegisterRepository") {
@@ -481,6 +569,10 @@ where
         },
         "controlplane.host.StartGoal" => match admit(caller, "controlplane.host.StartGoal") {
             Ok(()) => run_controlplane_host_start_goal(system, &input),
+            Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
+        },
+        "controlplane.host.UpdateGoal" => match admit(caller, "controlplane.host.UpdateGoal") {
+            Ok(()) => run_controlplane_host_update_goal(system, &input),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "controlplane.host.WorkspaceList" => run_controlplane_host_workspace_list(system),
@@ -522,7 +614,7 @@ fn not_granted(actor: Option<&str>) -> http::Response {
 /// `POST` `controlplane.host.ArchiveWorkspace`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_archive_workspace<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -545,7 +637,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_archive_workspace<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_archive_workspace(value, "body") {
         Ok(input) => input,
@@ -619,7 +711,7 @@ fn answer_controlplane_host_archive_workspace(outcome: &crate::host::ArchiveWork
 /// `POST` `controlplane.host.BlockAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_block_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -642,7 +734,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_block_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_block_assignment(value, "body") {
         Ok(input) => input,
@@ -716,7 +808,7 @@ fn answer_controlplane_host_block_assignment(outcome: &crate::host::BlockAssignm
 /// `POST` `controlplane.host.CancelAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_cancel_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -739,7 +831,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_cancel_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_cancel_assignment(value, "body") {
         Ok(input) => input,
@@ -813,7 +905,7 @@ fn answer_controlplane_host_cancel_assignment(outcome: &crate::host::CancelAssig
 /// `POST` `controlplane.host.CancelGoal`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_cancel_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -836,7 +928,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_cancel_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_cancel_goal(value, "body") {
         Ok(input) => input,
@@ -910,7 +1002,7 @@ fn answer_controlplane_host_cancel_goal(outcome: &crate::host::CancelGoalOutcome
 /// `POST` `controlplane.host.ClaimAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_claim_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -933,7 +1025,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_claim_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_claim_assignment(value, "body") {
         Ok(input) => input,
@@ -1007,7 +1099,7 @@ fn answer_controlplane_host_claim_assignment(outcome: &crate::host::ClaimAssignm
 /// `POST` `controlplane.host.CompleteAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_complete_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1030,7 +1122,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_complete_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_complete_assignment(value, "body") {
         Ok(input) => input,
@@ -1101,10 +1193,192 @@ fn answer_controlplane_host_complete_assignment(outcome: &crate::host::CompleteA
     (status, body)
 }
 
+/// `POST` `controlplane.host.ConfigureRepository`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_configure_repository<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_configure_repository(system, &value))
+}
+
+/// `controlplane.host.ConfigureRepository` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_configure_repository<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_configure_repository(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.configure_repository(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_configure_repository(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.ConfigureRepository`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_configure_repository(outcome: &crate::host::ConfigureRepositoryOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::ConfigureRepositoryOutcome::Applied { configure_repository_applied, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "applied");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.ConfigureRepositoryApplied");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_configure_repository_applied(configure_repository_applied, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+        crate::host::ConfigureRepositoryOutcome::NotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.RepositoryRegistrationNotFound");
+            404
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
+/// `POST` `controlplane.host.ConfirmPublication`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_confirm_publication<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_confirm_publication(system, &value))
+}
+
+/// `controlplane.host.ConfirmPublication` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_confirm_publication<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_confirm_publication(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.confirm_publication(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_confirm_publication(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.ConfirmPublication`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_confirm_publication(outcome: &crate::host::ConfirmPublicationOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::ConfirmPublicationOutcome::Applied { confirm_publication_applied, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "applied");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.ConfirmPublicationApplied");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_confirm_publication_applied(confirm_publication_applied, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+        crate::host::ConfirmPublicationOutcome::NotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.PublicationIntentNotFound");
+            404
+        }
+        crate::host::ConfirmPublicationOutcome::WrongState { error, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "wrong-state");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.PublicationIntentStateConflict");
+            json::member(&mut body, "payload");
+            wire::encode_error_controlplane_host_publication_intent_state_conflict(error, &mut body);
+            409
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
 /// `POST` `controlplane.host.CreateGoal`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_create_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1127,7 +1401,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_create_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_create_goal(value, "body") {
         Ok(input) => input,
@@ -1179,7 +1453,7 @@ fn answer_controlplane_host_create_goal(outcome: &crate::host::CreateGoalOutcome
 /// `POST` `controlplane.host.DisableRepositoryRegistration`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_disable_repository_registration<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1202,7 +1476,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_disable_repository_registration<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_disable_repository_registration(value, "body") {
         Ok(input) => input,
@@ -1276,7 +1550,7 @@ fn answer_controlplane_host_disable_repository_registration(outcome: &crate::hos
 /// `POST` `controlplane.host.EnableRepositoryRegistration`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_enable_repository_registration<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1299,7 +1573,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_enable_repository_registration<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_enable_repository_registration(value, "body") {
         Ok(input) => input,
@@ -1370,10 +1644,107 @@ fn answer_controlplane_host_enable_repository_registration(outcome: &crate::host
     (status, body)
 }
 
+/// `POST` `controlplane.host.MarkPublicationUncertain`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_mark_publication_uncertain<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_mark_publication_uncertain(system, &value))
+}
+
+/// `controlplane.host.MarkPublicationUncertain` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_mark_publication_uncertain<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_mark_publication_uncertain(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.mark_publication_uncertain(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_mark_publication_uncertain(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.MarkPublicationUncertain`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_mark_publication_uncertain(outcome: &crate::host::MarkPublicationUncertainOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::MarkPublicationUncertainOutcome::Applied { mark_publication_uncertain_applied, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "applied");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.MarkPublicationUncertainApplied");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_mark_publication_uncertain_applied(mark_publication_uncertain_applied, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+        crate::host::MarkPublicationUncertainOutcome::NotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.PublicationIntentNotFound");
+            404
+        }
+        crate::host::MarkPublicationUncertainOutcome::WrongState { error, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "wrong-state");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.PublicationIntentStateConflict");
+            json::member(&mut body, "payload");
+            wire::encode_error_controlplane_host_publication_intent_state_conflict(error, &mut body);
+            409
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
 /// `POST` `controlplane.host.MergeAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_merge_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1396,7 +1767,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_merge_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_merge_assignment(value, "body") {
         Ok(input) => input,
@@ -1470,7 +1841,7 @@ fn answer_controlplane_host_merge_assignment(outcome: &crate::host::MergeAssignm
 /// `POST` `controlplane.host.PauseGoal`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_pause_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1493,7 +1864,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_pause_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_pause_goal(value, "body") {
         Ok(input) => input,
@@ -1564,10 +1935,85 @@ fn answer_controlplane_host_pause_goal(outcome: &crate::host::PauseGoalOutcome) 
     (status, body)
 }
 
+/// `POST` `controlplane.host.PreparePublication`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_prepare_publication<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_prepare_publication(system, &value))
+}
+
+/// `controlplane.host.PreparePublication` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_prepare_publication<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_prepare_publication(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.prepare_publication(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_prepare_publication(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.PreparePublication`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_prepare_publication(outcome: &crate::host::PreparePublicationOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::PreparePublicationOutcome::Created { publication_intent_created, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "created");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.PublicationIntentCreated");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_publication_intent_created(publication_intent_created, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
 /// `POST` `controlplane.host.QueueAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_queue_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1590,7 +2036,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_queue_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_queue_assignment(value, "body") {
         Ok(input) => input,
@@ -1642,7 +2088,7 @@ fn answer_controlplane_host_queue_assignment(outcome: &crate::host::QueueAssignm
 /// `POST` `controlplane.host.ReadyAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_ready_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1665,7 +2111,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_ready_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_ready_assignment(value, "body") {
         Ok(input) => input,
@@ -1736,10 +2182,107 @@ fn answer_controlplane_host_ready_assignment(outcome: &crate::host::ReadyAssignm
     (status, body)
 }
 
+/// `POST` `controlplane.host.ReconcileAssignment`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_reconcile_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_reconcile_assignment(system, &value))
+}
+
+/// `controlplane.host.ReconcileAssignment` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_reconcile_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_reconcile_assignment(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.reconcile_assignment(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_reconcile_assignment(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.ReconcileAssignment`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_reconcile_assignment(outcome: &crate::host::ReconcileAssignmentOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "applied");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.ReconcileAssignmentApplied");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_reconcile_assignment_applied(reconcile_assignment_applied, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+        crate::host::ReconcileAssignmentOutcome::NotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.AssignmentNotFound");
+            404
+        }
+        crate::host::ReconcileAssignmentOutcome::WrongState { error, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "wrong-state");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.AssignmentStateConflict");
+            json::member(&mut body, "payload");
+            wire::encode_error_controlplane_host_assignment_state_conflict(error, &mut body);
+            409
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
 /// `POST` `controlplane.host.RegisterRepository`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_register_repository<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1762,7 +2305,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_register_repository<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_register_repository(value, "body") {
         Ok(input) => input,
@@ -1814,7 +2357,7 @@ fn answer_controlplane_host_register_repository(outcome: &crate::host::RegisterR
 /// `POST` `controlplane.host.RegisterWorkspace`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_register_workspace<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1837,7 +2380,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_register_workspace<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_register_workspace(value, "body") {
         Ok(input) => input,
@@ -1889,7 +2432,7 @@ fn answer_controlplane_host_register_workspace(outcome: &crate::host::RegisterWo
 /// `POST` `controlplane.host.RepairAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_repair_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1912,7 +2455,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_repair_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_repair_assignment(value, "body") {
         Ok(input) => input,
@@ -1986,7 +2529,7 @@ fn answer_controlplane_host_repair_assignment(outcome: &crate::host::RepairAssig
 /// `POST` `controlplane.host.ReviewAssignment`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_review_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -2009,7 +2552,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_review_assignment<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_review_assignment(value, "body") {
         Ok(input) => input,
@@ -2083,7 +2626,7 @@ fn answer_controlplane_host_review_assignment(outcome: &crate::host::ReviewAssig
 /// `POST` `controlplane.host.SatisfyGoal`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_satisfy_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -2106,7 +2649,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_satisfy_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_satisfy_goal(value, "body") {
         Ok(input) => input,
@@ -2180,7 +2723,7 @@ fn answer_controlplane_host_satisfy_goal(outcome: &crate::host::SatisfyGoalOutco
 /// `POST` `controlplane.host.StartGoal`: reads the declared input, runs the port, answers the declared outcome.
 fn serve_controlplane_host_start_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -2203,7 +2746,7 @@ where
 /// `body`, as the route reports it.
 fn run_controlplane_host_start_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     let input = match wire::decode_command_controlplane_host_start_goal(value, "body") {
         Ok(input) => input,
@@ -2274,12 +2817,97 @@ fn answer_controlplane_host_start_goal(outcome: &crate::host::StartGoalOutcome) 
     (status, body)
 }
 
+/// `POST` `controlplane.host.UpdateGoal`: reads the declared input, runs the port, answers the declared outcome.
+fn serve_controlplane_host_update_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, body: &[u8]) -> http::Response
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let text = match std::str::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not UTF-8: {error}"));
+        }
+    };
+    let value = match json::parse(text) {
+        Ok(value) => value,
+        Err(error) => {
+            return http::Response::refusal(400, &format!("the body is not JSON: {error}"));
+        }
+    };
+    http::answer(run_controlplane_host_update_goal(system, &value))
+}
+
+/// `controlplane.host.UpdateGoal` from its input as a JSON value: decode, run the port, render the declared outcome.
+///
+/// The one path the `POST` route and [`handle`] share. A decoding failure is located under
+/// `body`, as the route reports it.
+fn run_controlplane_host_update_goal<ControlPlaneBehaviors>(system: &mut crate::system::System<ControlPlaneBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    let input = match wire::decode_command_controlplane_host_update_goal(value, "body") {
+        Ok(input) => input,
+        Err(error) => {
+            // `400` and not `422`: this is a body the schema decides, which is the difference
+            // between fixing a value and fixing a serialiser.
+            return Err(entry::Refused::Input(format!("{error}")));
+        }
+    };
+    let outcome = match system.control_plane.update_goal(input) {
+        Ok(outcome) => outcome,
+        Err(unmet) => return Err(entry::Refused::Unmet(format!("{unmet}"))),
+    };
+    // Deliver what this command published to every binding that reacts to it, then take it
+    // off the log: a long-running server keeps nothing from one request to the next.
+    let delivered = system.pump();
+    let _ = system.take_published();
+    if let Err(failure) = delivered {
+        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+    }
+    Ok(answer_controlplane_host_update_goal(&outcome))
+}
+
+/// One declared outcome of `controlplane.host.UpdateGoal`: the branch that was taken, every event it published in
+/// publication order, the declared error where there is one, and that error's own payload —
+/// with the status the contract declares for that branch.
+fn answer_controlplane_host_update_goal(outcome: &crate::host::UpdateGoalOutcome) -> (u16, String) {
+    let mut body = String::from("{");
+    let status = match outcome {
+        crate::host::UpdateGoalOutcome::Applied { update_goal_applied, .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "applied");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push('{');
+            json::member(&mut body, "event");
+            json::push_text(&mut body, "controlplane.host.UpdateGoalApplied");
+            json::member(&mut body, "payload");
+            wire::encode_event_controlplane_host_update_goal_applied(update_goal_applied, &mut body);
+            body.push('}');
+            body.push(']');
+            202
+        }
+        crate::host::UpdateGoalOutcome::NotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalNotFound");
+            404
+        }
+    };
+    body.push('}');
+    (status, body)
+}
+
 /// `GET` `controlplane.host.AssignmentList` at `read_your_writes` consistency: every row the owed projection holds.
 ///
 /// The one path the `GET` route and [`handle`] share.
 fn run_controlplane_host_assignment_list<ControlPlaneBehaviors>(system: &crate::system::System<ControlPlaneBehaviors>) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     match system.control_plane.assignment_list() {
         Ok(rows) => {
@@ -2305,7 +2933,7 @@ where
 /// The one path the `GET` route and [`handle`] share.
 fn run_controlplane_host_goal_list<ControlPlaneBehaviors>(system: &crate::system::System<ControlPlaneBehaviors>) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     match system.control_plane.goal_list() {
         Ok(rows) => {
@@ -2326,12 +2954,38 @@ where
     }
 }
 
+/// `GET` `controlplane.host.PublicationIntentList` at `read_your_writes` consistency: every row the owed projection holds.
+///
+/// The one path the `GET` route and [`handle`] share.
+fn run_controlplane_host_publication_intent_list<ControlPlaneBehaviors>(system: &crate::system::System<ControlPlaneBehaviors>) -> Result<(u16, String), entry::Refused>
+where
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+{
+    match system.control_plane.publication_intent_list() {
+        Ok(rows) => {
+            let mut body = String::from("{");
+            json::member(&mut body, "rows");
+            body.push('[');
+            for (position, row) in rows.iter().enumerate() {
+                if position > 0 {
+                    body.push(',');
+                }
+                wire::encode_view_controlplane_host_publication_intent_list(row, &mut body);
+            }
+            body.push(']');
+            body.push('}');
+            Ok((200, body))
+        }
+        Err(unmet) => Err(entry::Refused::Unmet(format!("{unmet}"))),
+    }
+}
+
 /// `GET` `controlplane.host.RepositoryRegistrationList` at `read_your_writes` consistency: every row the owed projection holds.
 ///
 /// The one path the `GET` route and [`handle`] share.
 fn run_controlplane_host_repository_registration_list<ControlPlaneBehaviors>(system: &crate::system::System<ControlPlaneBehaviors>) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     match system.control_plane.repository_registration_list() {
         Ok(rows) => {
@@ -2357,7 +3011,7 @@ where
 /// The one path the `GET` route and [`handle`] share.
 fn run_controlplane_host_workspace_list<ControlPlaneBehaviors>(system: &crate::system::System<ControlPlaneBehaviors>) -> Result<(u16, String), entry::Refused>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     match system.control_plane.workspace_list() {
         Ok(rows) => {
