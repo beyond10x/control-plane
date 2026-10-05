@@ -81,6 +81,39 @@ fn elapsed(at: &str) -> String {
         Err(_) => "Observation time unavailable".into(),
     }
 }
+fn activity_detail(detail: &Value) -> String {
+    if let Some(text) = detail.as_str() {
+        return short(text, 560);
+    }
+    // Only selected operational fields enter HTML. Receipts, transcripts and
+    // arbitrary process output remain behind the evidence endpoint.
+    let bounded = |text: &str, limit| text.chars().take(limit).collect::<String>();
+    let mut parts = Vec::new();
+    if let Some(command) = detail["command"].as_str() {
+        parts.push(bounded(command, 180));
+    } else if let Some(program) = detail["program"].as_str() {
+        let mut command = bounded(program, 80);
+        if let Some(args) = detail["args"].as_array() {
+            for arg in args.iter().take(12).filter_map(Value::as_str) {
+                command.push(' ');
+                command.push_str(&bounded(arg, 80));
+            }
+        }
+        parts.push(bounded(&command, 240));
+    }
+    for (key, label, limit) in [
+        ("reason", "Reason", 200),
+        ("path", "Path", 120),
+        ("worktree", "Worktree", 160),
+        ("target", "Target", 80),
+        ("candidate", "Candidate", 64),
+    ] {
+        if let Some(text) = detail[key].as_str().filter(|text| !text.is_empty()) {
+            parts.push(format!("{label}: {}", bounded(text, limit)));
+        }
+    }
+    short(&parts.join(" · "), 560)
+}
 fn event(event: &Value, current: bool) -> String {
     let at = field(event, "at");
     let status = if current {
@@ -92,7 +125,7 @@ fn event(event: &Value, current: bool) -> String {
         "<div class=\"event\"><div class=\"event-top\"><strong>{}</strong>{}</div><p>{}</p><div class=\"meta\">{} · {}<br><time datetime=\"{}\">{}</time></div>{}</div>",
         short(field(event, "action"), 120),
         badge(&status),
-        short(field(event, "detail"), 280),
+        activity_detail(&event["detail"]),
         short(field(event, "role"), 80),
         elapsed(at),
         escape(at),

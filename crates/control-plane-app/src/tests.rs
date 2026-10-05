@@ -135,6 +135,26 @@ fn concurrent_workers_and_blocked_stopped_states_are_distinct() {
     );
 }
 
+#[test]
+fn structured_worker_details_show_bounded_commands_and_paths_without_receipts() {
+    let event = json!({"at":"2026-10-05T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":{"program":"cargo","args":["test","--package","<script>bad</script>"],"path":"src/lib.rs","worktree":"isolated/worker","receipt":"PRIVATE-RECEIPT".repeat(50000),"stdout":"PRIVATE-OUTPUT"}});
+    let receipt = json!({"last_activity":event,"activity":[event]}).to_string();
+    let mut view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Planning","planning_receipt":receipt}]});
+    let html = dashboard::operations(&view).unwrap();
+    assert!(html.contains("cargo test --package &lt;script&gt;bad&lt;/script&gt;"));
+    assert!(html.contains("src/lib.rs"));
+    assert!(html.contains("isolated/worker"));
+    assert!(!html.contains("PRIVATE-RECEIPT"));
+    assert!(!html.contains("PRIVATE-OUTPUT"));
+    assert!(!html.contains("<script>"));
+    assert!(html.len() < 30000);
+    let receipt=json!({"last_activity":{"action":"blocked","detail":{"reason":"Required checks refused","command":"cargo test --locked"}}}).to_string();
+    view["goals"][0]["planning_receipt"] = json!(receipt);
+    let html = dashboard::operations(&view).unwrap();
+    assert!(html.contains("Required checks refused"));
+    assert!(html.contains("cargo test --locked"));
+}
+
 async fn fixture() -> (tempfile::TempDir, AppState) {
     let root = std::path::PathBuf::from(std::env::var_os("HOME").unwrap())
         .join(".cache/control-plane-console");
