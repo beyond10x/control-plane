@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:workspace-host
 kind: story
-status: draft
+status: active
 title: Workspace host and durable generated behavior
 relations:
 - decomposes: epic:bootstrap
@@ -10,7 +10,10 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-core
-revision: 2
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T20:20:54Z", actor: "human:timo", revision: 3}
+- {from: "proposed", to: "active", at: "2026-10-05T20:20:54Z", actor: "human:timo", revision: 4}
 ---
 ## Outcome
 Workspace host and durable generated behavior, as part of the approved standalone control-plane plan.
