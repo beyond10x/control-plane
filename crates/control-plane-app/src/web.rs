@@ -22,9 +22,37 @@ pub(crate) fn escape(value: &str) -> String {
     })
 }
 fn page(title: &str, body: String) -> Response {
-    Html(format!("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} · Control plane</title><style>{STYLE}</style></head><body><header><a href=\"/\">Control plane</a><span>Local engineering workspace</span></header><main>{body}</main></body></html>",escape(title))).into_response()
+    Html(format!("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} · Control plane</title><style>{STYLE}</style></head><body><header class=\"brand\"><a href=\"/\"><span class=\"brand-icon\">▦</span> control plane</a><span>ENGINEERING OPERATIONS</span></header><main>{body}</main></body></html>",escape(title))).into_response()
 }
-const STYLE: &str = "*{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#182430;font:16px system-ui,sans-serif}header{display:flex;justify-content:space-between;padding:20px max(24px,calc((100vw - 1120px)/2));background:#142b3a;color:#cadbe5}header a{color:white;font-weight:700;text-decoration:none}main{max-width:1120px;margin:32px auto;padding:0 24px}h1{font-size:30px}h2{font-size:22px}h3{font-size:18px}section,article{background:white;padding:24px;border:1px solid #dde3e8;border-radius:10px;margin:18px 0}label{display:block;font-size:14px;font-weight:600;margin:12px 0}input,textarea{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #bac6cf;border-radius:5px;font:inherit}input[type=checkbox]{display:inline;width:auto;margin-right:8px}textarea{min-height:80px}button{border:0;border-radius:5px;background:#145c78;color:white;padding:10px 16px;font:inherit;cursor:pointer}button.secondary{background:#e8eef2;color:#183a4c}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.actions{display:flex;gap:10px;flex-wrap:wrap}.actions form{margin:0}.muted{color:#566b7a;font-size:14px}.status{display:inline-block;border-radius:20px;background:#e8f1f5;padding:4px 10px;font-size:13px}code,pre{overflow-wrap:anywhere;white-space:pre-wrap}a{color:#145c78}details{margin-top:18px}summary{cursor:pointer}table{width:100%;border-collapse:collapse}td,th{padding:10px;text-align:left;border-bottom:1px solid #e1e7ec}.error{border-left:4px solid #b13939}small{display:block;color:#566b7a;margin:8px 0}";
+pub(crate) const STYLE: &str = include_str!("dashboard.css");
+
+fn navigation(view: &Value, selected: &str) -> Result<String> {
+    let mut out = String::from(
+        "<nav class=\"sidebar\" aria-label=\"Workspaces\"><a class=\"overview\" href=\"/\">◈ &nbsp; Operations overview</a><p class=\"nav-label\">WORKSPACES</p>",
+    );
+    for workspace in rows(view, "workspaces")? {
+        write!(
+            out,
+            "<a class=\"workspace-link {}\" href=\"/workspaces/{}\"><span class=\"nav-dot\"></span>{}</a>",
+            if field(workspace, "workspace_id") == selected {
+                "selected"
+            } else {
+                ""
+            },
+            escape(field(workspace, "workspace_id")),
+            escape(field(workspace, "name"))
+        )?;
+    }
+    out.push_str("<div class=\"sidebar-footer\"><strong>Local & governed</strong><p>Actions follow your authority.<br>Evidence stays with the work.</p></div></nav>");
+    Ok(out)
+}
+fn live_frame(path: &str) -> String {
+    format!(
+        "<iframe class=\"operations-frame\" src=\"{}\" title=\"Live engineering operations\"></iframe><p class=\"muted frame-note\">Live status refreshes every second. Your controls and unsaved form edits stay in this page. <a href=\"{}\" target=\"_blank\" rel=\"noopener\">Open status separately ↗</a></p>",
+        escape(path),
+        escape(path)
+    )
+}
 fn token(state: &AppState) -> String {
     format!(
         "<input type=\"hidden\" name=\"csrf\" value=\"{}\">",
@@ -78,10 +106,10 @@ pub async fn home(State(state): State<AppState>) -> Response {
 }
 async fn home_body(state: &AppState) -> Result<String> {
     let view = state.snapshot().await?;
-    let mut body = String::from(
-        "<h1>Workspaces</h1><p>Choose a repository or a directory of repositories, set a goal, and follow its progress.</p><div class=\"grid\">",
-    );
-    body.push_str(&runtime_notice(&view));
+    let mut body = navigation(&view, "")?;
+    body.push_str("<div class=\"page-heading\"><div><p class=\"eyebrow\">ALL WORKSPACES</p><h1>Operations overview</h1><p class=\"muted\">Your autonomous engineering, in view.</p></div><a class=\"button secondary\" href=\"#workspace-settings\">Manage workspaces ↓</a></div>");
+    body.push_str(&live_frame("/live"));
+    body.push_str("<details id=\"workspace-settings\" class=\"settings\"><summary>Manage workspaces · Add workspace</summary><div class=\"grid\">");
     for ws in rows(&view, "workspaces")? {
         write!(
             body,
@@ -94,7 +122,7 @@ async fn home_body(state: &AppState) -> Result<String> {
     }
     write!(
         body,
-        "</div><section><h2>Add workspace</h2><form method=\"post\" action=\"/workspaces\">{}{}{}<button>Add workspace</button></form></section>",
+        "</div><section><h2>Add workspace</h2><form method=\"post\" action=\"/workspaces\">{}{}{}<button>Add workspace</button></form></section></details>",
         token(state),
         input("Name", "name", ""),
         input("Directory", "path", "")
@@ -113,17 +141,17 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         .iter()
         .find(|ws| field(ws, "workspace_id") == id)
         .context("workspace was not found")?;
-    let mut body = format!(
-        "<p><a href=\"/\">All workspaces</a></p><h1>{}</h1><p class=\"muted\">{}</p>",
-        escape(field(ws, "name")),
-        escape(field(ws, "path"))
-    );
-    body.push_str(&runtime_notice(&view));
+    let mut body = navigation(&view, id)?;
     write!(
         body,
-        "<p><a href=\"/workspaces/{}\">Refresh status</a> <span class=\"muted\">Reload to see the latest planning and assignment progress.</span></p>",
-        escape(id)
+        "<div class=\"page-heading\"><div><p class=\"eyebrow\">WORKSPACE OPERATIONS</p><h1>{}</h1><p class=\"muted path\">{}</p></div><a class=\"button secondary\" href=\"#goal-controls\">Goal controls ↓</a></div>",
+        escape(field(ws, "name")),
+        escape(field(ws, "path"))
     )?;
+    body.push_str(&live_frame(&format!("/workspaces/{id}/live")));
+    body.push_str(
+        "<details class=\"settings\"><summary>Workspace settings · Directories</summary>",
+    );
     body.push_str("<h2>Directories</h2><p>Directories provide workspace context, including folders without Git. Repositories in each directory and its immediate children appear below.</p>");
     for directory in rows(&view, "directories")?.iter().filter(|directory| {
         field(directory, "workspace_id") == id && field(directory, "state") == "Registered"
@@ -149,7 +177,7 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         token(state),
         input("Directory path", "path", "")
     )?;
-    body.push_str("<h2>Goals</h2>");
+    body.push_str("</details><div id=\"goal-controls\" class=\"section-heading\"><h2>Goal controls</h2><span class=\"muted\">Changes here remain until you submit</span></div>");
     for goal in rows(&view, "goals")?
         .iter()
         .filter(|g| field(g, "workspace_id") == id)
@@ -179,11 +207,11 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         body.push_str("</div>");
         write!(
             body,
-            "<p>Planning: <span class=\"status\">{}</span></p><p>{}</p><details><summary>Planning evidence</summary><dl><dt>Workspace</dt><dd><code>{}</code></dd><dt>Receipt</dt><dd><code>{}</code></dd></dl></details>",
+            "<p class=\"muted\">Planning at page load: {}</p><p>{}</p><p class=\"path\">{}</p><a href=\"/goals/{}/evidence\">Inspect planning evidence ↗</a>",
             escape(field(goal, "planning_phase")),
             escape(field(goal, "planning_reason")),
             escape(field(goal, "planning_worktree_path")),
-            escape(field(goal, "planning_receipt"))
+            escape(goal_id)
         )?;
         if matches!(field(goal, "state"), "Paused" | "Running") {
             write!(
@@ -203,7 +231,7 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
                 "Paused" => "This goal is paused. Start it when you want the planner to work.",
                 "Cancelled" => "This goal is cancelled; no further work will start.",
                 "Running" if field(goal, "planning_phase") == "Idle" => {
-                    "Waiting for the planner to begin. Refresh this page to see progress."
+                    "Waiting for the planner to begin. Live operations above update automatically."
                 }
                 "Running" => {
                     "No assignments are queued. The planning status above shows progress or the reason work cannot continue."
@@ -215,12 +243,11 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         for assignment in assignments {
             write!(
                 body,
-                "<section><h3>{}</h3><span class=\"status\">{}</span><p>{}</p><details><summary>Evidence and execution details</summary><dl><dt>Candidate</dt><dd><code>{}</code></dd><dt>Merge receipt</dt><dd><code>{}</code></dd><dt>Implementation run</dt><dd><code>{}</code></dd><dt>Review run</dt><dd><code>{}</code></dd></dl>",
+                "<section><h3>{}</h3><span class=\"status\">{}</span><p>{}</p><details><summary>Evidence and execution details</summary><dl><dt>Candidate</dt><dd><code>{}</code></dd><dt>Merge receipt</dt><dd>Available through Inspect planning evidence</dd><dt>Implementation run</dt><dd><code>{}</code></dd><dt>Review run</dt><dd><code>{}</code></dd></dl>",
                 escape(field(assignment, "story_id")),
                 escape(field(assignment, "state")),
                 escape(field(assignment, "reason")),
                 escape(field(assignment, "candidate")),
-                escape(field(assignment, "merge_receipt")),
                 escape(field(assignment, "implementor_run")),
                 escape(field(assignment, "reviewer_run"))
             )?;
@@ -230,25 +257,20 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
             {
                 write!(
                     body,
-                    "<p>Publication: {} · <code>{}</code></p>",
-                    escape(field(publication, "state")),
-                    escape(field(publication, "receipt"))
+                    "<p>Publication: {} · Receipt available through the state API</p>",
+                    escape(field(publication, "state"))
                 )?;
             }
             body.push_str("</details></section>");
         }
         if !field(goal, "satisfaction_receipt").is_empty() {
-            write!(
-                body,
-                "<p>Acceptance receipt: <code>{}</code></p>",
-                escape(field(goal, "satisfaction_receipt"))
-            )?;
+            body.push_str("<p>Acceptance receipt recorded; inspect evidence for details.</p>");
         }
         body.push_str("</article>");
     }
     write!(
         body,
-        "<section><h2>New goal</h2><form method=\"post\" action=\"/goals\">{}<input type=\"hidden\" name=\"workspace_id\" value=\"{}\">{}<button>Create paused goal</button></form></section><h2>Repositories</h2>",
+        "<details class=\"settings\"><summary>Create a new goal</summary><section><h2>New goal</h2><form method=\"post\" action=\"/goals\">{}<input type=\"hidden\" name=\"workspace_id\" value=\"{}\">{}<button>Create paused goal</button></form></section></details><details class=\"settings\"><summary>Repository settings</summary>",
         token(state),
         escape(id),
         goal_fields(&json!({}))
@@ -297,11 +319,8 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         token(state),
         input("Repository directory", "path", "")
     )?;
+    body.push_str("</details>");
     Ok(body)
-}
-
-fn runtime_notice(view: &Value) -> String {
-    view["runtime_error"].as_str().map(|error|format!("<section class=\"error\" role=\"alert\"><h2>Autonomous processing needs attention</h2><p>{}</p></section>",escape(error))).unwrap_or_default()
 }
 fn goal_fields(goal: &Value) -> String {
     let mut body = format!(

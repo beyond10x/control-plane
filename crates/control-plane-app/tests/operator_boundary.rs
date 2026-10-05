@@ -10,11 +10,26 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
 use tower::ServiceExt;
 
+fn isolate_git_discovery(path: &std::path::Path) {
+    // Scratch lives under the product checkout, which is detached in PR CI.
+    // A bare boundary models a non-worktree directory without inheriting that checkout.
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "--bare"])
+            .arg(path)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+}
+
 #[tokio::test]
 async fn token_from_previous_process_cannot_mutate_restarted_service() {
     let scratch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch");
     std::fs::create_dir_all(&scratch).unwrap();
     let temp = tempfile::tempdir_in(scratch).unwrap();
+    isolate_git_discovery(temp.path());
     let store = Arc::new(Mutex::new(
         Store::open(temp.path().join("state.sqlite")).await.unwrap(),
     ));
@@ -89,6 +104,7 @@ async fn ipv6_loopback_client_and_server_agree_on_authority() {
     let scratch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch");
     std::fs::create_dir_all(&scratch).unwrap();
     let temp = tempfile::tempdir_in(scratch).unwrap();
+    isolate_git_discovery(temp.path());
     let store = Arc::new(Mutex::new(
         Store::open(temp.path().join("state.sqlite")).await.unwrap(),
     ));

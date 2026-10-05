@@ -1,5 +1,6 @@
 //! Local operator surface. Browser and CLI mutations share the same admitted Store.
 mod cli;
+mod dashboard;
 mod web;
 use anyhow::{Context, Result, ensure};
 use axum::{
@@ -82,6 +83,7 @@ impl AppState {
             "assignments":store.query("AssignmentList")?,
             "publications":store.query("PublicationIntentList")?,
             "runtime_error":self.runtime_error.lock().await.clone(),
+            "server_observed_at": time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339)?,
         }))
     }
     async fn command(&self, command: &str, body: Value) -> Result<Value> {
@@ -136,6 +138,9 @@ const OPERATOR_COMMANDS: &[&str] = &[
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(web::home))
+        .route("/live", get(dashboard::live))
+        .route("/workspaces/{id}/live", get(dashboard::workspace_live))
+        .route("/goals/{id}/evidence", get(dashboard::evidence))
         .route("/workspaces", post(web::add_workspace))
         .route("/workspaces/{id}", get(web::workspace))
         .route("/workspaces/{id}/repositories", post(web::add_repository))
@@ -279,7 +284,8 @@ async fn request_guard(
     // Native form navigation with no-referrer sends Origin: null in Chromium.
     // Keep local form origins verifiable without sharing referrers cross-origin.
     headers.insert("referrer-policy", "same-origin".parse().unwrap());
-    headers.insert("content-security-policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
+    headers.insert("content-security-policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'".parse().unwrap());
+    headers.insert("x-frame-options", "SAMEORIGIN".parse().unwrap());
     response
 }
 
