@@ -190,6 +190,32 @@ pub fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
 }
 
 impl Planning<'_> {
+    fn respond(&self, request: ModelRequest) -> Result<Value> {
+        (self.input.progress)(
+            "activity",
+            &json!({"action":"model.requested","role":request.role,"detail":format!("Waiting for {} response from {}",request.role,request.model),"status":"running"}),
+        )?;
+        let answer = self.model.respond(&request);
+        let (action, status, detail) = match &answer {
+            Ok(_) => (
+                "model.completed",
+                "completed",
+                format!("{} response received", request.role),
+            ),
+            Err(error) => (
+                "model.failed",
+                "failed",
+                format!("{}: {error:#}", request.role),
+            ),
+        };
+        // This also rechecks operator authority after a model call, before any response effect.
+        (self.input.progress)(
+            "activity",
+            &json!({"action":action,"role":request.role,"detail":detail,"status":status}),
+        )?;
+        answer
+    }
+
     fn remaining(&self) -> Result<std::time::Duration> {
         let seconds = self.input.goal["max_minutes"]
             .as_u64()
@@ -233,9 +259,10 @@ impl Planning<'_> {
             .lock()
             .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
         let text = format!(
-            "Goal: {}\nAcceptance: {}\nObserved repository context:\n{}",
+            "Goal: {}\nAcceptance: {}\nRegistered workspace directories: {}\nRead context files using workspace:<directory_id>/<relative-file>. These directories are read-only; every edit stays inside this planning worktree.\nObserved repository context:\n{}",
             text(&self.input.goal, "objective")?,
             text(&self.input.goal, "acceptance")?,
+            self.input.goal["directories"],
             state.transcript.join("\n")
         );
         ensure!(text.len() <= 1024 * 1024, "planner context exceeds 1 MiB");
@@ -262,7 +289,7 @@ impl Planning<'_> {
             PlannerAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "read requests at most 32 files");
                 for name in paths {
-                    let file = confined(path, &name, false)?;
+                    let file = context_file(path, &name, &self.input.goal)?;
                     let metadata = std::fs::metadata(&file)?;
                     ensure!(metadata.len() <= 256 * 1024, "file exceeds read budget");
                     self.record(format!("{name}:\n{}", std::fs::read_to_string(file)?))?;
@@ -343,7 +370,7 @@ impl Planning<'_> {
                     reviewed.push(item);
                 }
                 let critic_context = format!("critic-{}", uuid::Uuid::new_v4());
-                let critique=self.model.respond(&ModelRequest { role:"critic".into(),execution_context:critic_context.clone(),model:text(&self.input.goal,"reviewer_model")?.into(),instructions:"Independently review this proposed plan against the standing goal, repository observations and ESS. Reject duplicate backlog, missing named conformance scenarios, unsafe scope, unsupported dependencies or goal claims unsupported by evidence. You cannot execute tools or grant authority.".into(),prompt:format!("{}\nSelected stories: {}\nSummary: {summary}\nActual validations:\n{validation}\n{plan_validation}",self.prompt()?,serde_json::to_string(&reviewed)?),schema:critique_schema(),timeout:self.remaining()? })?;
+                let critique=self.respond(ModelRequest { role:"critic".into(),execution_context:critic_context.clone(),model:text(&self.input.goal,"reviewer_model")?.into(),instructions:"Independently review this proposed plan against the standing goal, repository observations and ESS. Reject duplicate backlog, missing named conformance scenarios, unsafe scope, unsupported dependencies or goal claims unsupported by evidence. You cannot execute tools or grant authority.".into(),prompt:format!("{}\nSelected stories: {}\nSummary: {summary}\nActual validations:\n{validation}\n{plan_validation}",self.prompt()?,serde_json::to_string(&reviewed)?),schema:critique_schema(),timeout:self.remaining()? })?;
                 ensure!(
                     critique["approved"] == true,
                     "independent plan critique rejected: {}",
@@ -427,7 +454,7 @@ impl Planning<'_> {
 impl ActionSelector for &Planning<'_> {
     fn select(&self, _: &SelectionContext, _: &[CatalogueEntry]) -> Result<Choice, SelectorError> {
         let answer = (|| -> Result<PlannerAction> {
-            let response = self.model.respond(&ModelRequest {
+            let response = self.respond(ModelRequest {
                 role: "planner".into(),
                 execution_context: self.input.namespace.clone(),
                 model: text(&self.input.goal, "planner_model")?.into(),
@@ -704,6 +731,10 @@ pub fn validate_spec(root: &Path, runner: &ProcessRunner) -> Result<String> {
     )
 }
 pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
+    ensure!(
+        root.canonicalize()? == root,
+        "tool root changed or contains a symlink"
+    );
     let relative = Path::new(name);
     ensure!(
         !relative.as_os_str().is_empty()
@@ -729,6 +760,22 @@ pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
         }
     }
     Ok(path)
+}
+pub fn context_file(root: &Path, name: &str, goal: &Value) -> Result<PathBuf> {
+    if let Some(reference) = name.strip_prefix("workspace:") {
+        let (id, relative) = reference
+            .split_once('/')
+            .context("context read requires workspace:directory-id/relative-file")?;
+        let directory = goal["directories"]
+            .as_array()
+            .context("workspace context unavailable")?
+            .iter()
+            .find(|d| d["directory_id"] == id && d["state"] == "Registered")
+            .context("workspace context directory is not registered")?;
+        confined(Path::new(text(directory, "path")?), relative, false)
+    } else {
+        confined(root, name, false)
+    }
 }
 fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
     let files = runner.command(root, "git", &["ls-files"])?;
