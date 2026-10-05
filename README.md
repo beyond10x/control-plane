@@ -38,7 +38,7 @@ The service starts its planner alongside the console. The planner uses the exist
 
 The operations dashboard refreshes live status every second while keeping goal forms and unsaved edits in place. Planner cards show the model, current stage, actual model-call waits, elapsed time and recorded blockers. Assignment state and durable activity history appear beneath them; full receipts are available through **Inspect evidence**. The server timestamp measures connection freshness, while work timestamps advance only when an operation is recorded.
 
-Planner context uses bounded repository indexes and observations. Repeated reads refresh the same observation, and file pages allow later content to be inspected without accumulating entire files in every request.
+Loom owns model turns, compaction and durable sessions; Commission admits planner, implementation and publication effects. Control-plane owns workspace scheduling, persistence, authority inputs and UI projections. Planner context uses bounded repository indexes and observations. Repeated reads refresh the same observation, and file pages allow later content to be inspected without accumulating entire files in every request.
 
 The HTTP API shares the browser and CLI state:
 
@@ -95,4 +95,4 @@ task generate
 
 `task check` validates ESS and AEP, checks Rust formatting and lints, runs tests, checks generated drift and exercises the real durable conformance target. `task generate` regenerates artifacts from the specification. Generated files are not edited directly. Repository changes use managed worktrees; see [AGENTS.md](AGENTS.md).
 
-Bootstrap status: the workspace host and dashboard are running, but the external auth example failed during planning. The [runtime ownership audit](.engineering/planning/architecture-design/runtime-ownership.md) identifies execution behavior duplicated in control-plane, and the [boundary correction](.engineering/planning/story/runtime-boundary.md) records the required foundation integration. Passing scripted tests is not evidence of a delivered autonomous application.
+Bootstrap status: the workspace host and dashboard are running through the corrected Loom integration. The external auth example still has no successful delivery: its latest attempt stopped on ESS validation diagnostics, now covered by a failing-then-passing native runtime recovery test. The [runtime ownership audit](.engineering/planning/architecture-design/runtime-ownership.md) records exact foundation API findings and their resolution; the [boundary correction](.engineering/planning/story/runtime-boundary.md) retains the outstanding real-provider acceptance. Passing scripted tests is not evidence of a delivered autonomous application.

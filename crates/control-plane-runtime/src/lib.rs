@@ -7,10 +7,12 @@ use tokio::sync::Mutex;
 mod context;
 mod engine;
 mod fleet;
+mod governance;
+mod loom_model;
 mod model;
 pub mod process;
 mod supervisor;
-pub use model::CodexAgentModel;
+pub use loom_model::CodexAgentModel;
 pub use supervisor::Supervisor;
 
 pub type SharedStore = Arc<Mutex<Store>>;
@@ -28,6 +30,20 @@ pub struct ModelRequest {
 
 pub trait AgentModel: Send + Sync {
     fn respond(&self, request: &ModelRequest) -> Result<Value>;
+    fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value> {
+        let _ = environment;
+        self.respond(request)
+    }
+}
+
+/// Host bindings for Loom. The model never supplies these values.
+pub struct ModelEnvironment {
+    pub workspace: PathBuf,
+    pub max_turns: u64,
+    pub cancel: tokio_util::sync::CancellationToken,
+    pub progress: Arc<dyn Fn(Value) -> Result<()> + Send + Sync>,
+    /// New host observations for an existing Loom session; the first turn uses the full brief.
+    pub continuation: Option<String>,
 }
 
 #[derive(Clone)]

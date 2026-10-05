@@ -818,3 +818,112 @@ async fn repository_execution_is_exclusive_across_workspace_aliases() {
         "{assignments}"
     );
 }
+
+#[tokio::test]
+async fn native_loom_delivers_candidate_through_checks_review_and_observed_publication() {
+    use llm_core::{BoxFuture, Capabilities, Model, Provenance, TurnObservation};
+    struct Provider {
+        binding: Provenance,
+        caps: Capabilities,
+    }
+    impl Model for Provider {
+        fn provenance(&self) -> &Provenance {
+            &self.binding
+        }
+        fn capabilities(&self) -> &Capabilities {
+            &self.caps
+        }
+        fn turn<'a>(
+            &'a self,
+            request: &'a llm_core::TurnRequest,
+            _: &'a mut dyn llm_core::StreamSink,
+            _: &'a llm_core::Cancel,
+        ) -> BoxFuture<'a, Result<llm_core::TurnOutcome, llm_core::Error>> {
+            Box::pin(async move {
+                request.validate_for(&self.binding, &self.caps)?;
+                let previous = request
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, llm_core::Item::ToolCall(_)))
+                    .count();
+                let arguments = if request
+                    .instructions
+                    .contains("Implement the accepted AEP story")
+                {
+                    if previous == 0 {
+                        json!({"action":"write","path":"src/lib.rs","contents":"pub fn answer() -> u32 { 42 }\n"})
+                    } else {
+                        json!({"action":"finish","summary":"Candidate ready for actual checks and independent review"})
+                    }
+                } else if request.instructions.contains("Independently") {
+                    assert_eq!(previous, 0, "each reviewer needs a separate session");
+                    json!({"approved":true,"reason":"Trusted test output and exact diff establish the accepted answer"})
+                } else {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Select existing accepted scope"})
+                };
+                Ok(llm_core::TurnOutcome {
+                    stop_reason: llm_core::StopReason::ToolCalls,
+                    items: vec![
+                        llm_core::Item::Opaque {
+                            provenance: self.binding.clone(),
+                            payload: json!({"retained":true}),
+                        },
+                        llm_core::Item::ToolCall(llm_core::ToolCall {
+                            call_id: llm_core::CallId::new(format!("call-{previous}")).unwrap(),
+                            name: request.tools[0].name.clone(),
+                            arguments,
+                        }),
+                    ],
+                    observation: TurnObservation {
+                        usage: Some(llm_core::Usage {
+                            input_tokens: Some(20),
+                            output_tokens: Some(10),
+                            cached_input_tokens: Some(0),
+                            ..Default::default()
+                        }),
+                        final_usage: true,
+                        ..TurnObservation::new(self.binding.clone())
+                    },
+                })
+            })
+        }
+    }
+    let fixture = fixture(1).await;
+    let provider=Arc::new(Provider{binding:serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),caps:Capabilities{tools:true,tool_choice:true,temperature:false,top_p:false,reasoning_efforts:vec![],context_window:128000,max_output_tokens:32000}});
+    let sessions = tempfile::tempdir().unwrap();
+    let model = Arc::new(control_plane_runtime::CodexAgentModel::with_provider(
+        sessions.path().into(),
+        provider,
+    ));
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model,
+    );
+    let planning = supervisor.tick().await.unwrap();
+    assert_eq!(planning.queued, 1, "{planning:?}");
+    let fleet = supervisor.fleet_tick().await.unwrap();
+    assert!(fleet.blockers.is_empty(), "{fleet:?}");
+    let store = fixture.store.lock().await;
+    let assignments = store.query("AssignmentList").unwrap();
+    assert_eq!(assignments[0]["state"], "Merged", "{assignments}");
+    assert_eq!(assignments[0]["candidate"], assignments[0]["test_revision"]);
+    assert_eq!(
+        assignments[0]["candidate"],
+        assignments[0]["review_revision"]
+    );
+    let remote = cmd(
+        Path::new(fixture.repositories[0]["path"].as_str().unwrap()),
+        "git",
+        &["ls-remote", "origin", "refs/heads/main"],
+        &[],
+    );
+    assert!(remote.starts_with(assignments[0]["candidate"].as_str().unwrap()));
+    assert_eq!(store.query("GoalList").unwrap()[0]["state"], "Satisfied");
+    assert_eq!(
+        std::fs::read_dir(sessions.path()).unwrap().count(),
+        5,
+        "planner, critic, implementor, reviewer and goal reviewer sessions"
+    );
+}

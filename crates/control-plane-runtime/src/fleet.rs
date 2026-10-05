@@ -5,8 +5,15 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use control_plane_core::Actor;
-use control_plane_protocol::{
-    AttestedEvidence, EvaluationContext, EvidenceOrigin, Protocol, ProtocolKind, canon,
+use control_plane_protocol::{AttestedEvidence, EvidenceOrigin};
+use loom_sdk::commission::ports::governor::Governor;
+use loom_sdk::commission::{
+    model::{behaviour::Generated, json as wire, responsibility::*},
+    outcome::RunStore,
+    ports::{
+        effect::{AdmittedRequest, EffectError, EffectPort},
+        executor::AgentExecutor,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -30,6 +37,28 @@ struct Host {
     deadline: Option<Instant>,
 }
 impl Host {
+    fn respond(&self, request: &ModelRequest, path: &Path, assignment: &Value) -> Result<Value> {
+        let host = self.clone();
+        let assignment = assignment.clone();
+        self.model.respond_in(
+            request,
+            &crate::ModelEnvironment {
+                workspace: path.into(),
+                max_turns: self.config.max_steps as u64,
+                cancel: self.runner.cancel.clone(),
+                progress: Arc::new(move |event| {
+                    let goal = host.row("GoalList", "goal_id", &assignment["goal_id"])?;
+                    ensure!(
+                        goal["state"] == "Running"
+                            && goal["revision"] == assignment["goal_revision"],
+                        "goal paused, cancelled or revision changed during model turn"
+                    );
+                    host.progress(&assignment, "loom.event", "runtime", event)
+                }),
+                continuation: None,
+            },
+        )
+    }
     fn remaining(&self) -> Result<Duration> {
         match self.deadline {
             Some(deadline) => deadline
@@ -725,7 +754,7 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
             "reviewer",
             json!({"candidate":candidate,"execution_context":reviewer}),
         )?;
-        let review=host.model.respond(&ModelRequest {role:"reviewer".into(),execution_context:reviewer.clone(),model:text(goal,"reviewer_model")?.into(),instructions:"Independently review the exact candidate and real host check output against this accepted AEP story and standing goal. You cannot grant publication authority or fabricate check evidence.".into(),prompt:json!({"goal":goal,"story":story,"candidate":candidate,"base":base,"diff":diff,"checks":checks}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?})?;
+        let review=host.respond(&ModelRequest {role:"reviewer".into(),execution_context:reviewer.clone(),model:text(goal,"reviewer_model")?.into(),instructions:"Independently review the exact candidate and real host check output against this accepted AEP story and standing goal. You cannot grant publication authority or fabricate check evidence.".into(),prompt:json!({"goal":goal,"story":story,"candidate":candidate,"base":base,"diff":diff,"checks":checks}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?}, &path, &assignment)?;
         ensure!(
             review["approved"] == true
                 && review["reason"]
@@ -804,17 +833,8 @@ struct Execution<'a> {
     run: &'a str,
 }
 fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) -> Result<()> {
-    let Execution {
-        host,
-        assignment,
-        goal,
-        repo,
-        path,
-        run,
-    } = *execution;
-    let allow_go = host.config.local_eval(path, &host.runner)?;
-    let started = Instant::now();
-    let budget = attempt_budget(goal)?;
+    let host = execution.host;
+    let path = execution.path;
     let mut transcript = vec![format!(
         "Repository files:\n{}",
         git(host, path, &["ls-files"])?
@@ -829,49 +849,257 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
             transcript.push(std::fs::read_to_string(file)?);
         }
     }
-    for _ in 0..host.config.max_steps {
-        host.guard(assignment, goal, repo, false)?;
-        let remaining = budget
-            .checked_sub(started.elapsed())
-            .context("implementation attempt exceeded max_minutes")?;
-        let remaining = remaining.min(host.remaining()?);
-        host.progress(
-            assignment,
-            "model.request",
-            "implementor",
-            json!({"execution_context":run,"worktree":path,"step_observations":transcript.len()}),
-        )?;
-        let prompt =
-            json!({"goal":goal,"story":story,"scope":scope,"observations":transcript}).to_string();
-        ensure!(
-            prompt.len() <= 1024 * 1024,
-            "implementation context exceeded 1 MiB"
-        );
-        let language = if allow_go {
-            "This isolated eval repository permits Go with the standard library and HTML/CSS frontend. Go commands are version or build/test/vet/list ./...."
+    let case_id = CaseId(execution.run.into());
+    let progress_host = host.clone();
+    let assignment = execution.assignment.clone();
+    let governor = crate::governance::open(
+        control_plane_protocol::VERIFIED_MERGE_YAML,
+        "source-delivery@1",
+        &case_id,
+        BTreeMap::from([("implementation".into(), execution.run.into())]),
+        Arc::new(move |kind, value| {
+            progress_host.progress(&assignment, kind, "runtime", value.clone())
+        }),
+    )?;
+    let phase = ImplementationPhase {
+        execution: *execution,
+        story,
+        scope,
+        governor,
+        case_id,
+        transcript: std::sync::Mutex::new(transcript),
+        pending: std::sync::Mutex::new(None),
+        finished: std::sync::atomic::AtomicBool::new(false),
+        failure: std::sync::Mutex::new(None),
+        allow_go: host.config.local_eval(path, &host.runner)?,
+    };
+    let executor = ImplementationExecutor {
+        phase: &phase,
+        loom: loom_sdk::Loom::new(&phase, &phase, text(execution.goal, "objective")?),
+    };
+    let commission = Commission::new(CommissionData {
+        commission_id: CommissionId(runtime_id()),
+        agent_revision_id: AgentRevisionId(runtime_id()),
+        case_id: phase.case_id.clone(),
+        principal: PrincipalId("control-plane-supervisor".into()),
+        authority_context: AuthorityContext(wire::Value::Null),
+    });
+    let mut runs = Generated::new(RunStore::new(|| RunId(runtime_id())));
+    let end = loom_sdk::run_until_blocked(
+        &phase.governor,
+        &executor,
+        &engine::NoAuthority,
+        &phase,
+        &commission,
+        &mut runs,
+        &mut crate::governance::ContextClock {
+            max_steps: host.config.max_steps + 1,
+        },
+    )?;
+    if let Some(error) = phase
+        .failure
+        .lock()
+        .map_err(|_| anyhow::anyhow!("implementation failure state poisoned"))?
+        .as_ref()
+    {
+        bail!("{error}");
+    }
+    ensure!(
+        phase.finished.load(std::sync::atomic::Ordering::SeqCst),
+        "implementation ended before a candidate proposal: {:?}",
+        end.outcome
+    );
+    ensure!(
+        matches!(
+            end.outcome,
+            RunOutcome::Suspended(RunOutcomeSuspended {
+                reason: SuspensionReason::Evidence(_)
+            })
+        ),
+        "unexpected implementation stop: {:?}",
+        end.outcome
+    );
+    // This is only the model's candidate proposal. Tests, independent review and observed
+    // publication still have to produce trusted evidence before the case can complete.
+    Ok(())
+}
+fn runtime_id() -> loom_sdk::commission::model::primitives::Uuid {
+    loom_sdk::commission::model::primitives::Uuid(uuid::Uuid::new_v4().to_string())
+}
+struct ImplementationPhase<'a> {
+    execution: Execution<'a>,
+    story: &'a Value,
+    scope: &'a [String],
+    governor: crate::governance::HostGovernor,
+    case_id: CaseId,
+    transcript: std::sync::Mutex<Vec<String>>,
+    pending: std::sync::Mutex<Option<ImplementationAction>>,
+    finished: std::sync::atomic::AtomicBool,
+    failure: std::sync::Mutex<Option<String>>,
+    allow_go: bool,
+}
+struct ImplementationExecutor<'a> {
+    phase: &'a ImplementationPhase<'a>,
+    loom: loom_sdk::Loom<&'a ImplementationPhase<'a>, &'a ImplementationPhase<'a>>,
+}
+impl AgentExecutor for ImplementationExecutor<'_> {
+    fn run(
+        &self,
+        commission: &Commission<commission_state::Assigned>,
+        frontier: &Frontier<frontier_state::Issued>,
+    ) -> ExecutorOutcome {
+        if self
+            .phase
+            .finished
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            ExecutorOutcome::Suspended(ExecutorOutcomeSuspended {
+                reason: SuspensionReason::Evidence(vec![
+                    "test_result".into(),
+                    "independent_code_review".into(),
+                    "merge_observation".into(),
+                ]),
+            })
         } else {
-            "All runnable source is Rust, CLIs use clap derive."
-        };
-        let response=host.model.respond(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt."),prompt,schema:implementation_schema(),timeout:remaining})?;
-        let action: ImplementationAction = serde_json::from_value(response)?;
+            self.loom.run(commission, frontier)
+        }
+    }
+}
+impl loom_sdk::ActionSelector for &ImplementationPhase<'_> {
+    fn select(
+        &self,
+        _: &loom_sdk::loom::selection::SelectionContext,
+        candidates: &[loom_sdk::loom::model::run::CatalogueEntry],
+    ) -> Result<loom_sdk::loom::selection::Choice, loom_sdk::loom::selection::SelectorError> {
+        let proposed=(||->Result<String>{
+            let Execution {host,assignment,goal,repo,path,run}=self.execution;
+            host.guard(assignment,goal,repo,false)?;
+            let language=if self.allow_go {"This isolated eval repository permits Go with the standard library and HTML/CSS frontend. Go commands are version or build/test/vet/list ./...."}else{"All runnable source is Rust, CLIs use clap derive."};
+            let prompt=json!({"goal":goal,"story":self.story,"scope":self.scope,"observations":*self.transcript.lock().map_err(|_|anyhow::anyhow!("implementation context poisoned"))?,"frontier":candidates.iter().map(|c|&c.action).collect::<Vec<_>>()}).to_string();
+            host.progress(assignment,"model.request","implementor",json!({"execution_context":run}))?;
+            let response=host.respond(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt."),prompt,schema:implementation_schema(),timeout:host.remaining()?},path,assignment)?;
+            self.transcript.lock().map_err(|_|anyhow::anyhow!("implementation context poisoned"))?.clear();
+            let action:ImplementationAction=serde_json::from_value(response)?;
+            let name=implementation_protocol_action(&action).into();
+            *self.pending.lock().map_err(|_|anyhow::anyhow!("implementation selection poisoned"))?=Some(action);
+            Ok(name)
+        })().map_err(|e|loom_sdk::loom::selection::SelectorError::Unavailable(e.to_string()))?;
+        Ok(loom_sdk::loom::selection::Choice {
+            action: proposed,
+            confidence: None,
+        })
+    }
+    fn strategy(&self) -> loom_sdk::loom::model::run::SelectionStrategy {
+        loom_sdk::loom::model::run::SelectionStrategy::ReasoningModel
+    }
+}
+fn implementation_protocol_action(action: &ImplementationAction) -> &'static str {
+    match action {
+        ImplementationAction::Read { .. } => "repository.inspect",
+        ImplementationAction::Write { .. } | ImplementationAction::Delete { .. } => {
+            "repository.edit"
+        }
+        ImplementationAction::Run { .. } => "tests.run",
+        ImplementationAction::Finish { .. } => "review.request",
+    }
+}
+impl loom_sdk::ArgumentGenerator for &ImplementationPhase<'_> {
+    fn generate(
+        &self,
+        _: &loom_sdk::loom::arguments::ArgumentContext,
+        _: &loom_sdk::loom::model::run::CatalogueEntry,
+    ) -> Result<wire::Value, String> {
+        let pending = self
+            .pending
+            .lock()
+            .map_err(|_| "implementation selection poisoned")?;
+        wire::parse(
+            &serde_json::to_string(pending.as_ref().ok_or("missing implementation selection")?)
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| format!("{e:?}"))
+    }
+}
+impl EffectPort for ImplementationPhase<'_> {
+    fn performs(&self, action: &str) -> bool {
+        matches!(
+            action,
+            "repository.inspect" | "repository.edit" | "tests.run" | "review.request"
+        )
+    }
+    fn invoke(
+        &self,
+        _: &Commission<commission_state::Assigned>,
+        request: &AdmittedRequest,
+    ) -> Result<EffectOutcome, EffectError> {
+        let result = (|| -> Result<String> {
+            let action = self
+                .pending
+                .lock()
+                .map_err(|_| anyhow::anyhow!("implementation selection poisoned"))?
+                .take()
+                .context("missing implementation selection")?;
+            ensure!(
+                implementation_protocol_action(&action) == request.data().action,
+                "implementation action changed"
+            );
+            self.perform(action)
+        })();
+        match result {
+            Ok(report) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                report: wire::Value::Text(report),
+            })),
+            Err(error) => {
+                let message = format!("{error:#}");
+                if let Ok(mut failure) = self.failure.lock() {
+                    *failure = Some(message.clone());
+                }
+                Err(EffectError::new(message))
+            }
+        }
+    }
+}
+impl ImplementationPhase<'_> {
+    fn perform(&self, action: ImplementationAction) -> Result<String> {
+        let Execution {
+            host,
+            assignment,
+            goal,
+            repo,
+            path,
+            ..
+        } = self.execution;
         host.guard(assignment, goal, repo, false)?;
+        let mut transcript = self
+            .transcript
+            .lock()
+            .map_err(|_| anyhow::anyhow!("implementation context poisoned"))?;
+        let mutation = matches!(
+            action,
+            ImplementationAction::Write { .. }
+                | ImplementationAction::Delete { .. }
+                | ImplementationAction::Run { .. }
+        );
         match action {
             ImplementationAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "too many file reads");
                 for name in paths {
-                    let file = engine::context_file(path, &name, goal)?;
-                    ensure!(
-                        std::fs::metadata(&file)?.len() <= 256 * 1024,
-                        "read exceeds budget"
-                    );
-                    transcript.push(format!("{name}:\n{}", std::fs::read_to_string(file)?));
+                    let file = engine::context_path(path, &name, goal, true)?;
+                    match std::fs::metadata(&file) {
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => transcript
+                            .push(format!("File not found: {name}. Create it before reading.")),
+                        metadata => {
+                            ensure!(metadata?.len() <= 256 * 1024, "read exceeds budget");
+                            transcript.push(format!("{name}:\n{}", std::fs::read_to_string(file)?));
+                        }
+                    }
                 }
             }
             ImplementationAction::Write {
                 path: name,
                 contents,
             } => {
-                scoped(&name, scope, allow_go)?;
+                scoped(&name, self.scope, self.allow_go)?;
                 ensure!(contents.len() <= 256 * 1024, "write exceeds budget");
                 let file = engine::confined(path, &name, true)?;
                 std::fs::create_dir_all(file.parent().context("write parent")?)?;
@@ -885,7 +1113,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 )?;
             }
             ImplementationAction::Delete { path: name } => {
-                scoped(&name, scope, allow_go)?;
+                scoped(&name, self.scope, self.allow_go)?;
                 std::fs::remove_file(engine::confined(path, &name, false)?)?;
                 transcript.push(format!("deleted {name}"));
                 host.progress(
@@ -896,7 +1124,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 )?;
             }
             ImplementationAction::Run { program, args } => {
-                let args = if program == "go" && allow_go {
+                let args = if program == "go" && self.allow_go {
                     ensure!(
                         args == ["version"]
                             || ["build", "test", "vet", "list"]
@@ -909,14 +1137,26 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                     inspection_arguments(path, &program, &args)?
                 };
                 let mut runner = host.runner.clone();
-                runner.timeout = runner.timeout.min(remaining);
+                runner.timeout = runner.timeout.min(host.remaining()?);
                 host.progress(
                     assignment,
                     "tool.run",
                     "implementor",
                     json!({"program":program,"args":args}),
                 )?;
-                transcript.push(runner.run(path, &program, &args, None)?);
+                match runner.run(path, &program, &args, None) {
+                    Ok(output) => transcript.push(output),
+                    Err(error)
+                        if error
+                            .downcast_ref::<crate::process::ProcessExit>()
+                            .is_some() =>
+                    {
+                        transcript.push(format!(
+                            "Command failed (no validation evidence): {error:#}"
+                        ))
+                    }
+                    Err(error) => return Err(error),
+                }
                 host.progress(
                     assignment,
                     "tool.run.completed",
@@ -926,19 +1166,36 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
             }
             ImplementationAction::Finish { summary } => {
                 ensure!(!summary.trim().is_empty(), "implementation summary missing");
-                for name in git(host, path, &["diff", "--name-only", "HEAD"])?.lines() {
-                    scoped(name, scope, allow_go)?;
-                }
-                for name in
-                    git(host, path, &["ls-files", "--others", "--exclude-standard"])?.lines()
+                for name in git(host, path, &["diff", "--name-only", "HEAD"])?
+                    .lines()
+                    .chain(
+                        git(host, path, &["ls-files", "--others", "--exclude-standard"])?.lines(),
+                    )
                 {
-                    scoped(name, scope, allow_go)?;
+                    scoped(name, self.scope, self.allow_go)?;
                 }
-                return Ok(());
+                self.finished
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                return Ok(
+                    "candidate proposed; trusted checks and independent review are still required"
+                        .into(),
+                );
             }
         }
+        if mutation {
+            self.governor
+                .update_revision(
+                    &self.case_id,
+                    "implementation",
+                    &uuid::Uuid::new_v4().to_string(),
+                )
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        }
+        Ok(transcript
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "operation completed".into()))
     }
-    bail!("implementation exhausted the action limit")
 }
 fn implementation_schema() -> Value {
     json!({"oneOf":[
@@ -1138,11 +1395,6 @@ fn verification_evidence(
         )?,
     ])
 }
-fn case(candidate: &str, id: &str) -> Result<canon::model::Case> {
-    Ok(serde_json::from_value(
-        json!({"format":"canon-case/1","id":id,"protocol":"software.change.merge","artifacts":{"implementation":{"revision":candidate}}}),
-    )?)
-}
 fn publish(
     execution: &Execution<'_>,
     candidate: &str,
@@ -1168,30 +1420,21 @@ fn publish(
         remote_head(host, path, target)? == base,
         "remote target changed; candidate evidence is stale"
     );
-    let protocol = Protocol::compile(ProtocolKind::VerifiedMerge).map_err(anyhow::Error::msg)?;
-    let decision = protocol
-        .evaluate_effect(
-            &case(candidate, text(assignment, "case_id")?)?,
-            evidence,
-            EvaluationContext {
-                at: &now(),
-                implementor_context: Some(implementor),
-            },
-            "repository.merge",
-            |_| {
-                host.guard(assignment, goal, repo, true)
-                    .map(|_| true)
-                    .map_err(|e| e.to_string())
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-    ensure!(
-        decision
-            .actions
-            .as_ref()
-            .is_some_and(|a| a["repository.merge"]["status"] == "admissible"),
-        "Canon refused verified merge: {decision:?}"
-    );
+    let case_id = CaseId(text(assignment, "case_id")?.into());
+    let progress_host = host.clone();
+    let progress_assignment = assignment.clone();
+    let governor = crate::governance::open(
+        control_plane_protocol::VERIFIED_MERGE_YAML,
+        "source-delivery@1",
+        &case_id,
+        BTreeMap::from([("implementation".into(), candidate.into())]),
+        Arc::new(move |kind, value| {
+            progress_host.progress(&progress_assignment, kind, "runtime", value.clone())
+        }),
+    )?;
+    for item in evidence {
+        crate::governance::submit(&governor, &case_id, item, Some(implementor))?;
+    }
     let created=host.execute("PreparePublication",json!({"assignment_id":assignment["assignment_id"],"candidate":candidate,"target":target,"expected_base":base}))?;
     let publication_id = created["published"][0]["payload"]["publication_id"].clone();
     ensure!(publication_id.is_string(), "publication id missing");
@@ -1212,12 +1455,11 @@ fn publish(
     ]);
     host.progress(assignment,"publication.invoke","host",json!({"operation_id":publication_id,"candidate":candidate,"expected_base":base,"target":target}))?;
     host.guard(assignment, goal, repo, true)?;
-    let outcome = command(host, path, text(repo, "publish_command")?, &bindings);
+    let outcome = admitted_publication(execution, &governor, &case_id, &bindings);
     let intent = host.row("PublicationIntentList", "publication_id", &publication_id)?;
     match observe_merge(host, repo, &intent) {
         Ok(Some(receipt)) => {
-            let mut completed = evidence.to_vec();
-            completed.push(attestation(
+            let observed = attestation(
                 "merge_observation",
                 "merged",
                 candidate,
@@ -1226,23 +1468,16 @@ fn publish(
                     observation: receipt.clone(),
                     candidate: candidate.into(),
                 },
-            )?);
-            let decision = protocol
-                .evaluate(
-                    &case(candidate, text(assignment, "case_id")?)?,
-                    &completed,
-                    EvaluationContext {
-                        at: &now(),
-                        implementor_context: Some(implementor),
-                    },
-                )
-                .map_err(anyhow::Error::msg)?;
+            )?;
+            crate::governance::submit(&governor, &case_id, &observed, Some(implementor))?;
             ensure!(
-                decision
-                    .outcomes
-                    .as_ref()
-                    .is_some_and(|o| o["accepted"]["status"] == "legitimate"),
-                "Canon has not accepted observed merge"
+                matches!(
+                    governor
+                        .completion(&case_id)
+                        .map_err(|e| anyhow::anyhow!("{e:?}"))?,
+                    CompletionDetermination::Complete(_)
+                ),
+                "Loom governor has not accepted observed merge"
             );
             host.execute(
                 "ConfirmPublication",
@@ -1503,7 +1738,7 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 "goal_reviewer",
                 json!({"execution_context":reviewer}),
             )?;
-            let review=host.model.respond(&ModelRequest {role:"goal_reviewer".into(),execution_context:reviewer.clone(),model:text(&goal,"reviewer_model")?.into(),instructions:"Independently decide whether the exact standing objective and acceptance are satisfied by all observed merged targets, real check outputs and diffs. Do not infer completion from an empty queue or story statuses. Reject any acceptance obligation unsupported by evidence.".into(),prompt:json!({"goal":goal,"observations":observations}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?})?;
+            let review=host.respond(&ModelRequest {role:"goal_reviewer".into(),execution_context:reviewer.clone(),model:text(&goal,"reviewer_model")?.into(),instructions:"Independently decide whether the exact standing objective and acceptance are satisfied by all observed merged targets, real check outputs and diffs. Do not infer completion from an empty queue or story statuses. Reject any acceptance obligation unsupported by evidence.".into(),prompt:json!({"goal":goal,"observations":observations}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?}, Path::new(text(repos[0], "path")?), current[0])?;
             ensure!(
                 review["approved"] == true
                     && review["reason"]
@@ -1630,6 +1865,155 @@ impl Drop for AttemptDeadline {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
+    }
+}
+
+/// Publication is one Commission-admitted effect. The host supplies current authority and the
+/// exact durable intent; command success remains separate from the subsequent remote observation.
+fn admitted_publication(
+    execution: &Execution<'_>,
+    governor: &crate::governance::HostGovernor,
+    case: &CaseId,
+    bindings: &BTreeMap<&str, String>,
+) -> Result<()> {
+    let effect = Publication {
+        execution: *execution,
+        bindings,
+        invoked: std::sync::atomic::AtomicBool::new(false),
+        result: std::sync::Mutex::new(None),
+    };
+    let commission = Commission::new(CommissionData {
+        commission_id: CommissionId(runtime_id()),
+        agent_revision_id: AgentRevisionId(runtime_id()),
+        case_id: case.clone(),
+        principal: PrincipalId("control-plane-supervisor".into()),
+        authority_context: AuthorityContext(wire::Value::Null),
+    });
+    let mut runs = Generated::new(RunStore::new(|| RunId(runtime_id())));
+    let end = loom_sdk::run_until_blocked(
+        governor,
+        &effect,
+        &effect,
+        &effect,
+        &commission,
+        &mut runs,
+        &mut crate::governance::ContextClock { max_steps: 2 },
+    );
+    let result = effect
+        .result
+        .lock()
+        .map_err(|_| anyhow::anyhow!("publisher state poisoned"))?
+        .take();
+    match result {
+        Some(result) => result,
+        None => {
+            let end = end?;
+            bail!(
+                "Commission refused publication before effect: {:?}",
+                end.outcome
+            )
+        }
+    }
+}
+struct Publication<'a> {
+    execution: Execution<'a>,
+    bindings: &'a BTreeMap<&'a str, String>,
+    invoked: std::sync::atomic::AtomicBool,
+    result: std::sync::Mutex<Option<Result<()>>>,
+}
+impl AgentExecutor for Publication<'_> {
+    fn run(
+        &self,
+        _: &Commission<commission_state::Assigned>,
+        _: &Frontier<frontier_state::Issued>,
+    ) -> ExecutorOutcome {
+        if self.invoked.load(std::sync::atomic::Ordering::SeqCst) {
+            ExecutorOutcome::Suspended(ExecutorOutcomeSuspended {
+                reason: SuspensionReason::Evidence(vec!["merge_observation".into()]),
+            })
+        } else {
+            ExecutorOutcome::ProposedAction(ExecutorOutcomeProposedAction {
+                action: "repository.merge".into(),
+                arguments: ProposedActionArguments(wire::Value::Null),
+            })
+        }
+    }
+}
+impl loom_sdk::commission::ports::authority::AuthorityProvider for Publication<'_> {
+    fn decide(
+        &self,
+        _: &CommissionData,
+        capability: &str,
+    ) -> Result<AuthorityVerdict, loom_sdk::commission::ports::authority::AuthorityProviderError>
+    {
+        let Execution {
+            host,
+            assignment,
+            goal,
+            repo,
+            ..
+        } = self.execution;
+        if capability != "repository.merge" {
+            return Ok(AuthorityVerdict::Deny(AuthorityVerdictDeny {
+                reason: "capability not configured".into(),
+            }));
+        }
+        host.guard(assignment, goal, repo, true).map_err(|e| {
+            loom_sdk::commission::ports::authority::AuthorityProviderError::new(e.to_string())
+        })?;
+        Ok(AuthorityVerdict::Allow(Unit(true)))
+    }
+}
+impl EffectPort for Publication<'_> {
+    fn performs(&self, action: &str) -> bool {
+        action == "repository.merge"
+    }
+    fn invoke(
+        &self,
+        _: &Commission<commission_state::Assigned>,
+        request: &AdmittedRequest,
+    ) -> Result<EffectOutcome, EffectError> {
+        let result = (|| -> Result<()> {
+            ensure!(
+                request.data().action == "repository.merge"
+                    && !self.invoked.swap(true, std::sync::atomic::Ordering::SeqCst),
+                "publication request replayed"
+            );
+            let Execution {
+                host,
+                assignment,
+                goal,
+                repo,
+                path,
+                ..
+            } = self.execution;
+            host.guard(assignment, goal, repo, true)?;
+            ensure!(
+                git(host, path, &["rev-parse", "HEAD"])? == self.bindings["candidate"]
+                    && git(host, path, &["status", "--porcelain"])?.is_empty(),
+                "publication candidate changed before effect"
+            );
+            ensure!(
+                remote_head(host, path, &self.bindings["target"])?
+                    == self.bindings["expected_base"],
+                "publication base changed before effect"
+            );
+            command(host, path, text(repo, "publish_command")?, self.bindings)?;
+            Ok(())
+        })();
+        let outcome = match &result {
+            Ok(()) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                report: wire::Value::Text(
+                    "publisher returned; remote observation still required".into(),
+                ),
+            })),
+            Err(e) => Err(EffectError::new(e.to_string())),
+        };
+        *self
+            .result
+            .lock()
+            .map_err(|_| EffectError::new("publisher state poisoned"))? = Some(result);
+        outcome
     }
 }
 

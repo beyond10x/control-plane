@@ -7,7 +7,7 @@ title: Control-plane hosts; Loom executes; protocols govern
 summary: 'Audited ownership at the pinned SDK: preserve workspace scheduling and UI, reuse governed execution, and repair foundation gaps at their owners.'
 relations:
 - designs: epic:bootstrap
-revision: 2
+revision: 3
 ---
 # Runtime ownership
 
@@ -107,3 +107,17 @@ Named scenarios for the boundary-correction story:
 - `current-review-and-publication`: acceptance requires checks and independent review for the exact candidate plus observed publication; a transcript or zero exit alone cannot satisfy it.
 
 Use the actual Loom runtime with scripted ModelPort/provider responses for these tests, not a fake replacement for the runtime. Keep the two real auth-eval failures and all existing workspaces as fixtures. After these pass, run one bounded external eval and report its result, including failure. No additional paid retry is part of this audit.
+
+## Resolution on the corrected pin
+
+The baseline audit above records commit 75eeb4062690c0505673ef8ccd2b7a6a4b2b58ce. The implemented dependency is published Loom 1b25fe8939e1883f3e47c1292ac90cf75fc3f3a5. The baseline deviation table describes the pre-correction source, not the final implementation.
+
+The original concern about a missing native-session composition is resolved using existing supported APIs: AgentLoop, OutputSchema, SessionFile, ModelPort and Commission. The host projects its LLM provider into ModelPort, carries opaque provenance losslessly, supplies new observations, files the SDK session and renders runtime events. Loom still owns the turn loop, compaction, structured proposal validation and session representation. This does not establish a missing foundation API or justify another executor.
+
+The demonstrated governor gaps were real: CaseStore had no error channel; CanonGovernor admitted only built-ins; freshness could not be supplied by the trusted host clock. The foundation commit adds FallibleCaseStore, with_protocol_yaml/with_protocol and with_evaluation_time. Its tests reject store failures, duplicate/replaced protocols and multiple capability truncation. Both roles now use that governor. Product-specific planning/source-delivery profiles are validated host configuration; no engineering-protocols release is claimed.
+
+Fleet actions and publication now enter Commission, with current operator revision/authority and candidate/base checks. Publication intent persistence and remote observation remain host responsibilities. Goal/workspace state, contention, scheduling, API and UI remain control-plane responsibilities. The provider adapter no longer calls the forced-tool shortcut; all roles use native Loom sessions with independent reviewer contexts.
+
+Cases remain bounded-attempt state with fallible event journaling, not a claimed durable case-replay database. Restart retains product records and filed Loom sessions and revalidates through fresh cases. A crash-left Active session is refused rather than automatically recovered with invented spend. Process confinement is still not a property of a local path allowlist. These limitations remain explicit.
+
+Root verification passed task check, including 167 conformance scenarios with no failures/errors/unsupported/skips. Native regressions cover real ESS/AEP missing-file recovery and full candidate checks/review/observed local publication. Deliberate continuation loss fails its regression; restored continuation passes. A midstream progress-write failure initially failed cancellation, then passed after token propagation. Independent review found no authority/provenance/publication bypass. Real-provider eval outcome is recorded separately and is required before completion.

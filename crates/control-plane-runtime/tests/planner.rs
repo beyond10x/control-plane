@@ -366,6 +366,9 @@ async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
         json!({"action":"aep","args":["new","--help"],"body":null}),
         json!({"action":"finish","stories":["story:deliver"],"summary":"Validation must still refuse."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan must exhaust feedback budget."}),
     ]))));
     let supervisor = Supervisor::new(
         store.clone(),
@@ -380,6 +383,13 @@ async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
     );
     assert_eq!(report.queued, 0);
     assert!(!report.blockers.is_empty());
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("4 unchanged observations")),
+        "{report:?}"
+    );
     assert_eq!(
         store.lock().await.query("AssignmentList").unwrap(),
         json!([])
@@ -1377,5 +1387,137 @@ async fn unavailable_workspace_does_not_prevent_healthy_workspace_planning() {
             .unwrap()
             .iter()
             .any(|a| a["goal_id"] == goal && a["state"] == "Queued")
+    );
+}
+
+/// Recorded missing-file failure, through the actual LLM port, Loom session/loop,
+/// Commission admission, governor, ESS/AEP CLI, durable host and queue boundary.
+#[tokio::test]
+async fn native_loom_recovers_missing_and_invalid_specification_and_queues_validated_plan() {
+    use llm_core::{BoxFuture, Capabilities, Model, Provenance, TurnObservation};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Provider {
+        binding: Provenance,
+        caps: Capabilities,
+        calls: AtomicUsize,
+    }
+    impl Model for Provider {
+        fn provenance(&self) -> &Provenance {
+            &self.binding
+        }
+        fn capabilities(&self) -> &Capabilities {
+            &self.caps
+        }
+        fn turn<'a>(
+            &'a self,
+            request: &'a llm_core::TurnRequest,
+            _: &'a mut dyn llm_core::StreamSink,
+            _: &'a llm_core::Cancel,
+        ) -> BoxFuture<'a, Result<llm_core::TurnOutcome, llm_core::Error>> {
+            Box::pin(async move {
+                request.validate_for(&self.binding, &self.caps)?;
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                if n == 1 {
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::Opaque {payload,..} if payload==&json!({"retained":"provider-state"}))));
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("File not found: ess/domains/item.yaml"))));
+                }
+                let arguments = match n {
+                    0 => json!({"action":"read","paths":["ess/domains/item.yaml"]}),
+                    1 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
+                    }
+                    2 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: auth.session\nentities:\n  - name: auth.session.Session\n    identity: {name: session_id, type: Uuid}\n    fields: [{name: username, type: String}]\n    lifecycle:\n      initial: Active\n      states: [Active, Revoked]\n      terminal: [Revoked]\n"})
+                    }
+                    3 => {
+                        json!({"action":"aep","args":["new","story","must-not-exist"],"body":null})
+                    }
+                    4 => {
+                        assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("dead_end_state") && text.contains("conflicting_declaration"))), "ESS refusal must return through the native session");
+                        json!({"action":"finish","stories":["story:deliver"],"summary":"Finish must also return invalid ESS feedback without spending a critic review."})
+                    }
+                    5 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
+                    }
+                    6 => {
+                        json!({"action":"finish","stories":["story:deliver"],"summary":"Recovered missing source; actual ESS and AEP validation required."})
+                    }
+                    7 => {
+                        assert!(
+                            !request
+                                .items
+                                .iter()
+                                .any(|item| matches!(item, llm_core::Item::Opaque { .. })),
+                            "independent reviewer must start a separate session"
+                        );
+                        json!({"approved":true,"reason":"Recovered domain and scoped existing story satisfy requested acceptance."})
+                    }
+                    _ => panic!("unexpected paid-equivalent turn {n}"),
+                };
+                Ok(llm_core::TurnOutcome {
+                    stop_reason: llm_core::StopReason::ToolCalls,
+                    items: vec![
+                        llm_core::Item::Opaque {
+                            provenance: self.binding.clone(),
+                            payload: json!({"retained":"provider-state"}),
+                        },
+                        llm_core::Item::ToolCall(llm_core::ToolCall {
+                            call_id: llm_core::CallId::new(format!("call-{n}")).unwrap(),
+                            name: request.tools[0].name.clone(),
+                            arguments,
+                        }),
+                    ],
+                    observation: TurnObservation {
+                        usage: Some(llm_core::Usage {
+                            input_tokens: Some(21),
+                            output_tokens: Some(13),
+                            cached_input_tokens: Some(0),
+                            ..Default::default()
+                        }),
+                        final_usage: true,
+                        ..TurnObservation::new(self.binding.clone())
+                    },
+                })
+            })
+        }
+    }
+    let (fixture, store, config, _, _) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    run(&repo, "git", &["rm", "ess/domains/item.yaml"], &[]);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Reproduce missing domain"],
+        &[],
+    );
+    let provider=Arc::new(Provider{binding:serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),caps:Capabilities{tools:true,tool_choice:true,temperature:false,top_p:false,reasoning_efforts:vec![],context_window:128000,max_output_tokens:32000},calls:AtomicUsize::new(0)});
+    let sessions = fixture.path().join("loom-sessions");
+    let model = Arc::new(control_plane_runtime::CodexAgentModel::with_provider(
+        sessions.clone(),
+        provider.clone(),
+    ));
+    let report = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model)
+        .tick()
+        .await
+        .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 8);
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let planning_tree = goals[0]["planning_worktree_path"].as_str().unwrap();
+    assert!(
+        !Path::new(planning_tree)
+            .join(".engineering/planning/story/must-not-exist.md")
+            .exists(),
+        "invalid ESS must not admit an AEP mutation"
+    );
+    assert!(
+        receipt.contains("provider-observation"),
+        "provider usage must be visible in durable progress"
+    );
+    assert_eq!(
+        std::fs::read_dir(sessions).unwrap().count(),
+        2,
+        "planner and reviewer sessions filed separately"
     );
 }

@@ -306,7 +306,9 @@ impl Supervisor {
         last["planning_worktree_path"] = json!(path);
         last["planning_phase"] = json!("Planning");
         record(&self.store, goal, last).await?;
-        let session = format!("planner-{}", uuid::Uuid::new_v4());
+        // Recovery of this planning attempt must reopen its Loom session and spent budget.
+        // A crash-left Active session is refused by Loom; a fresh random identity would hide it.
+        let session = format!("planner-{worktree_id}");
         let session_path = path.clone();
         let session_id = session.clone();
         let run = runner.clone();

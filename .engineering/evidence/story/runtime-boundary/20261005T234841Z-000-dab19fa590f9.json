@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T23:48:41Z",
+  "actor": "human:timo",
+  "artifact": "story:runtime-boundary",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check: final corrected source; 145 Rust tests and 167 durable conformance scenarios pass, generated drift and foundation boundary pass",
+    "reference": ".scratch/ownership-final-check.log"
+  }
+}

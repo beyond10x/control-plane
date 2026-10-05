@@ -285,6 +285,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         );
         let listener = tokio::net::TcpListener::bind(listen).await?;
         let address = listener.local_addr()?;
+        let model_sessions = state.with_extension("loom-sessions");
         let mut store = Store::open(state).await?;
         initialize_workspaces(&mut store, &std::env::current_dir()?, &workspace).await?;
         let store = Arc::new(Mutex::new(store));
@@ -316,7 +317,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
             listener,
             app,
             config,
-            Arc::new(control_plane_runtime::CodexAgentModel::default()),
+            Arc::new(control_plane_runtime::CodexAgentModel::new(model_sessions)),
             shutdown,
         )
         .await;

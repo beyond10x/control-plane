@@ -8,7 +8,7 @@ repository.workspace = true
 [dependencies]
 control-plane-core = { path = "../control-plane-core" }
 control-plane-protocol = { path = "../control-plane-protocol" }
-loom-sdk = { package = "b10x-loom-sdk", git = "https://github.com/beyond10x/loom", rev = "75eeb4062690c0505673ef8ccd2b7a6a4b2b58ce" }
+loom-sdk = { package = "b10x-loom-sdk", git = "https://github.com/beyond10x/loom", rev = "1b25fe8939e1883f3e47c1292ac90cf75fc3f3a5" }
 llm-core = { package = "b10x-llm-core", git = "https://github.com/beyond10x/llm", rev = "8618681c9b3156a98ef7f71233e4c2758d4d1a33" }
 b10x-llm-tool-call = { git = "https://github.com/beyond10x/llm", rev = "8618681c9b3156a98ef7f71233e4c2758d4d1a33" }
 anyhow.workspace = true

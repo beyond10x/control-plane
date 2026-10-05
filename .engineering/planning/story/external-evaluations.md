@@ -20,7 +20,7 @@ scope:
   path: ess/
 - confidence: inferred
   path: generated/
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -70,3 +70,13 @@ The real eval failures are also an integration defect. Loom's `EffectPort` contr
 Offline regressions now prove that a missing read can be returned as an observation and identical specification writes exhaust the unchanged-action budget; both were red against the recorded behavior and green locally afterward. No further real-model runs were started, and these changes do not establish a working autonomous app.
 
 Before another paid eval: reconcile the planner/fleet adapters with the SDK's EffectPort outcomes and governed run loop; reuse existing Loom facilities, and identify any actual foundation gap rather than adding another control-plane execution framework. Keep workspace/API/UI ownership in control-plane. The live auth eval remains blocked; the locally tested feedback changes have not been deployed to it.
+
+## Corrected runtime and third auth eval
+
+The ownership correction is implemented on published Loom 1b25fe8939e1883f3e47c1292ac90cf75fc3f3a5. Native model sessions, streamed observations, Commission effect admission and the supplied Canon governor replace the duplicated paths. All four registered workspaces and the existing blocked goal survived a real service restart. A headless browser capture showed the auth workspace, its goal revision and actual Loom turn/stream activity.
+
+One authorized real auth eval ran on goal revision 3 with one worker, one attempt and a ten-minute total watchdog. It stopped after approximately 48 seconds and six planner turns: invalid ESS emitted dead_end_state, unreachable_state and conflicting_declaration diagnostics. The adapter incorrectly treated that observed validation refusal as external unavailability. No assignment, candidate or publication was produced. Observed usage: 37,523 input tokens, 1,852 output tokens, of which 1,536 input tokens were cached; dollar cost was not reported. Results and session evidence remain outside the source repository under the configured eval root. No extra paid retry was started.
+
+The exact invalid domain now participates in native_loom_recovers_missing_and_invalid_specification_and_queues_validated_plan. It failed against the deployed adapter and passes after typed ESS-validation refusal handling. The test uses the real LLM port, Loom sessions, Commission, Canon governor, ESS and AEP; it proves diagnostics reach the next turn, invalid ESS does not mutate AEP, correction queues a validated story and independent review remains separate. Invalid Finish requests do not spend a critic review. Four unchanged validation refusals still stop; cancellation, transport/launch failures and non-validation process errors remain fatal. All 33 planner tests pass. This deterministic recovery is not a real-provider auth application success.
+
+The end-to-end acceptance remains unmet. Another paid eval requires an explicit additional attempt allocation; the agreed one-attempt limit has been consumed. Preserve the failed goal and all workspaces; do not erase the failure or mark this story implemented from component tests.

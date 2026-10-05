@@ -14,6 +14,7 @@ Standalone Rust product: local autonomous planner, implementation fleet and web 
 - ESS under ess/ owns domain types and lifecycles. Specify first, record a failing test, generate Rust contracts, then implement adapters. Never hand-edit generated output.
 - AEP under .engineering/ owns the engineering plan. Artifact writes use aep plan artifact. Stories name conformance scenarios, scope, dependencies and evidence.
 - Runtime dependencies use foundation components. Repository-configured publishing tools are an operational exception.
+- Loom owns model turns, compaction, structured proposals and sessions; Commission admits every planner, implementor and publication effect. Use CanonGovernor with admitted protocol inputs, never a private Governor or direct Canon admission loop. Host adapters authenticate evidence and bind provider, persistence, authority and repository operations.
 - Model output cannot grant authority or supply test/merge evidence. Review must use a distinct execution context. Recheck authority and candidate before publication.
 - One active change per Git common directory across workspaces. Effects use managed worktrees.
 - Storage failures stop effects. Reconcile uncertain publication before retry. An empty queue does not prove goal completion.

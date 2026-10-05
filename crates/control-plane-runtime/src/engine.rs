@@ -5,9 +5,7 @@ use crate::{
     process::ProcessRunner,
 };
 use anyhow::{Context, Result, bail, ensure};
-use control_plane_protocol::{
-    AttestedEvidence, EvaluationContext, EvidenceOrigin, Protocol, ProtocolKind, canon,
-};
+use control_plane_protocol::{AttestedEvidence, EvidenceOrigin};
 use loom_sdk::commission::{
     model::{
         behaviour::Generated,
@@ -19,8 +17,6 @@ use loom_sdk::commission::{
     ports::{
         authority::{AuthorityProvider, AuthorityProviderError},
         effect::{AdmittedRequest, EffectError, EffectPort},
-        evidence::ObservationPort,
-        governor::Governor,
     },
 };
 use loom_sdk::loom::{
@@ -56,6 +52,8 @@ pub struct EngineOutput {
 struct State {
     revision: i64,
     transcript: Vec<String>,
+    unseen: Vec<String>,
+    model_started: bool,
     pending: Option<PlannerAction>,
     selected: Vec<String>,
     evidence: Vec<AttestedEvidence>,
@@ -71,12 +69,13 @@ enum OperationResult {
     Completed,
     SyntaxFeedback,
     ReviewFeedback,
+    ValidationFeedback,
 }
 
 struct Planning<'a> {
     input: &'a EngineInput,
     model: &'a dyn AgentModel,
-    protocol: Protocol,
+    governor: crate::governance::HostGovernor,
     case_id: CaseId,
     state: Mutex<State>,
     started: std::time::Instant,
@@ -128,13 +127,21 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
         &["plan", "artifact", "list", "--format", "json"],
     )?;
     let planning = Planning {
-        protocol: Protocol::compile(ProtocolKind::Planning).map_err(anyhow::Error::msg)?,
+        governor: crate::governance::open(
+            control_plane_protocol::PLANNING_YAML,
+            "engineering-plan@1",
+            &CaseId(input.namespace.clone()),
+            std::collections::BTreeMap::from([("plan".into(), input.namespace.clone())]),
+            input.progress.clone(),
+        )?,
         case_id: CaseId(input.namespace.clone()),
         input: &input,
         model: model.as_ref(),
         started: std::time::Instant::now(),
         state: Mutex::new(State {
             revision: 1,
+            unseen: Vec::new(),
+            model_started: false,
             transcript: vec![
                 inspection,
                 crate::context::scan(&scan)?,
@@ -164,7 +171,7 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
         max_steps: input.config.max_steps,
     };
     let result = run_until_blocked(
-        &planning,
+        &planning.governor,
         &executor,
         &NoAuthority,
         &planning,
@@ -213,7 +220,32 @@ impl Planning<'_> {
             "activity",
             &json!({"action":"model.requested","role":request.role,"detail":format!("Waiting for {} response from {}",request.role,request.model),"status":"running"}),
         )?;
-        let answer = self.model.respond(&request);
+        let progress = self.input.progress.clone();
+        let role = request.role.clone();
+        let continuation = if role == "planner" {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            let new = std::mem::take(&mut state.unseen);
+            let started = std::mem::replace(&mut state.model_started, true);
+            started.then(|| {
+                format!(
+                    "New trusted host observations:\n{}\n{}",
+                    new.join("\n"),
+                    state.memory.prompt()
+                )
+            })
+        } else {
+            None
+        };
+        let answer = self.model.respond_in(&request, &crate::ModelEnvironment {
+            workspace: self.input.path.clone(),
+            max_turns: self.input.config.max_steps as u64,
+            cancel: self.input.runner.cancel.clone(),
+            progress: Arc::new(move |event| progress("activity", &json!({"action":"loom.event","role":role,"detail":event,"status":"running"}))),
+            continuation,
+        });
         let (action, status, detail) = match &answer {
             Ok(_) => (
                 "model.completed",
@@ -246,31 +278,6 @@ impl Planning<'_> {
         ensure!(!remaining.is_zero(), "planner exhausted goal time budget");
         Ok(remaining)
     }
-    fn governor_failure(&self, error: anyhow::Error) -> GovernorError {
-        if let Ok(mut state) = self.state.lock() {
-            state.failure = Some(format!("{error:#}"));
-        }
-        GovernorError::GovernorUnavailable
-    }
-    fn decision(&self) -> Result<canon::model::Decision> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
-        let case: canon::model::Case = serde_json::from_value(
-            json!({"format":"canon-case/1","id":self.case_id.0,"protocol":"engineering.plan","artifacts":{"plan":{"revision":state.plan_revision}}}),
-        )?;
-        self.protocol
-            .evaluate(
-                &case,
-                &state.evidence,
-                EvaluationContext {
-                    at: &instant(),
-                    implementor_context: None,
-                },
-            )
-            .map_err(anyhow::Error::msg)
-    }
     fn prompt(&self) -> Result<String> {
         let state = self
             .state
@@ -295,6 +302,7 @@ impl Planning<'_> {
                 .state
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            state.unseen.push(message.clone());
             crate::context::push(&mut state.transcript, message);
             json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript,"action_history":state.memory.prompt()})
         };
@@ -478,6 +486,8 @@ impl Planning<'_> {
                 }
             }
             PlannerAction::Finish { stories, summary } => {
+                // An invalid draft is feedback, not an independent review attempt.
+                let validation = validate_spec(path, runner)?;
                 {
                     let mut state = self
                         .state
@@ -493,7 +503,6 @@ impl Planning<'_> {
                     );
                     state.review_attempts += 1;
                 }
-                let validation = validate_spec(path, runner)?;
                 let plan_validation =
                     runner.command(path, "aep", &["plan", "artifact", "validate"])?;
                 self.record(format!("Observed ESS validation:\n{validation}\nObserved AEP validation:\n{plan_validation}"))?;
@@ -690,79 +699,6 @@ impl ArgumentGenerator for &Planning<'_> {
         wire::parse(&value).map_err(|e| format!("{e:?}"))
     }
 }
-impl Governor for Planning<'_> {
-    fn current_revision(&self, case: &CaseId) -> Result<i64, GovernorError> {
-        if case != &self.case_id {
-            return Err(GovernorError::UnknownCase);
-        }
-        self.state
-            .lock()
-            .map(|state| state.revision)
-            .map_err(|_| GovernorError::GovernorUnavailable)
-    }
-    fn frontier(&self, case: &CaseId) -> Result<Frontier<frontier_state::Issued>, GovernorError> {
-        let revision = self.current_revision(case)?;
-        let decision = self
-            .decision()
-            .map_err(|error| self.governor_failure(error))?;
-        let actions = self
-            .protocol
-            .ir()
-            .actions
-            .keys()
-            .map(|action| FrontierAction {
-                action: action.as_str().into(),
-                status: match decision
-                    .actions
-                    .as_ref()
-                    .and_then(|a| a.get(action.as_str()))
-                    .and_then(|a| a.get("status"))
-                    .and_then(Value::as_str)
-                {
-                    Some("admissible") => ActionStatus::Admissible,
-                    _ => ActionStatus::Blocked,
-                },
-                capability: None,
-                reasons: Vec::new(),
-            })
-            .collect();
-        Ok(Frontier::new(FrontierData {
-            frontier_id: FrontierId(id()),
-            case_id: case.clone(),
-            case_revision: revision,
-            claims: Vec::new(),
-            obligations: Vec::new(),
-            actions,
-        }))
-    }
-    fn completion(&self, case: &CaseId) -> Result<CompletionDetermination, GovernorError> {
-        self.current_revision(case)?;
-        let decision = self
-            .decision()
-            .map_err(|error| self.governor_failure(error))?;
-        Ok(
-            if decision
-                .outcomes
-                .as_ref()
-                .is_some_and(|o| o["accepted"]["status"] == "legitimate")
-            {
-                CompletionDetermination::Complete(CompletionDeterminationComplete {
-                    outcome: "accepted".into(),
-                })
-            } else {
-                CompletionDetermination::Open(Unit(true))
-            },
-        )
-    }
-}
-impl ObservationPort for Planning<'_> {
-    fn observe(
-        &self,
-        observation: Observation<observation_state::Reported>,
-    ) -> Result<(), GovernorError> {
-        (self.input.progress)("loom-observation",&json!({"namespace":self.input.namespace,"observation":format!("{:?}",observation.data())})).map_err(|_|GovernorError::GovernorUnavailable)
-    }
-}
 impl EffectPort for Planning<'_> {
     fn performs(&self, action: &str) -> bool {
         matches!(action, "repository.inspect" | "plan.edit" | "plan.validate")
@@ -782,7 +718,27 @@ impl EffectPort for Planning<'_> {
         if action.protocol_action() != request.data().action {
             return Err(EffectError::new("selected action changed"));
         }
-        match self.perform(action) {
+        let performed = self.perform(action).or_else(|error| {
+            if ess_validation_refusal(&error) {
+                self.read_record("ess-validation", "ESS validation refusal", format!("{error}\nNo plan validation evidence or AEP mutation was produced. Correct the specification before retrying."))?;
+                Ok(OperationResult::ValidationFeedback)
+            } else {
+                Err(error)
+            }
+        }).and_then(|result| {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            self.governor
+                .update_revision(&self.case_id, "plan", &state.plan_revision)
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            for item in &state.evidence {
+                crate::governance::submit(&self.governor, &self.case_id, item, None)?;
+            }
+            Ok(result)
+        });
+        match performed {
             Ok(result) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
                 report: wire::Value::Text(
                     match result {
@@ -792,6 +748,9 @@ impl EffectPort for Planning<'_> {
                         }
                         OperationResult::ReviewFeedback => {
                             "plan review rejected; revision feedback recorded"
+                        }
+                        OperationResult::ValidationFeedback => {
+                            "ESS validation refused; corrective diagnostics recorded"
                         }
                     }
                     .into(),
@@ -807,7 +766,7 @@ impl EffectPort for Planning<'_> {
         }
     }
 }
-struct NoAuthority;
+pub(crate) struct NoAuthority;
 impl AuthorityProvider for NoAuthority {
     fn decide(
         &self,
@@ -965,6 +924,19 @@ fn canonical_aep_args(args: &[String]) -> &[String] {
     args
 }
 
+fn ess_validation_refusal(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<crate::process::ProcessExit>()
+        .is_some_and(|exit| {
+            exit.program == "ess"
+                && exit.code == Some(1)
+                && exit
+                    .args
+                    .starts_with(&["specify".into(), "validate".into()])
+                && exit.stderr.contains(" was refused:\n")
+        })
+}
+
 fn aep_cli_syntax(error: &anyhow::Error) -> bool {
     error
         .downcast_ref::<crate::process::ProcessExit>()
@@ -1068,10 +1040,12 @@ pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
     }
     Ok(path)
 }
-pub fn context_file(root: &Path, name: &str, goal: &Value) -> Result<PathBuf> {
-    context_path(root, name, goal, false)
-}
-fn context_path(root: &Path, name: &str, goal: &Value, missing: bool) -> Result<PathBuf> {
+pub(crate) fn context_path(
+    root: &Path,
+    name: &str,
+    goal: &Value,
+    missing: bool,
+) -> Result<PathBuf> {
     if let Some(reference) = name.strip_prefix("workspace:") {
         let (id, relative) = reference
             .split_once('/')
@@ -1166,6 +1140,39 @@ const PLANNER_INSTRUCTIONS: &str = concat!(
 #[cfg(test)]
 mod aep_help_tests {
     use super::validate_aep_args;
+
+    #[test]
+    fn ess_feedback_requires_observed_validation_diagnostics() {
+        let refusal = "ess was refused:\n  - [dead_end_state] invalid lifecycle\n";
+        let error = |program: &str, code, args: &[&str], stderr: &str| {
+            anyhow::Error::new(crate::process::ProcessExit {
+                program: program.into(),
+                args: args.iter().map(|s| (*s).into()).collect(),
+                code,
+                stdout: String::new(),
+                stderr: stderr.into(),
+            })
+        };
+        let args = ["specify", "validate", "--path", "ess"];
+        assert!(super::ess_validation_refusal(&error(
+            "ess",
+            Some(1),
+            &args,
+            refusal
+        )));
+        for (program, code, arguments, message) in [
+            ("ess", None, args.as_slice(), refusal),
+            ("ess", Some(2), args.as_slice(), refusal),
+            ("aep", Some(1), args.as_slice(), refusal),
+            ("ess", Some(1), ["--help"].as_slice(), refusal),
+            ("ess", Some(1), args.as_slice(), "permission denied"),
+        ] {
+            assert!(!super::ess_validation_refusal(&error(
+                program, code, arguments, message
+            )));
+        }
+        assert!(!super::ess_validation_refusal(&anyhow::anyhow!(refusal)));
+    }
 
     #[test]
     fn syntax_recovery_requires_typed_aep_clap_failure() {

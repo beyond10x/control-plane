@@ -37,7 +37,22 @@ across restarts; the durable assignment attempt count bounds retries. A changed 
 or unresolved publication is an explicit blocker, never an automatic force repair.
 
 `CodexAgentModel` uses the foundation LLM crate's `codex_model` login resolver.
-Authentication failures, refused Git operations, validator errors and limits are
+Its single-turn `ModelPort` projection preserves LLM continuation provenance and streams
+real activity to the host. Loom's `AgentLoop` validates structured proposals, compacts
+context and files durable `SessionFile` records beside the host database. Planner,
+implementor and all independent reviewers use this same path, with separate sessions.
+Reopening a session deducts its recorded turns from the host's remaining turn limit.
+Missing files, ESS validation diagnostics and unsuccessful inspection/build exits return observations; authority,
+confinement, persistence and cancellation failures stop effects.
+
+Commission drives planner and implementation proposals and admits publication. Its
+`CanonGovernor` evaluates host-admitted planning/source-delivery profiles; the host
+authenticates verifier/reviewer receipts before submitting them as evidence. Case state
+belongs to a bounded attempt and is journalled before updates become visible. Recovery
+revalidates a fresh case against durable product state; a trace never authorizes replay
+of an uncertain publication. The SDK pin includes the tested fallible store and supplied
+protocol APIs on Loom's `feat/hosted-governor-contract` branch; it is not a new release.
+Authentication failures, refused Git operations, unavailable validators and limits are
 reported as blockers. `RuntimeConfig.commit_command` is trusted service/operator
 configuration; its default invokes `b10x-gates bot`. Supply normal Gates policy
 configuration or `B10X_GATES_POLICY`; model output cannot change commit authority.

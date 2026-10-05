@@ -128,6 +128,21 @@ pub fn check(metadata: &Value) -> Result<()> {
 }
 
 pub fn run(root: &Path) -> Result<()> {
+    for name in ["engine.rs", "fleet.rs"] {
+        let source =
+            std::fs::read_to_string(root.join("crates/control-plane-runtime/src").join(name))?;
+        for duplicated in [
+            "impl Governor for",
+            ".evaluate_effect(",
+            "call_tool(",
+            "for _ in 0..host.config.max_steps",
+        ] {
+            ensure!(
+                !source.contains(duplicated),
+                "{name} duplicates foundation execution: {duplicated}"
+            );
+        }
+    }
     let output = Command::new("cargo")
         .current_dir(root)
         .args(["metadata", "--format-version", "1", "--locked"])

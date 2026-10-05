@@ -85,6 +85,9 @@ fn activity_detail(detail: &Value) -> String {
     if let Some(text) = detail.as_str() {
         return short(text, 560);
     }
+    if let Some(summary) = detail["summary"].as_str() {
+        return short(summary, 560);
+    }
     // Only selected operational fields enter HTML. Receipts, transcripts and
     // arbitrary process output remain behind the evidence endpoint.
     let bounded = |text: &str, limit| text.chars().take(limit).collect::<String>();

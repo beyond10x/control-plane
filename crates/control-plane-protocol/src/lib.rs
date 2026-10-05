@@ -180,7 +180,7 @@ fn named(value: &str) -> bool {
     !value.is_empty() && value.trim() == value && !value.chars().any(char::is_control)
 }
 
-fn validate_attestation(
+pub fn validate_attestation(
     item: &AttestedEvidence,
     context: EvaluationContext<'_>,
 ) -> Result<(), String> {
