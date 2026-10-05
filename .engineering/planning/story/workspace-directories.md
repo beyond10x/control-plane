@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:workspace-directories
 kind: story
-status: active
+status: implemented
 title: Multiple workspace directories and current-directory startup
 relations:
 - decomposes: epic:bootstrap
@@ -17,10 +17,11 @@ scope:
   path: ess
 - confidence: inferred
   path: generated
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:11:59Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T21:11:59Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-05T21:36:00Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 ## Outcome
 
