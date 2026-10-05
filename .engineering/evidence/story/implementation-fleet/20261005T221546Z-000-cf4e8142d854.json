@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:15:46Z",
+  "actor": "human:timo",
+  "artifact": "story:implementation-fleet",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Integrated reviewed fleet: 43 runtime tests pass (14 unit, 10 real fleet integration, 19 planner); two-repository delivery, authority, restart recovery and confinement exercised; task check passes with 159 real conformance scenarios"
+  }
+}

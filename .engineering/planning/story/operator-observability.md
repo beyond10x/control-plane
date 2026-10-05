@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:operator-observability
 kind: story
-status: active
+status: implemented
 title: Live operational dashboard and visible autonomous activity
 relations:
 - decomposes: epic:bootstrap
@@ -17,10 +17,11 @@ scope:
   path: crates/control-plane-runtime
 - confidence: cited
   path: docs/vision.md
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-05T22:15:46Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":5}}}
 ---
 ## Outcome
 

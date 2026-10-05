@@ -82,4 +82,4 @@ task generate
 
 `task check` validates ESS and AEP, checks Rust formatting and lints, runs tests, checks generated drift and exercises the real durable conformance target. `task generate` regenerates artifacts from the specification. Generated files are not edited directly. Repository changes use managed worktrees; see [AGENTS.md](AGENTS.md).
 
-Bootstrap status: the host, workspace directories, protocols, autonomous planner and operator surface are integrated. Implementation fleet delivery and full repository qualification remain in the active AEP plan.
+Bootstrap status: the host, workspace directories, protocols, autonomous planner, reviewed implementation fleet and live operations dashboard are integrated. Full repository qualification and publication remain in the AEP plan.

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:implementation-fleet
 kind: story
-status: active
+status: implemented
 title: Isolated implementation, independent review and verified merges
 relations:
 - decomposes: epic:bootstrap
@@ -11,10 +11,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:31:09Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-05T21:31:09Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-05T22:15:46Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 ## Outcome
 Isolated implementation, independent review and verified merges, as part of the approved standalone control-plane plan.
