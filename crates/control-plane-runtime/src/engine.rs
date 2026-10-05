@@ -61,6 +61,13 @@ struct State {
     evidence: Vec<AttestedEvidence>,
     plan_revision: String,
     failure: Option<String>,
+    syntax_failures: usize,
+    memory: crate::context::ActionMemory,
+}
+
+enum OperationResult {
+    Completed,
+    SyntaxFeedback,
 }
 
 struct Planning<'a> {
@@ -135,6 +142,8 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
             evidence: Vec::new(),
             plan_revision: input.namespace.clone(),
             failure: None,
+            syntax_failures: 0,
+            memory: crate::context::ActionMemory::default(),
         }),
     };
     let executor = Loom::new(&planning, &planning, text(&input.goal, "objective")?);
@@ -173,7 +182,7 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
     );
     Ok(EngineOutput {
         stories: state.selected.clone(),
-        receipt: json!({"namespace":input.namespace,"run_id":end.run_id.0.0,"revision":state.plan_revision,"transcript":state.transcript,"steps":end.steps}),
+        receipt: json!({"namespace":input.namespace,"run_id":end.run_id.0.0,"revision":state.plan_revision,"transcript":state.transcript,"steps":end.steps,"action_history":state.memory.prompt()}),
     })
 }
 
@@ -267,7 +276,7 @@ impl Planning<'_> {
             text(&self.input.goal, "objective")?,
             text(&self.input.goal, "acceptance")?,
             self.input.goal["directories"],
-            state.transcript.join("\n")
+            format_args!("{}\n{}", state.memory.prompt(), state.transcript.join("\n"))
         );
         ensure!(
             text.len() <= 160 * 1024,
@@ -282,15 +291,88 @@ impl Planning<'_> {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
             crate::context::push(&mut state.transcript, message);
-            json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript})
+            json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript,"action_history":state.memory.prompt()})
         };
         (self.input.progress)("observation", &receipt)
     }
-    fn perform(&self, action: PlannerAction) -> Result<()> {
+    fn read_record(&self, key: &str, label: &str, message: String) -> Result<()> {
+        let count = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            let count = state
+                .memory
+                .observed(key.to_owned(), digest(&json!(message)));
+            state
+                .memory
+                .note(&format!("observed {label}; unchanged-result count {count}"));
+            count
+        };
+        self.record(format!("Observed {label}:\n{message}"))?;
+        if count > 1 {
+            let feedback = format!(
+                "Repeated unchanged observation ({count}): {label}. Choose new evidence, make an authorized change, or Finish with the authoritative stories. Re-reading this unchanged result is not progress."
+            );
+            self.state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?
+                .memory
+                .note(&feedback);
+            self.record(feedback)?;
+        }
+        ensure!(
+            count < 4,
+            "planner stalled after 4 unchanged observations: {label}"
+        );
+        Ok(())
+    }
+
+    fn syntax_feedback(&self, args: &[String], error: &str) -> Result<OperationResult> {
+        let message = format!(
+            "AEP syntax feedback: command was rejected, no successful mutation is claimed.\nAttempted args: {}\n{}\nAdmitted grammar: {}",
+            crate::context::excerpt(&json!(args).to_string(), 2048),
+            crate::context::excerpt(error, 4096),
+            AEP_GRAMMAR
+        );
+        let failures = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            state.syntax_failures += 1;
+            let failures = state.syntax_failures;
+            state.memory.note(&format!(
+                "syntax rejected ({failures}/3): {}",
+                crate::context::excerpt(error, 512)
+            ));
+            crate::context::push(&mut state.transcript, message.clone());
+            state.syntax_failures
+        };
+        (self.input.progress)(
+            "activity",
+            &json!({"action":"aep.syntax_rejected","role":"planner","status":"failed","detail":message}),
+        )?;
+        ensure!(
+            failures < 3,
+            "AEP syntax error budget exhausted after 3 rejected commands"
+        );
+        Ok(OperationResult::SyntaxFeedback)
+    }
+
+    fn perform(&self, action: PlannerAction) -> Result<OperationResult> {
         let path = &self.input.path;
         let mut bounded = self.input.runner.clone();
         bounded.timeout = bounded.timeout.min(self.remaining()?);
         let runner = &bounded;
+        let action_value = serde_json::to_value(&action)?;
+        let action_key = digest(&action_value);
+        let label = crate::context::action_label(&action_value);
+        self.state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?
+            .memory
+            .attempted(&label);
         (self.input.progress)("intent", &serde_json::to_value(&action)?)?;
         match action {
             PlannerAction::Read { paths } => {
@@ -299,12 +381,11 @@ impl Planning<'_> {
                     let file = context_file(path, &name, &self.input.goal)?;
                     let metadata = std::fs::metadata(&file)?;
                     ensure!(metadata.len() <= 256 * 1024, "file exceeds read budget");
-                    self.record(crate::context::page(
-                        &name,
-                        &std::fs::read_to_string(file)?,
-                        1,
-                        160,
-                    )?)?;
+                    self.read_record(
+                        &format!("{action_key}:{name}"),
+                        &label,
+                        crate::context::page(&name, &std::fs::read_to_string(file)?, 1, 160)?,
+                    )?;
                 }
             }
             PlannerAction::ReadRange {
@@ -317,12 +398,16 @@ impl Planning<'_> {
                     std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
                     "file exceeds paged read budget"
                 );
-                self.record(crate::context::page(
-                    &name,
-                    &std::fs::read_to_string(file)?,
-                    start_line,
-                    line_count,
-                )?)?;
+                self.read_record(
+                    &action_key,
+                    &label,
+                    crate::context::page(
+                        &name,
+                        &std::fs::read_to_string(file)?,
+                        start_line,
+                        line_count,
+                    )?,
+                )?;
             }
             PlannerAction::ReadBytes {
                 path: name,
@@ -334,12 +419,16 @@ impl Planning<'_> {
                     std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
                     "file exceeds paged read budget"
                 );
-                self.record(crate::context::bytes(
-                    &name,
-                    &std::fs::read_to_string(file)?,
-                    start_byte,
-                    byte_count,
-                )?)?;
+                self.read_record(
+                    &action_key,
+                    &label,
+                    crate::context::bytes(
+                        &name,
+                        &std::fs::read_to_string(file)?,
+                        start_byte,
+                        byte_count,
+                    )?,
+                )?;
             }
             PlannerAction::WriteSpecification {
                 path: name,
@@ -372,16 +461,33 @@ impl Planning<'_> {
                 self.record(format!("wrote specification {name}"))?;
             }
             PlannerAction::Aep { args, body } => {
-                let mutation = validate_aep_args(&args)?;
+                let canonical = canonical_aep_args(&args);
+                let mutation = match validate_aep_args(canonical) {
+                    Ok(mutation) => mutation,
+                    Err(error) if error.is::<AepSyntax>() => {
+                        return self.syntax_feedback(&args, &error.to_string());
+                    }
+                    Err(error) => return Err(error),
+                };
                 if mutation {
                     validate_spec(path, runner)?;
                 }
-                let command = [vec!["plan".into(), "artifact".into()], args].concat();
-                let output = runner.run(path, "aep", &command, body.as_deref())?;
+                let command = [vec!["plan".into(), "artifact".into()], canonical.to_vec()].concat();
+                let output = match runner.run(path, "aep", &command, body.as_deref()) {
+                    Ok(output) => output,
+                    Err(error) if aep_cli_syntax(&error) => {
+                        return self.syntax_feedback(&args, &error.to_string());
+                    }
+                    Err(error) => return Err(error),
+                };
                 if mutation {
                     self.changed()?;
+                    self.record(format!("Observed aep {}:\n{output}", json!(canonical)))?;
+                } else {
+                    let label =
+                        crate::context::action_label(&json!({"action":"aep","args":canonical}));
+                    self.read_record(&digest(&json!(canonical)), &label, output)?;
                 }
-                self.record(output)?;
             }
             PlannerAction::Finish { stories, summary } => {
                 let validation = validate_spec(path, runner)?;
@@ -479,7 +585,7 @@ impl Planning<'_> {
                 }];
             }
         }
-        Ok(())
+        Ok(OperationResult::Completed)
     }
     fn changed(&self) -> Result<()> {
         let mut state = self
@@ -489,6 +595,7 @@ impl Planning<'_> {
         state.revision += 1;
         state.plan_revision = format!("{}-{}", self.input.namespace, state.revision);
         state.evidence.clear();
+        state.memory.changed();
         Ok(())
     }
 }
@@ -500,7 +607,7 @@ impl ActionSelector for &Planning<'_> {
                 role: "planner".into(),
                 execution_context: self.input.namespace.clone(),
                 model: text(&self.input.goal, "planner_model")?.into(),
-                instructions: PLANNER_INSTRUCTIONS.into(),
+                instructions: format!("{PLANNER_INSTRUCTIONS}\n{AEP_GRAMMAR}"),
                 prompt: self.prompt()?,
                 schema: planner_schema(),
                 timeout: self.remaining()?,
@@ -626,8 +733,16 @@ impl EffectPort for Planning<'_> {
             return Err(EffectError::new("selected action changed"));
         }
         match self.perform(action) {
-            Ok(()) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
-                report: wire::Value::Text("host operation completed".into()),
+            Ok(result) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                report: wire::Value::Text(
+                    match result {
+                        OperationResult::Completed => "host operation completed",
+                        OperationResult::SyntaxFeedback => {
+                            "command syntax rejected; corrective feedback recorded"
+                        }
+                    }
+                    .into(),
+                ),
             })),
             Err(error) => {
                 let message = error.to_string();
@@ -671,10 +786,10 @@ impl LoopContext for ContextClock {
 
 // Returns whether the admitted command can mutate the planning store.
 fn validate_aep_args(args: &[String]) -> Result<bool> {
-    ensure!(
-        !args.is_empty() && args.len() <= 128,
-        "invalid AEP argument count"
-    );
+    ensure!(args.len() <= 128, "invalid AEP argument count");
+    if args.is_empty() {
+        return Err(AepSyntax("missing artifact verb; request --help for grammar").into());
+    }
     let admitted_verb = |verb: &str| {
         matches!(
             verb,
@@ -701,23 +816,8 @@ fn validate_aep_args(args: &[String]) -> Result<bool> {
         // or mutation flags are admitted with this exception.
         return Ok(false);
     }
-    ensure!(
-        !args.iter().any(|arg| help_flag(arg)),
-        "AEP help requires exactly --help, -h, or an admitted verb followed by a help flag"
-    );
-    ensure!(
-        admitted_verb(&args[0]),
-        "model cannot perform this AEP operation"
-    );
-    if args[0] == "new" {
-        ensure!(
-            args.get(1).is_some_and(|kind| matches!(
-                kind.as_str(),
-                "story" | "epic" | "task" | "executable-system-specification"
-            )),
-            "model cannot manufacture approval, review or evidence artifacts"
-        );
-    }
+    // Authority and confinement violations are always fatal, including when a
+    // malformed help request or other syntax error is present as well.
     for (index, arg) in args.iter().enumerate() {
         ensure!(
             !["--store", "--root", "--findings"]
@@ -736,10 +836,100 @@ fn validate_aep_args(args: &[String]) -> Result<bool> {
             "use --from followed by stdin marker"
         );
     }
+    if !admitted_verb(&args[0]) {
+        ensure!(
+            !matches!(
+                args[0].as_str(),
+                "move"
+                    | "set"
+                    | "evidence"
+                    | "findings"
+                    | "review-value"
+                    | "review"
+                    | "approve"
+                    | "approval"
+                    | "publish"
+                    | "merge"
+                    | "delete"
+                    | "remove"
+            ),
+            "model cannot perform this AEP operation"
+        );
+        // Unknown/noun-first grammar is never invoked or reinterpreted. Return
+        // bounded corrective feedback so the model can choose an admitted verb.
+        return Err(AepSyntax("unknown artifact verb or argument order; use [show, story:<id>] to inspect a story, or --help for admitted CLI syntax").into());
+    }
+    if args[0] == "new" {
+        if args.len() == 1 {
+            return Err(AepSyntax("new requires an admitted artifact kind").into());
+        }
+        ensure!(
+            matches!(
+                args[1].as_str(),
+                "story" | "epic" | "task" | "executable-system-specification"
+            ),
+            "model cannot manufacture approval, review or evidence artifacts"
+        );
+    }
+    if args.iter().any(|arg| help_flag(arg)) {
+        return Err(AepSyntax(
+            "AEP help requires exactly --help, -h, or an admitted verb followed by a help flag",
+        )
+        .into());
+    }
     Ok(!matches!(
         args[0].as_str(),
         "list" | "show" | "kinds" | "lifecycle" | "relations"
     ))
+}
+
+const AEP_GRAMMAR: &str = "AEP args are artifact arguments: --help, or one of new/body/scope/relate/unrelate/show/list/kinds/lifecycle/relations followed by its arguments. For verb help use [verb, --help]. Optional leading prefixes artifact, plan artifact, or aep plan artifact are normalized. New artifact kinds: story, epic, task, executable-system-specification. Bodies use --from - with body. Store/root overrides, evidence, approval and status authority remain forbidden. Correct the syntax and continue the standing goal; do not repeat the same rejected command.";
+
+#[derive(Debug)]
+struct AepSyntax(&'static str);
+impl std::fmt::Display for AepSyntax {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for AepSyntax {}
+
+fn canonical_aep_args(args: &[String]) -> &[String] {
+    for prefix in [
+        &["aep", "plan", "artifact"][..],
+        &["plan", "artifact"][..],
+        &["artifact"][..],
+    ] {
+        if args.len() >= prefix.len()
+            && args
+                .iter()
+                .zip(prefix)
+                .all(|(actual, expected)| actual == expected)
+        {
+            return &args[prefix.len()..];
+        }
+    }
+    args
+}
+
+fn aep_cli_syntax(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<crate::process::ProcessExit>()
+        .is_some_and(|exit| {
+            exit.program == "aep"
+                && exit.code == Some(2)
+                && exit.stdout.is_empty()
+                && [
+                    "error: unexpected argument ",
+                    "error: the following required arguments were not provided:",
+                    "error: invalid value ",
+                    "error: unrecognized subcommand ",
+                ]
+                .iter()
+                .any(|prefix| exit.stderr.starts_with(prefix))
+                && exit.stderr.contains("\nUsage: aep plan artifact")
+                && exit.stderr.contains("For more information, try '--help'.")
+        })
 }
 
 pub fn spec_root(root: &Path) -> Result<PathBuf> {
@@ -894,11 +1084,49 @@ pub fn digest(value: &Value) -> String {
     format!("{:x}", Sha256::digest(value.to_string().as_bytes()))
 }
 
-const PLANNER_INSTRUCTIONS: &str = "You are the control-plane planner in an isolated managed worktree. Everything runnable added to a beyond10x repository is Rust; CLIs use clap derive. Follow repository AGENTS.md. Inspect existing ESS and AEP before changes. Reuse existing relevant stories; migrate written legacy backlog preserving sources and citing source locations. New typed behavior belongs in ESS before any story. Use normal readable YAML. Only write_specification may write specification files; only aep may mutate planning artifacts, always through the AEP CLI. Aep args begin with the artifact verb. Use --from - and body for prose; record machine-readable scope. Acceptance must name conformance scenarios. Never fabricate check results, approvals, merge evidence or authority. Finish selects authoritative story ids and a summary; a separate critic and real validators decide acceptance. An empty selection never means goal completion.";
+const PLANNER_INSTRUCTIONS: &str = concat!(
+    "You are the control-plane planner in an isolated managed worktree. ",
+    "The standing goal's objective and acceptance define this task. Existing backlog is context only: reuse stories only when they directly serve that goal. ",
+    "Build the smallest validated plan for the goal; do not complete unrelated project backlog. ",
+    "Everything runnable added to a beyond10x repository is Rust; CLIs use clap derive. Follow repository AGENTS.md. ",
+    "Inspect existing ESS and AEP before changes. Migrate relevant written legacy backlog preserving sources and citing source locations. ",
+    "New typed behavior belongs in ESS before any story. Use normal readable YAML. ",
+    "Only write_specification may write specification files; only aep may mutate planning artifacts, always through the AEP CLI. ",
+    "Use --from - and body for prose; record machine-readable scope. Acceptance must name conformance scenarios. ",
+    "Use the recent action journal and unchanged-result feedback to choose new evidence, an authorized change or Finish; repeating unchanged reads is not progress. ",
+    "Never fabricate check results, approvals, merge evidence or authority. ",
+    "AEP help displays the CLI's complete surface, but only the admitted verbs below are available to you. Do not call move or evidence. ",
+    "Finish may select a scoped draft story: the host performs independent review, validation and lifecycle admission. ",
+    "Finish selects authoritative story ids and a summary; a separate critic and real validators decide acceptance. An empty selection never means goal completion."
+);
 
 #[cfg(test)]
 mod aep_help_tests {
     use super::validate_aep_args;
+
+    #[test]
+    fn syntax_recovery_requires_typed_aep_clap_failure() {
+        let stderr = "error: unexpected argument '--typo' found\n\nUsage: aep plan artifact list [OPTIONS]\n\nFor more information, try '--help'.\n";
+        let error = |program: &str, code, message: &str| {
+            anyhow::Error::new(crate::process::ProcessExit {
+                program: program.into(),
+                args: vec!["plan".into(), "artifact".into(), "list".into()],
+                code,
+                stdout: String::new(),
+                stderr: message.into(),
+            })
+        };
+        assert!(super::aep_cli_syntax(&error("aep", Some(2), stderr)));
+        assert!(!super::aep_cli_syntax(&error("aep", Some(1), stderr)));
+        assert!(!super::aep_cli_syntax(&error("git", Some(2), stderr)));
+        assert!(!super::aep_cli_syntax(&error("aep", None, stderr)));
+        assert!(!super::aep_cli_syntax(&anyhow::anyhow!(stderr.to_owned())));
+        assert!(!super::aep_cli_syntax(&error(
+            "aep",
+            Some(2),
+            "error: validation refused\nUsage: aep plan artifact\nFor more information, try '--help'."
+        )));
+    }
 
     #[test]
     fn exact_help_forms_are_read_only_for_every_admitted_verb() {

@@ -227,6 +227,9 @@ async fn planner_can_read_aep_help_then_finish_existing_work() {
     let (_fixture, store, config, _goal, _repo) = setup(true).await;
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
         json!({"action":"aep","args":["--help"],"body":null}),
+        json!({"action":"aep","args":["artifact","--help"],"body":null}),
+        json!({"action":"aep","args":["plan","artifact","new","--help"],"body":null}),
+        json!({"action":"aep","args":["aep","plan","artifact","scope","-h"],"body":null}),
         json!({"action":"aep","args":["new","--help"],"body":null}),
         json!({"action":"aep","args":["scope","-h"],"body":null}),
         json!({"action":"finish","stories":["story:deliver"],"summary":"Read CLI help and reused existing work."}),
@@ -283,6 +286,249 @@ async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
         store.lock().await.query("AssignmentList").unwrap(),
         json!([])
     );
+}
+
+#[tokio::test]
+async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["story","show","operator-console"],"body":null}),
+        json!({"action":"aep","args":["show","story:deliver"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Corrected noun-first CLI syntax."}),
+        json!({"approved":true,"reason":"Existing story remains authoritative."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(model.0.lock().unwrap().is_empty());
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    assert!(receipt.contains("AEP syntax feedback"));
+    assert!(receipt.contains("operator-console"));
+}
+
+#[tokio::test]
+async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
+    struct Recovering(Mutex<usize>);
+    impl AgentModel for Recovering {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut calls = self.0.lock().unwrap();
+            let answer = match *calls {
+                0 => json!({"action":"aep","args":["list","--not-a-real-option"],"body":null}),
+                1 => {
+                    assert!(request.prompt.contains("--not-a-real-option"));
+                    assert!(request.prompt.contains("AEP syntax feedback"));
+                    assert!(request.prompt.contains("Admitted grammar"));
+                    assert!(request.prompt.contains("Usage:"));
+                    json!({"action":"aep","args":["new","story"],"body":null})
+                }
+                2 => {
+                    assert!(request.prompt.contains("required arguments"));
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Corrected syntax and retained existing story."})
+                }
+                3 => json!({"approved":true,"reason":"Existing authoritative story is unchanged."}),
+                _ => panic!("unexpected model retry"),
+            };
+            *calls += 1;
+            Ok(answer)
+        }
+    }
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Recovering(Mutex::new(0)));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(*model.0.lock().unwrap(), 4);
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt: Value =
+        serde_json::from_str(goals[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    let failed = receipt["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["action"] == "aep.syntax_rejected")
+        .collect::<Vec<_>>();
+    assert_eq!(failed.len(), 2);
+    assert!(failed.iter().all(|event| event["status"] == "failed"));
+}
+
+#[tokio::test]
+async fn prior_actions_and_unchanged_feedback_break_a_stationary_model_loop() {
+    struct NeedsMemory(Mutex<Vec<String>>);
+    impl AgentModel for NeedsMemory {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            assert!(request.prompt.contains("Deliver requested change"));
+            if request.role == "critic" {
+                return Ok(json!({"approved":true,"reason":"Existing story is sufficient."}));
+            }
+            assert!(
+                request
+                    .prompt
+                    .contains("Required checks pass after reviewed merge")
+            );
+            let mut prompts = self.0.lock().unwrap();
+            prompts.push(request.prompt.clone());
+            if request
+                .prompt
+                .contains("Repeated unchanged observation (2)")
+            {
+                assert!(request.prompt.contains("Recent attempted actions"));
+                assert!(request.prompt.contains("README.md"));
+                assert!(request.prompt.contains("Choose new evidence"));
+                assert_ne!(prompts[prompts.len() - 1], prompts[prompts.len() - 2]);
+                Ok(
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Repeated read adds no evidence; existing plan is ready."}),
+                )
+            } else {
+                Ok(json!({"action":"read","paths":["README.md"]}))
+            }
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 6;
+    let model = Arc::new(NeedsMemory(Mutex::new(Vec::new())));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(model.0.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn unchanged_aep_reads_stop_with_explicit_stall_reason() {
+    struct Repeats(Mutex<usize>);
+    impl AgentModel for Repeats {
+        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            *self.0.lock().unwrap() += 1;
+            Ok(json!({"action":"aep","args":["show","story:deliver"],"body":null}))
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 6;
+    let model = Arc::new(Repeats(Mutex::new(0)));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("planner stalled after 4 unchanged observations")),
+        "{report:?}"
+    );
+    assert_eq!(*model.0.lock().unwrap(), 4);
+}
+
+#[tokio::test]
+async fn alternating_reads_retain_unchanged_feedback_across_actions() {
+    struct Alternates(Mutex<usize>);
+    impl AgentModel for Alternates {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            if request.role == "critic" {
+                return Ok(
+                    json!({"approved":true,"reason":"Existing scoped story satisfies the goal."}),
+                );
+            }
+            let mut calls = self.0.lock().unwrap();
+            *calls += 1;
+            if request
+                .prompt
+                .contains("Repeated unchanged observation (2)")
+            {
+                assert!(request.prompt.contains("Recent attempted actions"));
+                assert!(request.prompt.contains("README.md"));
+                assert!(request.prompt.contains("ess/system.yaml"));
+                Ok(
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Alternating unchanged reads add no evidence."}),
+                )
+            } else {
+                Ok(
+                    json!({"action":"read","paths":[if *calls % 2 == 1 {"README.md"} else {"ess/system.yaml"}]}),
+                )
+            }
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 7;
+    let model = Arc::new(Alternates(Mutex::new(0)));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(*model.0.lock().unwrap(), 4);
+}
+
+#[tokio::test]
+async fn repeated_aep_syntax_errors_stop_at_a_bounded_failure_budget() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let bad = json!({"action":"aep","args":["list","--not-a-real-option"],"body":null});
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        bad.clone(),
+        bad.clone(),
+        bad,
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Must not be reached."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("AEP syntax error budget exhausted")),
+        "{report:?}"
+    );
+    assert_eq!(model.0.lock().unwrap().len(), 1);
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+}
+
+#[tokio::test]
+async fn prefixed_aep_authority_and_path_violations_are_not_syntax_retries() {
+    for args in [
+        json!(["artifact", "list", "--store", "elsewhere"]),
+        json!(["aep", "plan", "artifact", "new", "evidence", "forged"]),
+        json!([
+            "plan",
+            "artifact",
+            "move",
+            "story:deliver",
+            "--to",
+            "implemented"
+        ]),
+    ] {
+        let (_fixture, store, config, _goal, _repo) = setup(true).await;
+        let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+            json!({"action":"aep","args":args,"body":null}),
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Must not be reached."}),
+        ]))));
+        let supervisor = Supervisor::new(
+            store.clone(),
+            Arc::new(Notify::new()),
+            config,
+            model.clone(),
+        );
+        let report = supervisor.tick().await.unwrap();
+        assert!(!report.blockers.is_empty());
+        assert_eq!(model.0.lock().unwrap().len(), 1);
+        assert_eq!(
+            store.lock().await.query("AssignmentList").unwrap(),
+            json!([])
+        );
+    }
 }
 
 #[tokio::test]
@@ -512,9 +758,9 @@ impl AgentModel for RepeatedReadModel {
         let mut calls = self.calls.lock().unwrap();
         *calls += 1;
         Ok(if *calls <= 8 {
-            json!({"action":"read","paths":["context.txt"]})
+            json!({"action":"read","paths":[format!("context{}.txt",*calls)]})
         } else if *calls == 9 {
-            json!({"action":"read_range","path":"context.txt","start_line":7001,"line_count":1})
+            json!({"action":"read_range","path":"context1.txt","start_line":7001,"line_count":1})
         } else {
             assert!(request.prompt.contains("Final page acceptance marker"));
             json!({"action":"finish","stories":["story:deliver"],"summary":"Context inspected; deliver the existing story"})
@@ -523,18 +769,21 @@ impl AgentModel for RepeatedReadModel {
 }
 
 #[tokio::test]
-async fn repeated_large_reads_do_not_exhaust_planner_context() {
+async fn distinct_large_reads_do_not_exhaust_planner_context() {
     let (fixture, store, config, _goal, _repo) = setup(true).await;
     let repo = fixture.path().join("repos/demo");
-    std::fs::write(
-        repo.join("context.txt"),
-        format!(
-            "{}Final page acceptance marker\n",
-            "Observed repository context.\n".repeat(7_000)
-        ),
-    )
-    .unwrap();
-    run(&repo, "git", &["add", "context.txt"], &config.environment);
+    for index in 1..=8 {
+        let name = format!("context{index}.txt");
+        std::fs::write(
+            repo.join(&name),
+            format!(
+                "{}Final page acceptance marker\n",
+                "Observed repository context.\n".repeat(7_000)
+            ),
+        )
+        .unwrap();
+        run(&repo, "git", &["add", &name], &config.environment);
+    }
     run(
         &repo,
         "git",
@@ -554,7 +803,7 @@ async fn repeated_large_reads_do_not_exhaust_planner_context() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(
         report.queued, 1,
-        "Repeated reads prevented planning: {report:?}"
+        "Bounded reads prevented planning: {report:?}"
     );
     assert!(
         model

@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:30:47Z",
+  "actor": "human:timo",
+  "artifact": "story:planner-feedback-recovery",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Exact live artifact --help and story show operator-console regressions failed before fix and pass with bounded feedback. Dynamic prompt-sensitive repeated and alternating read tests pass; protected paths/authority still refused. Integrated base56runtime tests pass; final exact noun-first regression passes; implementor final57runtime plus strict clippy pass. Live outcome remains unverified."
+  }
+}
