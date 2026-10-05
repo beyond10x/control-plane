@@ -398,7 +398,66 @@ async fn durable_contract_retains_generated_semantics_below_operational_admissio
 fn adversary_scratch() -> tempfile::TempDir {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/adversary-fixtures");
     std::fs::create_dir_all(&root).unwrap();
-    tempfile::tempdir_in(root).unwrap()
+    adversary_scratch_in(&root)
+}
+fn adversary_scratch_in(root: &Path) -> tempfile::TempDir {
+    let temp = tempfile::tempdir_in(root).unwrap();
+    // Stop Git discovery at this non-worktree fixture boundary. In PR CI the
+    // surrounding source checkout is detached and has no origin/HEAD ref.
+    let output = std::process::Command::new("git")
+        .args(["init", "--bare"])
+        .arg(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    temp
+}
+
+#[test]
+fn adversary_fixture_is_independent_of_detached_parent_without_origin_head() {
+    let outer = adversary_scratch();
+    let parent = outer.path().join("detached-parent");
+    repository(&parent);
+    for args in [
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Fixture detached parent",
+        ],
+        vec!["switch", "--detach"],
+        vec!["branch", "-D", "main"],
+    ] {
+        let output = std::process::Command::new("git")
+            .current_dir(&parent)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let unisolated = tempfile::tempdir_in(&parent).unwrap();
+    let error = discover(unisolated.path()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("detached Git repository needs an unambiguous base branch")
+    );
+    let child = adversary_scratch_in(&parent);
+    let discovered =
+        discover(child.path()).expect("non-Git fixture inherited its detached parent repository");
+    assert!(discovered.repositories.is_empty());
 }
 
 #[tokio::test]
