@@ -2,6 +2,13 @@
 
 Standalone Rust product: local autonomous planner, implementation fleet and web console. Read README.md for usage.
 
+## Serves
+
+- O1: reliable, composable engineering foundations.
+- O5: autonomous delivery from an operator's goal.
+
+## Working rules
+
 - Everything that runs is Rust; CLIs use clap derive. The UI is server-rendered HTML/CSS.
 - Use managed worktrees. Keep primary checkouts clean. All commits and GitHub writes use the bot and repository-required publishing tools; never bypass hooks.
 - ESS under ess/ owns domain types and lifecycles. Specify first, record a failing test, generate Rust contracts, then implement adapters. Never hand-edit generated output.
