@@ -4,8 +4,8 @@ Standalone Rust product: local autonomous planner, implementation fleet and web 
 
 ## Serves
 
-- O1: reliable, composable engineering foundations.
-- O5: autonomous delivery from an operator's goal.
+- O1 — governed reach: check declared authority before effectful work.
+- O5 — the generic agent platform: configure autonomous work and inspect its record.
 
 ## Working rules
 
