@@ -8,7 +8,23 @@ use std::{
 };
 
 type Files = BTreeMap<PathBuf, Vec<u8>>;
+fn refuse_symlink_ancestors(path: &Path) -> Result<()> {
+    for ancestor in path.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) => ensure!(
+                !metadata.file_type().is_symlink(),
+                "generated symlink refused: {}",
+                ancestor.display()
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
 fn files(root: &Path) -> Result<Files> {
+    refuse_symlink_ancestors(root)?;
     fn visit(root: &Path, dir: &Path, out: &mut Files) -> Result<()> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
@@ -72,14 +88,39 @@ fn ess(root: &Path, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
+fn preflight(expected: &Path, actual: &Path) -> Result<()> {
+    refuse_symlink_ancestors(actual)?;
+    let new = files(expected)?;
+    let old = if actual.exists() {
+        files(actual)?
+    } else {
+        Files::new()
+    };
+    let extras = old
+        .keys()
+        .filter(|path| !new.contains_key(*path))
+        .map(|path| actual.join(path).display().to_string())
+        .collect::<Vec<_>>();
+    ensure!(
+        extras.is_empty(),
+        "unowned or stale generated files require an explicit ownership decision before regeneration:\n{}",
+        extras.join("\n")
+    );
+    for path in new.keys() {
+        let destination = actual.join(path);
+        ensure!(
+            !destination.exists() || destination.is_file(),
+            "generated file destination is occupied by a directory: {}",
+            destination.display()
+        );
+    }
+    Ok(())
+}
+
 fn install(expected: &Path, actual: &Path) -> Result<()> {
+    preflight(expected, actual)?;
     let new = files(expected)?;
     fs::create_dir_all(actual)?;
-    for path in files(actual)?.keys() {
-        if !new.contains_key(path) {
-            fs::remove_file(actual.join(path))?;
-        }
-    }
     for (path, bytes) in new {
         let destination = actual.join(path);
         fs::create_dir_all(destination.parent().context("generated parent")?)?;
@@ -89,7 +130,9 @@ fn install(expected: &Path, actual: &Path) -> Result<()> {
 }
 
 pub fn run(root: &Path, write: bool) -> Result<()> {
+    refuse_symlink_ancestors(root)?;
     let scratch = root.join(".scratch");
+    refuse_symlink_ancestors(&scratch)?;
     fs::create_dir_all(&scratch)?;
     let fresh = tempfile::Builder::new()
         .prefix("ess-generation-")
@@ -155,6 +198,19 @@ pub fn run(root: &Path, write: bool) -> Result<()> {
         ],
     )?;
     let generated = root.join("generated");
+    let destination = generated.join("conformance.json");
+    // Preflight the entire output set before the first install. A refusal in API
+    // output or the suite must leave even earlier model output byte-for-byte intact.
+    if write {
+        for (fresh, name) in [(&model, "model"), (&api, "api")] {
+            preflight(fresh, &generated.join(name))?;
+        }
+        refuse_symlink_ancestors(&destination)?;
+        ensure!(
+            !destination.exists() || destination.is_file(),
+            "conformance output is not a regular file"
+        );
+    }
     for (fresh, name) in [(&model, "model"), (&api, "api")] {
         if write {
             install(fresh, &generated.join(name))?;
@@ -163,7 +219,6 @@ pub fn run(root: &Path, write: bool) -> Result<()> {
         }
     }
     let bytes = fs::read(suite)?;
-    let destination = generated.join("conformance.json");
     if write {
         fs::write(&destination, &bytes)?;
     }
@@ -191,6 +246,10 @@ mod tests {
         install(&expected, &actual)?;
         fs::write(actual.join("stale.rs"), "obsolete")?;
         assert!(compare(&expected, &actual).is_err());
+        assert!(install(&expected, &actual).is_err());
+        assert_eq!(fs::read_to_string(actual.join("stale.rs"))?, "obsolete");
+        // Removal is an explicit fixture ownership decision, never a generator effect.
+        fs::remove_file(actual.join("stale.rs"))?;
         install(&expected, &actual)?;
         fs::create_dir_all(actual.join(".ess-output"))?;
         fs::write(actual.join(".ess-output/local.json"), "local ownership")?;
