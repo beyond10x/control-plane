@@ -32,6 +32,7 @@ components:
     - controlplane.host.PreparePublication
     - controlplane.host.MarkPublicationUncertain
     - controlplane.host.ConfirmPublication
+    - controlplane.host.RecordPlanningProgress
   publishes:
     events:
     - controlplane.host.WorkspaceCreated
@@ -59,4 +60,5 @@ components:
     - controlplane.host.PublicationIntentCreated
     - controlplane.host.MarkPublicationUncertainApplied
     - controlplane.host.ConfirmPublicationApplied
+    - controlplane.host.PlanningProgressRecorded
   reached_by: network
