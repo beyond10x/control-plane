@@ -11,6 +11,7 @@ tasks:
       - cargo test --workspace --locked
       - cargo run --locked -p control-plane-xtask -- generated-check
       - cargo run --locked -p control-plane-xtask -- conformance
+      - cargo run --locked -p control-plane-xtask -- foundation-check
 
   generate:
     desc: Regenerate contracts from the ESS source
