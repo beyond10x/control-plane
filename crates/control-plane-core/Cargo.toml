@@ -1,0 +1,20 @@
+[package]
+name = "control-plane-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+controlplane-model.workspace = true
+eventlog-core.workspace = true
+eventlog-sqlite.workspace = true
+fs2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
