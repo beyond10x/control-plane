@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 mod engine;
+mod fleet;
 mod model;
 pub mod process;
 mod supervisor;
@@ -61,6 +62,8 @@ pub struct TickReport {
     pub planned: usize,
     pub queued: usize,
     pub blockers: Vec<String>,
+    pub merged: usize,
+    pub satisfied: usize,
 }
 
 /// The retained location and immutable commit of one validated engineering plan.

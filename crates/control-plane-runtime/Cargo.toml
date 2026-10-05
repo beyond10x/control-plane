@@ -20,6 +20,7 @@ time.workspace = true
 sha2 = "0.10"
 tokio-util = "0.7"
 nix = { version = "0.31", features = ["signal", "process"] }
+shell-words = "1"
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -39,7 +39,10 @@ impl Supervisor {
     }
     pub async fn run(&self, shutdown: CancellationToken) -> Result<()> {
         loop {
-            let tick = self.tick();
+            let tick = async {
+                self.tick().await?;
+                self.fleet_tick().await
+            };
             tokio::pin!(tick);
             tokio::select! {
                 result=&mut tick=>{ result?; }
@@ -59,7 +62,16 @@ impl Supervisor {
         let _exclusive = self.tick_lock.lock().await;
         let goals = rows(&self.store, "GoalList").await?;
         let mut report = TickReport::default();
-        for goal in goals.into_iter().filter(|g| g["state"] == "Running") {
+        for mut goal in goals.into_iter().filter(|g| g["state"] == "Running") {
+            goal["directories"] = json!(
+                rows(&self.store, "WorkspaceDirectoryList")
+                    .await?
+                    .into_iter()
+                    .filter(
+                        |d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered"
+                    )
+                    .collect::<Vec<_>>()
+            );
             let all_repositories = rows(&self.store, "RepositoryRegistrationList").await?;
             let repositories = all_repositories
                 .iter()
@@ -155,7 +167,14 @@ impl Supervisor {
         Ok(report)
     }
     pub async fn fleet_tick(&self) -> Result<TickReport> {
-        anyhow::bail!("fleet execution is not implemented")
+        let _exclusive = self.tick_lock.lock().await;
+        crate::fleet::run(
+            self.store.clone(),
+            self.config.clone(),
+            self.model.clone(),
+            self.runner(),
+        )
+        .await
     }
     async fn retire_superseded_queue(&self, goal: &Value) -> Result<()> {
         let mut store = self.store.lock().await;
@@ -316,13 +335,24 @@ impl Supervisor {
             ensure!(!attempt_cancel.is_cancelled(), "planning attempt cancelled");
             let mut progress = metadata.clone();
             progress["planning_receipt"] =
-                json!(json!({"kind":kind,"receipt":receipt}).to_string());
+                json!(json!({"kind":kind,"receipt":receipt,"activity_id":uuid::Uuid::new_v4().to_string()}).to_string());
             handle.block_on(async {
                 current_goal(&store, &goal_copy).await?;
                 let repositories = rows(&store, "RepositoryRegistrationList").await?;
                 ensure!(
                     repositories.iter().any(|r| r == &expected_repository),
                     "repository configuration changed during planning"
+                );
+                let directories = rows(&store, "WorkspaceDirectoryList")
+                    .await?
+                    .into_iter()
+                    .filter(|d| {
+                        d["workspace_id"] == goal_copy["workspace_id"] && d["state"] == "Registered"
+                    })
+                    .collect::<Vec<_>>();
+                ensure!(
+                    json!(directories) == goal_copy["directories"],
+                    "workspace directory membership changed during planning"
                 );
                 record(&store, &goal_copy, &progress).await
             })
@@ -473,6 +503,18 @@ async fn record(store: &SharedStore, goal: &Value, progress: &Value) -> Result<(
     check_goal(&store, goal)?;
     let mut payload = progress.as_object().context("progress not object")?.clone();
     payload.retain(|key, _| key.starts_with("planning_"));
+    let current = store
+        .query("GoalList")?
+        .as_array()
+        .context("goals view")?
+        .iter()
+        .find(|g| g["goal_id"] == goal["goal_id"])
+        .context("goal missing")?
+        .clone();
+    payload.insert(
+        "planning_receipt".into(),
+        json!(activity_receipt(&current, progress)?),
+    );
     payload.insert("goal_id".into(), goal["goal_id"].clone());
     let result = store
         .execute(
@@ -482,6 +524,71 @@ async fn record(store: &SharedStore, goal: &Value, progress: &Value) -> Result<(
         )
         .await?;
     applied(&result)
+}
+
+fn activity_receipt(current: &Value, progress: &Value) -> Result<String> {
+    let parse = |row: &Value| -> Value {
+        row["planning_receipt"]
+            .as_str()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .filter(Value::is_object)
+            .unwrap_or_else(|| json!({}))
+    };
+    let mut combined = parse(current);
+    let incoming = parse(progress);
+    let kind = incoming["kind"].as_str().unwrap_or_default();
+    let detail = &incoming["receipt"];
+    let mut event = if kind == "activity" {
+        Some(detail.clone())
+    } else if !kind.is_empty() {
+        let label = match kind {
+            "intent" => format!(
+                "Executing {}",
+                detail["action"].as_str().unwrap_or("planner tool")
+            ),
+            "observation" => "Repository operation completed".into(),
+            "plan-approved" => "Independent plan review passed".into(),
+            "accept-story" => format!("Accepting {}", detail["story"].as_str().unwrap_or("story")),
+            "adopt" => "Initializing the repository planning store".into(),
+            _ => kind.to_owned(),
+        };
+        Some(
+            json!({"action":format!("planner.{kind}"),"role":"planner","detail":label,"status":if kind=="intent" {"running"} else {"completed"}}),
+        )
+    } else if current["planning_phase"] != progress["planning_phase"] {
+        let phase = progress["planning_phase"].as_str().unwrap_or("Idle");
+        Some(
+            json!({"action":format!("planning.{phase}"),"role":"planner","detail":if phase=="Blocked" {progress["planning_reason"].as_str().unwrap_or("Planning blocked").to_owned()} else {format!("Planning phase: {phase}")},"status":match phase {"Blocked"=>"failed","Queued"=>"waiting","Validated"=>"completed",_=>"running"}}),
+        )
+    } else {
+        None
+    };
+    if let Some(mut activity) = event.take() {
+        let id = incoming["activity_id"]
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        if combined["last_activity"]["id"] != id {
+            activity["id"] = json!(id);
+            activity["at"] = json!(
+                time::OffsetDateTime::now_utc()
+                    .format(&time::format_description::well_known::Rfc3339)?
+            );
+            activity["worktree"] = progress["planning_worktree_path"].clone();
+            activity["goal_revision"] = current["revision"].clone();
+            let mut history = combined["activity"].as_array().cloned().unwrap_or_default();
+            history.push(activity.clone());
+            if history.len() > 64 {
+                history.drain(..history.len() - 64);
+            }
+            combined["activity"] = json!(history);
+            combined["last_activity"] = activity;
+        }
+    }
+    if incoming.as_object().is_some_and(|v| !v.is_empty()) {
+        combined["planner"] = incoming;
+    }
+    Ok(combined.to_string())
 }
 async fn fingerprint(
     goal: &Value,

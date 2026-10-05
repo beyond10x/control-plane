@@ -360,6 +360,76 @@ struct PausingModel {
     store: Arc<tokio::sync::Mutex<Store>>,
     goal: String,
 }
+
+struct ObservingModel {
+    store: Arc<tokio::sync::Mutex<Store>>,
+    entered: Mutex<Vec<Value>>,
+}
+impl AgentModel for ObservingModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        let receipt = tokio::runtime::Handle::current().block_on(async {
+            self.store.lock().await.query("GoalList").unwrap()[0]["planning_receipt"].clone()
+        });
+        self.entered
+            .lock()
+            .unwrap()
+            .push(serde_json::from_str(receipt.as_str().unwrap()).unwrap_or(json!({})));
+        Ok(if request.role == "critic" {
+            json!({"approved":true,"reason":"Requested story matches the goal"})
+        } else {
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Deliver existing story"})
+        })
+    }
+}
+
+#[tokio::test]
+async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(ObservingModel {
+        store: store.clone(),
+        entered: Mutex::new(Vec::new()),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1);
+    {
+        let observed = model.entered.lock().unwrap();
+        assert_eq!(observed.len(), 2);
+        for (entry, role) in observed.iter().zip(["planner", "critic"]) {
+            assert_eq!(entry["last_activity"]["action"], "model.requested");
+            assert_eq!(entry["last_activity"]["role"], role);
+            assert_eq!(entry["last_activity"]["status"], "running");
+            time::OffsetDateTime::parse(
+                entry["last_activity"]["at"].as_str().unwrap(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap();
+        }
+    }
+    let before = store.lock().await.query("GoalList").unwrap();
+    let receipt: Value =
+        serde_json::from_str(before[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    assert!(
+        receipt["activity"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["action"] == "model.completed" && a["role"] == "critic")
+    );
+    assert_eq!(before[0]["planning_phase"], "Queued");
+    drop(supervisor);
+    drop(model);
+    drop(store);
+    let reopened = Store::open(_fixture.path().join("host.sqlite3"))
+        .await
+        .unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap(), before);
+}
 impl AgentModel for PausingModel {
     fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
         tokio::runtime::Handle::current().block_on(async {

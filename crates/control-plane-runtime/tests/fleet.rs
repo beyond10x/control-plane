@@ -311,3 +311,350 @@ async fn review_is_independent_and_two_repositories_reach_observed_goal_completi
     supervisor.fleet_tick().await.unwrap();
     assert_eq!(model.calls.load(Ordering::SeqCst), calls);
 }
+
+struct RejectGoalReview(Scripted);
+impl AgentModel for RejectGoalReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        if request.role == "goal_reviewer" {
+            self.0.calls.fetch_add(1, Ordering::SeqCst);
+            return Ok(
+                json!({"approved":false,"reason":"A stated acceptance obligation is not demonstrated"}),
+            );
+        }
+        self.0.respond(request)
+    }
+}
+
+#[tokio::test]
+async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(RejectGoalReview(Scripted::new()));
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    let result = supervisor.fleet_tick().await.unwrap();
+    assert!(
+        result
+            .blockers
+            .iter()
+            .any(|r| r.contains("final goal review rejected")),
+        "{result:?}"
+    );
+    let goals = fixture.store.lock().await.query("GoalList").unwrap();
+    assert_eq!(goals[0]["state"], "Running");
+    let receipt: Value =
+        serde_json::from_str(goals[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    assert_eq!(receipt["acceptance"]["status"], "failed");
+    assert!(
+        receipt["acceptance"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("acceptance obligation")
+    );
+    let calls = model.0.calls.load(Ordering::SeqCst);
+    drop(supervisor);
+    let restarted = Supervisor::new(
+        fixture.store,
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    restarted.fleet_tick().await.unwrap();
+    assert_eq!(model.0.calls.load(Ordering::SeqCst), calls);
+}
+
+async fn revise(fixture: &Fixture, authority: bool) {
+    fixture.store.lock().await.execute("UpdateGoal",json!({"goal_id":fixture.goal,"objective":"Return 42 in every registered repository","acceptance":"requested_answer passes on each reviewed merged target","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":authority}),Actor::Operator).await.unwrap();
+}
+
+#[tokio::test]
+async fn merge_requires_current_authority() {
+    let fixture = fixture(1).await;
+    revise(&fixture, false).await;
+    let model = Arc::new(Scripted::new());
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model,
+    );
+    supervisor.tick().await.unwrap();
+    let initial = cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &["ls-remote", "origin", "refs/heads/main"],
+        &[],
+    );
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(!report.blockers.is_empty());
+    assert_eq!(
+        fixture
+            .store
+            .lock()
+            .await
+            .query("PublicationIntentList")
+            .unwrap(),
+        json!([])
+    );
+    assert_eq!(
+        cmd(
+            &fixture.root.join("repos/repo0"),
+            "git",
+            &["ls-remote", "origin", "refs/heads/main"],
+            &[]
+        ),
+        initial
+    );
+    assert_eq!(
+        fixture.store.lock().await.query("AssignmentList").unwrap()[0]["state"],
+        "Blocked"
+    );
+}
+struct ChangeDuringReview {
+    inner: Scripted,
+    store: SharedStore,
+    goal: Value,
+    changed: std::sync::atomic::AtomicBool,
+}
+impl AgentModel for ChangeDuringReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        if request.role == "reviewer" && !self.changed.swap(true, Ordering::SeqCst) {
+            tokio::runtime::Handle::current().block_on(async {
+                self.store.lock().await.execute("UpdateGoal",json!({"goal_id":self.goal,"objective":"Changed objective invalidates old review","acceptance":"Different acceptance","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await
+            })?;
+        }
+        self.inner.respond(request)
+    }
+}
+#[tokio::test]
+async fn changed_revision_invalidates_evidence() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(ChangeDuringReview {
+        inner: Scripted::new(),
+        store: fixture.store.clone(),
+        goal: fixture.goal.clone(),
+        changed: std::sync::atomic::AtomicBool::new(false),
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model,
+    );
+    supervisor.tick().await.unwrap();
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(!report.blockers.is_empty());
+    let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
+    assert_eq!(assignments[0]["state"], "Blocked");
+    assert_eq!(assignments[0]["review_revision"], "");
+    assert_eq!(
+        fixture
+            .store
+            .lock()
+            .await
+            .query("PublicationIntentList")
+            .unwrap(),
+        json!([])
+    );
+}
+
+#[tokio::test]
+async fn pause_and_limits_stop_dispatch() {
+    let mut fixture = fixture(1).await;
+    let model = Arc::new(Scripted::new());
+    let planning = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    planning.tick().await.unwrap();
+    drop(planning);
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    fixture.config.max_steps = 1;
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    let calls = model.calls.load(Ordering::SeqCst);
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(model.calls.load(Ordering::SeqCst), calls);
+    assert_eq!(
+        fixture.store.lock().await.query("AssignmentList").unwrap()[0]["attempt"],
+        0
+    );
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "StartGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    let calls = model.calls.load(Ordering::SeqCst);
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(model.calls.load(Ordering::SeqCst), calls);
+    let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
+    assert_eq!(assignments[0]["attempt"], 2);
+    assert_eq!(assignments[0]["state"], "Blocked");
+}
+
+#[tokio::test]
+async fn restart_reconciles_effects_and_zero_exit_is_not_a_merge_receipt() {
+    let fixture = fixture(1).await;
+    fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
+    let model = Arc::new(Scripted::new());
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model,
+    );
+    supervisor.tick().await.unwrap();
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(!report.blockers.is_empty());
+    let intent = fixture
+        .store
+        .lock()
+        .await
+        .query("PublicationIntentList")
+        .unwrap()[0]
+        .clone();
+    assert_eq!(intent["state"], "Uncertain");
+    assert_ne!(
+        fixture.store.lock().await.query("AssignmentList").unwrap()[0]["state"],
+        "Merged"
+    );
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/main", intent["candidate"].as_str().unwrap()),
+        ],
+        &[],
+    );
+    drop(supervisor);
+    drop(fixture.store);
+    let reopened = Arc::new(tokio::sync::Mutex::new(
+        Store::open(fixture.root.join("host.sqlite3"))
+            .await
+            .unwrap(),
+    ));
+    let model = Arc::new(Scripted::new());
+    let recovered = Supervisor::new(
+        reopened.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        model.clone(),
+    );
+    recovered.fleet_tick().await.unwrap();
+    assert_eq!(model.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        reopened
+            .lock()
+            .await
+            .query("PublicationIntentList")
+            .unwrap()[0]["state"],
+        "Confirmed"
+    );
+    let assignment = reopened.lock().await.query("AssignmentList").unwrap()[0].clone();
+    assert_eq!(assignment["state"], "Merged");
+    assert!(!assignment["merge_receipt"].as_str().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn repository_execution_is_exclusive_across_workspace_aliases() {
+    let fixture = fixture(1).await;
+    let primary = fixture.root.join("repos/repo0");
+    let alias_id = format!("alias-{}", uuid::Uuid::new_v4());
+    let created: Value = serde_json::from_str(&cmd(
+        &primary,
+        "worktree",
+        &[
+            "create",
+            "--json",
+            "--repo",
+            primary.to_str().unwrap(),
+            "--base",
+            "main",
+            "--id",
+            &alias_id,
+            "--purpose",
+            "cross workspace fixture",
+        ],
+        &fixture.config.environment,
+    ))
+    .unwrap();
+    let alias = Path::new(created["evidence"]["path"].as_str().unwrap());
+    let mut host = fixture.store.lock().await;
+    let workspace=host.register_workspace(alias,"alias").await.unwrap()["published"][0]["payload"]["workspace_id"].clone();
+    let repository = host
+        .query("RepositoryRegistrationList")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["workspace_id"] == workspace)
+        .unwrap()["repository_id"]
+        .clone();
+    host.execute("ConfigureRepository",json!({"repository_id":repository,"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git push --force-with-lease=refs/heads/{target}:{expected_base} origin {candidate}:refs/heads/{target}"}),Actor::Operator).await.unwrap();
+    let goal=host.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Same repository through an alias","acceptance":"requested_answer passes after observed merge","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+    host.execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(host);
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        Arc::new(Scripted::new()),
+    );
+    assert_eq!(supervisor.tick().await.unwrap().queued, 2);
+    supervisor.fleet_tick().await.unwrap();
+    let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
+    let rows = assignments.as_array().unwrap();
+    assert_eq!(
+        rows.iter().filter(|a| a["state"] == "Merged").count(),
+        1,
+        "{assignments}"
+    );
+    assert_eq!(
+        rows.iter().filter(|a| a["state"] == "Queued").count(),
+        1,
+        "{assignments}"
+    );
+}
