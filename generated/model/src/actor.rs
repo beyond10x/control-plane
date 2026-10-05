@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Every actor the specification declares, and the commands each may invoke — as data.
@@ -42,6 +42,7 @@ pub fn may(actor: Actor) -> &'static [&'static str] {
         Actor::Operator => &[
             "controlplane.host.ArchiveWorkspace",
             "controlplane.host.CancelGoal",
+            "controlplane.host.ConfigureRepository",
             "controlplane.host.CreateGoal",
             "controlplane.host.DisableRepositoryRegistration",
             "controlplane.host.EnableRepositoryRegistration",
@@ -49,6 +50,7 @@ pub fn may(actor: Actor) -> &'static [&'static str] {
             "controlplane.host.RegisterRepository",
             "controlplane.host.RegisterWorkspace",
             "controlplane.host.StartGoal",
+            "controlplane.host.UpdateGoal",
         ],
         Actor::Supervisor => &[
             "controlplane.host.ArchiveWorkspace",
@@ -57,13 +59,17 @@ pub fn may(actor: Actor) -> &'static [&'static str] {
             "controlplane.host.CancelGoal",
             "controlplane.host.ClaimAssignment",
             "controlplane.host.CompleteAssignment",
+            "controlplane.host.ConfirmPublication",
             "controlplane.host.CreateGoal",
             "controlplane.host.DisableRepositoryRegistration",
             "controlplane.host.EnableRepositoryRegistration",
+            "controlplane.host.MarkPublicationUncertain",
             "controlplane.host.MergeAssignment",
             "controlplane.host.PauseGoal",
+            "controlplane.host.PreparePublication",
             "controlplane.host.QueueAssignment",
             "controlplane.host.ReadyAssignment",
+            "controlplane.host.ReconcileAssignment",
             "controlplane.host.RegisterRepository",
             "controlplane.host.RegisterWorkspace",
             "controlplane.host.RepairAssignment",

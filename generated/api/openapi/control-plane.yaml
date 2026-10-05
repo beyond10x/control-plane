@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-# contract digest slice-sha256/2:c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+# model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+# contract digest slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-    contract_digest: slice-sha256/2:c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+    source_digest: d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+    contract_digest: slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
   x-ess-reached-by: network
 tags:
 - name: host
@@ -459,6 +459,144 @@ paths:
                 - refused
                 - committed
                 type: object
+  /host/commands/ConfigureRepository:
+    post:
+      operationId: controlplane.host.ConfigureRepository
+      summary: ConfigureRepository
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Operator
+      requestBody:
+        description: The input `controlplane.host.ConfigureRepository` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.ConfigureRepository.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ConfigureRepository.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ConfigureRepository.not-found.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
+  /host/commands/ConfirmPublication:
+    post:
+      operationId: controlplane.host.ConfirmPublication
+      summary: ConfirmPublication
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.ConfirmPublication` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.ConfirmPublication.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ConfirmPublication.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ConfirmPublication.not-found.Response'
+        '409':
+          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ConfirmPublication.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/commands/CreateGoal:
     post:
       operationId: controlplane.host.CreateGoal
@@ -666,6 +804,78 @@ paths:
                 - refused
                 - committed
                 type: object
+  /host/commands/MarkPublicationUncertain:
+    post:
+      operationId: controlplane.host.MarkPublicationUncertain
+      summary: MarkPublicationUncertain
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.MarkPublicationUncertain` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.MarkPublicationUncertain.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.MarkPublicationUncertain.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.MarkPublicationUncertain.not-found.Response'
+        '409':
+          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.MarkPublicationUncertain.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/commands/MergeAssignment:
     post:
       operationId: controlplane.host.MergeAssignment
@@ -811,6 +1021,66 @@ paths:
                 - refused
                 - committed
                 type: object
+  /host/commands/PreparePublication:
+    post:
+      operationId: controlplane.host.PreparePublication
+      summary: PreparePublication
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.PreparePublication` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.PreparePublication.Input'
+      responses:
+        '202':
+          description: 'Outcome `created`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.PreparePublication.created.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/commands/QueueAssignment:
     post:
       operationId: controlplane.host.QueueAssignment
@@ -926,6 +1196,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ReadyAssignment.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
+  /host/commands/ReconcileAssignment:
+    post:
+      operationId: controlplane.host.ReconcileAssignment
+      summary: ReconcileAssignment
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.ReconcileAssignment` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.not-found.Response'
+        '409':
+          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1354,6 +1696,72 @@ paths:
                 - refused
                 - committed
                 type: object
+  /host/commands/UpdateGoal:
+    post:
+      operationId: controlplane.host.UpdateGoal
+      summary: UpdateGoal
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Operator
+      requestBody:
+        description: The input `controlplane.host.UpdateGoal` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.UpdateGoal.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.UpdateGoal.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.UpdateGoal.not-found.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/views/AssignmentList:
     get:
       operationId: controlplane.host.AssignmentList
@@ -1382,6 +1790,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/controlplane.host.GoalList.Response'
+  /host/views/PublicationIntentList:
+    get:
+      operationId: controlplane.host.PublicationIntentList
+      summary: PublicationIntentList
+      tags:
+      - host
+      x-ess-consistency: read_your_writes
+      responses:
+        '200':
+          description: 'Every row of `controlplane.host.PublicationIntentList`, a projection of `controlplane.host.PublicationIntent`. Contains every instance. Read-your-writes: a caller that has just issued a command sees its effect here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.PublicationIntentList.Response'
   /host/views/RepositoryRegistrationList:
     get:
       operationId: controlplane.host.RepositoryRegistrationList
@@ -1558,6 +1980,8 @@ components:
           type: string
         reviewer_run:
           type: string
+        goal_revision:
+          type: integer
       required:
       - assignment_id
       - goal_id
@@ -1570,6 +1994,7 @@ components:
       - reason
       - implementor_run
       - reviewer_run
+      - goal_revision
       additionalProperties: false
     controlplane.host.AssignmentList.Response:
       additionalProperties: false
@@ -1617,6 +2042,16 @@ components:
           type: string
         reviewer_run:
           type: string
+        goal_revision:
+          type: integer
+        base_revision:
+          type: string
+        test_revision:
+          type: string
+        review_revision:
+          type: string
+        merge_receipt:
+          type: string
         state:
           $ref: '#/components/schemas/controlplane.host.Assignment.State'
       required:
@@ -1631,6 +2066,11 @@ components:
       - reason
       - implementor_run
       - reviewer_run
+      - goal_revision
+      - base_revision
+      - test_revision
+      - review_revision
+      - merge_receipt
       - state
       additionalProperties: false
     controlplane.host.AssignmentStateConflict.Error:
@@ -1655,8 +2095,11 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
       required:
       - assignment_id
+      - reason
       additionalProperties: false
     controlplane.host.BlockAssignment.applied.Response:
       additionalProperties: false
@@ -1740,8 +2183,11 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
       required:
       - assignment_id
+      - reason
       additionalProperties: false
     controlplane.host.CancelAssignment.Input:
       title: CancelAssignment input
@@ -1949,8 +2395,17 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        worktree_id:
+          type: string
+        implementor_run:
+          type: string
+        base_revision:
+          type: string
       required:
       - assignment_id
+      - worktree_id
+      - implementor_run
+      - base_revision
       additionalProperties: false
     controlplane.host.ClaimAssignment.applied.Response:
       additionalProperties: false
@@ -2034,8 +2489,17 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        worktree_id:
+          type: string
+        implementor_run:
+          type: string
+        base_revision:
+          type: string
       required:
       - assignment_id
+      - worktree_id
+      - implementor_run
+      - base_revision
       additionalProperties: false
     controlplane.host.CompleteAssignment.Input:
       title: CompleteAssignment input
@@ -2047,8 +2511,11 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        merge_receipt:
+          type: string
       required:
       - assignment_id
+      - merge_receipt
       additionalProperties: false
     controlplane.host.CompleteAssignment.applied.Response:
       additionalProperties: false
@@ -2132,8 +2599,206 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        merge_receipt:
+          type: string
       required:
       - assignment_id
+      - merge_receipt
+      additionalProperties: false
+    controlplane.host.ConfigureRepository.Input:
+      title: ConfigureRepository input
+      x-ess-name: controlplane.host.ConfigureRepository
+      x-ess-kind: command-input
+      type: object
+      properties:
+        repository_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        base_branch:
+          type: string
+        test_command:
+          type: string
+        publish_command:
+          type: string
+      required:
+      - repository_id
+      - base_branch
+      - test_command
+      - publish_command
+      additionalProperties: false
+    controlplane.host.ConfigureRepository.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.RepositoryRegistration` has changed, and its state is unchanged. The instance is the one `repository_id` names. Emits `ConfigureRepositoryApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.ConfigureRepositoryApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.ConfigureRepositoryApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.ConfigureRepository.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.RepositoryRegistrationNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ConfigureRepositoryApplied.Event:
+      title: ConfigureRepositoryApplied payload
+      x-ess-name: controlplane.host.ConfigureRepositoryApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        repository_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        base_branch:
+          type: string
+        test_command:
+          type: string
+        publish_command:
+          type: string
+      required:
+      - repository_id
+      - base_branch
+      - test_command
+      - publish_command
+      additionalProperties: false
+    controlplane.host.ConfirmPublication.Input:
+      title: ConfirmPublication input
+      x-ess-name: controlplane.host.ConfirmPublication
+      x-ess-kind: command-input
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        receipt:
+          type: string
+      required:
+      - publication_id
+      - receipt
+      additionalProperties: false
+    controlplane.host.ConfirmPublication.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.PublicationIntent` has moved to `Confirmed`, along `confirm`. The instance is the one `publication_id` names. Emits `ConfirmPublicationApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.ConfirmPublicationApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.ConfirmPublicationApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.ConfirmPublication.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentNotFound
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ConfirmPublication.wrong-state.Response:
+      additionalProperties: false
+      description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentStateConflict
+          type: string
+        outcome:
+          const: wrong-state
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.PublicationIntentStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.ConfirmPublicationApplied.Event:
+      title: ConfirmPublicationApplied payload
+      x-ess-name: controlplane.host.ConfirmPublicationApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        receipt:
+          type: string
+      required:
+      - publication_id
+      - receipt
       additionalProperties: false
     controlplane.host.CreateGoal.Input:
       title: CreateGoal input
@@ -2499,6 +3164,10 @@ components:
           type: string
         merge_authority:
           type: boolean
+        revision:
+          type: integer
+        satisfaction_receipt:
+          type: string
         state:
           $ref: '#/components/schemas/controlplane.host.Goal.State'
       required:
@@ -2513,6 +3182,8 @@ components:
       - implementor_model
       - reviewer_model
       - merge_authority
+      - revision
+      - satisfaction_receipt
       - state
       additionalProperties: false
     controlplane.host.GoalStateConflict.Error:
@@ -2526,6 +3197,102 @@ components:
           $ref: '#/components/schemas/controlplane.host.Goal.State'
       required:
       - state
+      additionalProperties: false
+    controlplane.host.MarkPublicationUncertain.Input:
+      title: MarkPublicationUncertain input
+      x-ess-name: controlplane.host.MarkPublicationUncertain
+      x-ess-kind: command-input
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - publication_id
+      additionalProperties: false
+    controlplane.host.MarkPublicationUncertain.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.PublicationIntent` has moved to `Uncertain`, along `uncertain`. The instance is the one `publication_id` names. Emits `MarkPublicationUncertainApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.MarkPublicationUncertainApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.MarkPublicationUncertainApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.MarkPublicationUncertain.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentNotFound
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.MarkPublicationUncertain.wrong-state.Response:
+      additionalProperties: false
+      description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentStateConflict
+          type: string
+        outcome:
+          const: wrong-state
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.PublicationIntentStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.MarkPublicationUncertainApplied.Event:
+      title: MarkPublicationUncertainApplied payload
+      x-ess-name: controlplane.host.MarkPublicationUncertainApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - publication_id
       additionalProperties: false
     controlplane.host.MergeAssignment.Input:
       title: MergeAssignment input
@@ -2723,6 +3490,149 @@ components:
       required:
       - goal_id
       additionalProperties: false
+    controlplane.host.PreparePublication.Input:
+      title: PreparePublication input
+      x-ess-name: controlplane.host.PreparePublication
+      x-ess-kind: command-input
+      type: object
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        candidate:
+          type: string
+        target:
+          type: string
+        expected_base:
+          type: string
+      required:
+      - assignment_id
+      - candidate
+      - target
+      - expected_base
+      additionalProperties: false
+    controlplane.host.PreparePublication.created.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.PublicationIntent` now exists, in `Prepared`. Its identity is published as `publication_id` on `controlplane.host.PublicationIntentCreated`. Emits `PublicationIntentCreated`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: created
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.PublicationIntentCreated
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.PublicationIntentCreated.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.PublicationIntent.State:
+      title: State
+      x-ess-name: controlplane.host.PublicationIntent.State
+      x-ess-kind: enum
+      type: string
+      enum:
+      - Confirmed
+      - Prepared
+      - Uncertain
+    controlplane.host.PublicationIntentCreated.Event:
+      title: PublicationIntentCreated payload
+      x-ess-name: controlplane.host.PublicationIntentCreated
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        candidate:
+          type: string
+        target:
+          type: string
+        expected_base:
+          type: string
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - assignment_id
+      - candidate
+      - target
+      - expected_base
+      - publication_id
+      additionalProperties: false
+    controlplane.host.PublicationIntentList.Response:
+      additionalProperties: false
+      description: The rows of `controlplane.host.PublicationIntentList`.
+      properties:
+        rows:
+          description: Every row the projection holds, in the order it holds them.
+          items:
+            $ref: '#/components/schemas/controlplane.host.PublicationIntentList.Row'
+          type: array
+      required:
+      - rows
+      type: object
+    controlplane.host.PublicationIntentList.Row:
+      title: PublicationIntentList row
+      x-ess-name: controlplane.host.PublicationIntentList
+      x-ess-kind: view-row
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        assignment_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        candidate:
+          type: string
+        target:
+          type: string
+        expected_base:
+          type: string
+        receipt:
+          type: string
+        state:
+          $ref: '#/components/schemas/controlplane.host.PublicationIntent.State'
+      required:
+      - publication_id
+      - assignment_id
+      - candidate
+      - target
+      - expected_base
+      - receipt
+      - state
+      additionalProperties: false
+    controlplane.host.PublicationIntentStateConflict.Error:
+      title: PublicationIntentStateConflict payload
+      x-ess-name: controlplane.host.PublicationIntentStateConflict
+      x-ess-kind: error-payload
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/controlplane.host.PublicationIntent.State'
+      required:
+      - state
+      additionalProperties: false
     controlplane.host.QueueAssignment.Input:
       title: QueueAssignment input
       x-ess-name: controlplane.host.QueueAssignment
@@ -2753,6 +3663,8 @@ components:
           type: string
         reviewer_run:
           type: string
+        goal_revision:
+          type: integer
       required:
       - goal_id
       - repository_id
@@ -2764,6 +3676,7 @@ components:
       - reason
       - implementor_run
       - reviewer_run
+      - goal_revision
       additionalProperties: false
     controlplane.host.QueueAssignment.created.Response:
       additionalProperties: false
@@ -2804,8 +3717,14 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reviewer_run:
+          type: string
+        review_revision:
+          type: string
       required:
       - assignment_id
+      - reviewer_run
+      - review_revision
       additionalProperties: false
     controlplane.host.ReadyAssignment.applied.Response:
       additionalProperties: false
@@ -2889,8 +3808,118 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reviewer_run:
+          type: string
+        review_revision:
+          type: string
       required:
       - assignment_id
+      - reviewer_run
+      - review_revision
+      additionalProperties: false
+    controlplane.host.ReconcileAssignment.Input:
+      title: ReconcileAssignment input
+      x-ess-name: controlplane.host.ReconcileAssignment
+      x-ess-kind: command-input
+      type: object
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        merge_receipt:
+          type: string
+      required:
+      - assignment_id
+      - merge_receipt
+      additionalProperties: false
+    controlplane.host.ReconcileAssignment.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.Assignment` has moved to `Merged`, along `reconcile`. The instance is the one `assignment_id` names. Emits `ReconcileAssignmentApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.ReconcileAssignmentApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.ReconcileAssignmentApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.ReconcileAssignment.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.AssignmentNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ReconcileAssignment.wrong-state.Response:
+      additionalProperties: false
+      description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
+      properties:
+        error:
+          const: controlplane.host.AssignmentStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: wrong-state
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.AssignmentStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.ReconcileAssignmentApplied.Event:
+      title: ReconcileAssignmentApplied payload
+      x-ess-name: controlplane.host.ReconcileAssignmentApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        merge_receipt:
+          type: string
+      required:
+      - assignment_id
+      - merge_receipt
       additionalProperties: false
     controlplane.host.RegisterRepository.Input:
       title: RegisterRepository input
@@ -3005,8 +4034,14 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
+        implementor_run:
+          type: string
       required:
       - assignment_id
+      - reason
+      - implementor_run
       additionalProperties: false
     controlplane.host.RepairAssignment.applied.Response:
       additionalProperties: false
@@ -3090,8 +4125,14 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
+        implementor_run:
+          type: string
       required:
       - assignment_id
+      - reason
+      - implementor_run
       additionalProperties: false
     controlplane.host.RepositoryRegistration.State:
       title: State
@@ -3210,8 +4251,14 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        candidate:
+          type: string
+        test_revision:
+          type: string
       required:
       - assignment_id
+      - candidate
+      - test_revision
       additionalProperties: false
     controlplane.host.ReviewAssignment.applied.Response:
       additionalProperties: false
@@ -3295,8 +4342,14 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        candidate:
+          type: string
+        test_revision:
+          type: string
       required:
       - assignment_id
+      - candidate
+      - test_revision
       additionalProperties: false
     controlplane.host.SatisfyGoal.Input:
       title: SatisfyGoal input
@@ -3308,8 +4361,11 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        satisfaction_receipt:
+          type: string
       required:
       - goal_id
+      - satisfaction_receipt
       additionalProperties: false
     controlplane.host.SatisfyGoal.applied.Response:
       additionalProperties: false
@@ -3393,8 +4449,11 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        satisfaction_receipt:
+          type: string
       required:
       - goal_id
+      - satisfaction_receipt
       additionalProperties: false
     controlplane.host.StartGoal.Input:
       title: StartGoal input
@@ -3493,6 +4552,135 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       required:
       - goal_id
+      additionalProperties: false
+    controlplane.host.UpdateGoal.Input:
+      title: UpdateGoal input
+      x-ess-name: controlplane.host.UpdateGoal
+      x-ess-kind: command-input
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        objective:
+          type: string
+        acceptance:
+          type: string
+        max_workers:
+          type: integer
+        max_attempts:
+          type: integer
+        max_minutes:
+          type: integer
+        planner_model:
+          type: string
+        implementor_model:
+          type: string
+        reviewer_model:
+          type: string
+        merge_authority:
+          type: boolean
+      required:
+      - goal_id
+      - objective
+      - acceptance
+      - max_workers
+      - max_attempts
+      - max_minutes
+      - planner_model
+      - implementor_model
+      - reviewer_model
+      - merge_authority
+      additionalProperties: false
+    controlplane.host.UpdateGoal.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.Goal` has changed, and its state is unchanged. The instance is the one `goal_id` names. Emits `UpdateGoalApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.UpdateGoalApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.UpdateGoalApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.UpdateGoal.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.GoalNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.UpdateGoalApplied.Event:
+      title: UpdateGoalApplied payload
+      x-ess-name: controlplane.host.UpdateGoalApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        objective:
+          type: string
+        acceptance:
+          type: string
+        max_workers:
+          type: integer
+        max_attempts:
+          type: integer
+        max_minutes:
+          type: integer
+        planner_model:
+          type: string
+        implementor_model:
+          type: string
+        reviewer_model:
+          type: string
+        merge_authority:
+          type: boolean
+      required:
+      - goal_id
+      - objective
+      - acceptance
+      - max_workers
+      - max_attempts
+      - max_minutes
+      - planner_model
+      - implementor_model
+      - reviewer_model
+      - merge_authority
       additionalProperties: false
     controlplane.host.Workspace.State:
       title: State
@@ -3618,6 +4806,16 @@ x-ess-entities:
         type: string
       reviewer_run:
         type: string
+      goal_revision:
+        type: integer
+      base_revision:
+        type: string
+      test_revision:
+        type: string
+      review_revision:
+        type: string
+      merge_receipt:
+        type: string
       state:
         $ref: '#/x-ess-entities/controlplane.host.Assignment.State'
     required:
@@ -3632,6 +4830,11 @@ x-ess-entities:
     - reason
     - implementor_run
     - reviewer_run
+    - goal_revision
+    - base_revision
+    - test_revision
+    - review_revision
+    - merge_receipt
     - state
     additionalProperties: false
   controlplane.host.Assignment.State:
@@ -3688,6 +4891,10 @@ x-ess-entities:
         type: string
       merge_authority:
         type: boolean
+      revision:
+        type: integer
+      satisfaction_receipt:
+        type: string
       state:
         $ref: '#/x-ess-entities/controlplane.host.Goal.State'
     required:
@@ -3702,6 +4909,8 @@ x-ess-entities:
     - implementor_model
     - reviewer_model
     - merge_authority
+    - revision
+    - satisfaction_receipt
     - state
     additionalProperties: false
   controlplane.host.Goal.State:
@@ -3714,6 +4923,56 @@ x-ess-entities:
     - Paused
     - Running
     - Satisfied
+  controlplane.host.PublicationIntent:
+    title: PublicationIntent
+    x-ess-name: controlplane.host.PublicationIntent
+    x-ess-kind: entity
+    type: object
+    properties:
+      publication_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      assignment_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        x-ess-relation:
+          name: publications
+          kind: owns
+          source: controlplane.host.Assignment
+          target: controlplane.host.PublicationIntent
+          cardinality: many
+          via: assignment_id
+          $ref: '#/x-ess-entities/controlplane.host.Assignment'
+      candidate:
+        type: string
+      target:
+        type: string
+      expected_base:
+        type: string
+      receipt:
+        type: string
+      state:
+        $ref: '#/x-ess-entities/controlplane.host.PublicationIntent.State'
+    required:
+    - publication_id
+    - assignment_id
+    - candidate
+    - target
+    - expected_base
+    - receipt
+    - state
+    additionalProperties: false
+  controlplane.host.PublicationIntent.State:
+    title: State
+    x-ess-name: controlplane.host.PublicationIntent.State
+    x-ess-kind: enum
+    type: string
+    enum:
+    - Confirmed
+    - Prepared
+    - Uncertain
   controlplane.host.RepositoryRegistration:
     title: RepositoryRegistration
     x-ess-name: controlplane.host.RepositoryRegistration

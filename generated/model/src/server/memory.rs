@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral stores for the generated network entry points; no durability.
@@ -35,6 +35,22 @@ fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::GoalSna
 fn put(&mut self, snapshot: crate::host::GoalSnapshot) { crate::behaviour::GoalStorage::put(&mut self.goal_storage, snapshot); }
 fn delete(&mut self, identity: &crate::primitives::Uuid) { crate::behaviour::GoalStorage::delete(&mut self.goal_storage, identity); }
 fn list(&self) -> Vec<crate::host::GoalSnapshot> { crate::behaviour::GoalStorage::list(&self.goal_storage) }
+}
+
+/// Ephemeral storage of `controlplane.host.PublicationIntent`, shared by clones.
+#[derive(Clone, Default)]
+pub struct MemoryPublicationIntentStorage(std::rc::Rc<std::cell::RefCell<Vec<crate::host::PublicationIntentSnapshot>>>);
+impl crate::behaviour::PublicationIntentStorage for MemoryPublicationIntentStorage {
+fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::PublicationIntentSnapshot> { let key = MemoryKey::Text((identity).0.clone()); self.0.borrow().iter().find(|row| MemoryKey::Text((&row.data.publication_id).0.clone()) == key).cloned() }
+fn put(&mut self, snapshot: crate::host::PublicationIntentSnapshot) { self.delete(&snapshot.data.publication_id); let mut rows = self.0.borrow_mut(); rows.push(snapshot); rows.sort_by(|row, other| MemoryKey::Text((&row.data.publication_id).0.clone()).cmp(&MemoryKey::Text((&other.data.publication_id).0.clone()))); }
+fn delete(&mut self, identity: &crate::primitives::Uuid) { let key = MemoryKey::Text((identity).0.clone()); self.0.borrow_mut().retain(|row| MemoryKey::Text((&row.data.publication_id).0.clone()) != key); }
+fn list(&self) -> Vec<crate::host::PublicationIntentSnapshot> { self.0.borrow().clone() }
+}
+impl crate::behaviour::PublicationIntentStorage for MemoryPorts {
+fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::PublicationIntentSnapshot> { crate::behaviour::PublicationIntentStorage::get(&self.publication_intent_storage, identity) }
+fn put(&mut self, snapshot: crate::host::PublicationIntentSnapshot) { crate::behaviour::PublicationIntentStorage::put(&mut self.publication_intent_storage, snapshot); }
+fn delete(&mut self, identity: &crate::primitives::Uuid) { crate::behaviour::PublicationIntentStorage::delete(&mut self.publication_intent_storage, identity); }
+fn list(&self) -> Vec<crate::host::PublicationIntentSnapshot> { crate::behaviour::PublicationIntentStorage::list(&self.publication_intent_storage) }
 }
 
 /// Ephemeral storage of `controlplane.host.RepositoryRegistration`, shared by clones.
@@ -76,6 +92,8 @@ pub struct MemoryPorts {
 pub assignment_storage: MemoryAssignmentStorage,
 /// Storage of `controlplane.host.Goal`.
 pub goal_storage: MemoryGoalStorage,
+/// Storage of `controlplane.host.PublicationIntent`.
+pub publication_intent_storage: MemoryPublicationIntentStorage,
 /// Storage of `controlplane.host.RepositoryRegistration`.
 pub repository_registration_storage: MemoryRepositoryRegistrationStorage,
 /// Storage of `controlplane.host.Workspace`.
