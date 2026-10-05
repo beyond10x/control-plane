@@ -301,6 +301,18 @@ fn invoke(
     if let Some(key) = guards::registration_key(name, body) {
         next.registration_receipts.insert(key, outcome.clone());
     }
+    if matches!(name, "ClaimAssignment" | "RepairAssignment")
+        && outcome["outcome"] == "applied"
+        && let Some(assignment) = body["assignment_id"]
+            .as_str()
+            .and_then(|id| next.assignments.get(id))
+        && let Some(repository) = next.repositories.get(&assignment.data.repository_id.0)
+    {
+        next.assignment_configs.insert(
+            assignment.data.assignment_id.0.clone(),
+            repository.data.clone(),
+        );
+    }
     Ok((next, outcome))
 }
 

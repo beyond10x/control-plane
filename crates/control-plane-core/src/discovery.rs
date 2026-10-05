@@ -22,7 +22,8 @@ pub fn discover(path: &Path) -> Result<DiscoveredWorkspace> {
         .canonicalize()
         .context("workspace directory does not exist")?;
     ensure!(path.is_dir(), "workspace must be a directory");
-    if let Ok(repo) = repository(&path) {
+    if git(&path, &["rev-parse", "--show-toplevel"]).is_ok() {
+        let repo = repository(&path)?;
         return Ok(DiscoveredWorkspace {
             path: repo.path.clone(),
             repositories: vec![repo],
@@ -46,7 +47,31 @@ pub(crate) fn repository(path: &Path) -> Result<DiscoveredRepository> {
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )?)
     .canonicalize()?;
-    let branch = git(&root, &["symbolic-ref", "--short", "HEAD"])?;
+    let branch = match git(&root, &["symbolic-ref", "--short", "HEAD"]) {
+        Ok(branch) => branch,
+        Err(_) => {
+            let branches = git(
+                &root,
+                &[
+                    "for-each-ref",
+                    "--points-at=HEAD",
+                    "--format=%(refname:short)",
+                    "refs/heads",
+                ],
+            )?;
+            let names: Vec<_> = branches.lines().collect();
+            if names.len() == 1 {
+                names[0].to_owned()
+            } else {
+                let remote = git(&root, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+                    .context("detached Git repository needs an unambiguous base branch; select a branch before registering it")?;
+                remote
+                    .strip_prefix("origin/")
+                    .context("origin HEAD has no branch")?
+                    .to_owned()
+            }
+        }
+    };
     let name = root
         .file_name()
         .context("repository has no directory name")?
