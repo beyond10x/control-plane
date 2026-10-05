@@ -514,33 +514,65 @@ async fn record(store: &SharedStore, goal: &Value, progress: &Value) -> Result<(
 }
 
 fn activity_receipt(current: &Value, progress: &Value) -> Result<String> {
-    let parse = |row: &Value| -> Value {
-        row["planning_receipt"]
-            .as_str()
-            .and_then(|s| serde_json::from_str(s).ok())
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}))
+    let parse = |row: &Value| -> Result<Value> {
+        let text = row["planning_receipt"].as_str().unwrap_or_default();
+        if text.is_empty() {
+            return Ok(json!({}));
+        }
+        let receipt: Value = serde_json::from_str(text).context("invalid planning receipt")?;
+        ensure!(receipt.is_object(), "planning receipt must be an object");
+        Ok(receipt)
     };
-    let mut combined = parse(current);
-    let incoming = parse(progress);
-    let kind = incoming["kind"].as_str().unwrap_or_default();
+    let saved = parse(current)?;
+    let incoming = parse(progress)?;
+    let mut combined = saved.clone();
+    // Persisted envelopes are snapshots, never new tool events. Flatten envelopes
+    // written by older versions, retaining the authoritative outer fleet fields.
+    let saved_evidence = if activity_envelope(&saved) {
+        planner_evidence(&saved)
+    } else if saved["kind"].is_string() {
+        Some(saved.clone())
+    } else {
+        None
+    };
+    let fields = combined.as_object_mut().context("receipt not object")?;
+    if fields.get("kind").is_some_and(Value::is_string) {
+        for key in ["kind", "receipt", "activity_id"] {
+            fields.remove(key);
+        }
+    }
+    fields.remove("planner");
+    if let Some(evidence) = saved_evidence.as_ref() {
+        fields.insert("planner".into(), evidence.clone());
+    }
+    let fresh = !activity_envelope(&incoming)
+        && incoming != saved
+        && saved_evidence.as_ref() != Some(&incoming);
+    let kind = if fresh {
+        incoming["kind"].as_str().unwrap_or_default()
+    } else {
+        ""
+    };
     let detail = &incoming["receipt"];
     let mut event = if kind == "activity" {
         Some(detail.clone())
     } else if !kind.is_empty() {
         let label = match kind {
-            "intent" => format!(
-                "Executing {}",
-                detail["action"].as_str().unwrap_or("planner tool")
-            ),
+            "intent" => intent_label(detail),
             "observation" => "Repository operation completed".into(),
             "plan-approved" => "Independent plan review passed".into(),
             "accept-story" => format!("Accepting {}", detail["story"].as_str().unwrap_or("story")),
             "adopt" => "Initializing the repository planning store".into(),
             _ => kind.to_owned(),
         };
+        // These two hooks follow successful effects. All other generic hooks
+        // announce work or observations without proof of successful completion.
+        let status = match kind {
+            "observation" | "plan-approved" => "completed",
+            _ => "running",
+        };
         Some(
-            json!({"action":format!("planner.{kind}"),"role":"planner","detail":label,"status":if kind=="intent" {"running"} else {"completed"}}),
+            json!({"action":format!("planner.{kind}"),"role":"planner","detail":label,"status":status}),
         )
     } else if current["planning_phase"] != progress["planning_phase"] {
         let phase = progress["planning_phase"].as_str().unwrap_or("Idle");
@@ -551,8 +583,9 @@ fn activity_receipt(current: &Value, progress: &Value) -> Result<String> {
         None
     };
     if let Some(mut activity) = event.take() {
-        let id = incoming["activity_id"]
-            .as_str()
+        let id = (!kind.is_empty())
+            .then(|| incoming["activity_id"].as_str())
+            .flatten()
             .map(str::to_owned)
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         if combined["last_activity"]["id"] != id {
@@ -572,11 +605,73 @@ fn activity_receipt(current: &Value, progress: &Value) -> Result<String> {
             combined["last_activity"] = activity;
         }
     }
-    if incoming.as_object().is_some_and(|v| !v.is_empty()) {
+    if fresh && incoming.as_object().is_some_and(|v| !v.is_empty()) {
         combined["planner"] = incoming;
     }
     Ok(combined.to_string())
 }
+
+fn activity_envelope(receipt: &Value) -> bool {
+    receipt["activity"].is_array()
+        || receipt["last_activity"].is_object()
+        || receipt["planner"].is_object()
+}
+
+fn planner_evidence(mut receipt: &Value) -> Option<Value> {
+    while activity_envelope(receipt) {
+        receipt = receipt.get("planner")?;
+    }
+    receipt
+        .as_object()
+        .filter(|fields| !fields.is_empty())
+        .map(|_| receipt.clone())
+}
+
+fn intent_label(detail: &Value) -> String {
+    let single_line = |value: &str| value.lines().next().unwrap_or_default().to_owned();
+    let label = match detail["action"].as_str() {
+        Some("read") => {
+            let paths = detail["paths"]
+                .as_array()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .take(3)
+                        .filter_map(Value::as_str)
+                        .map(single_line)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            format!("Reading {paths}")
+        }
+        Some("write_specification") => format!(
+            "Writing specification {}",
+            single_line(detail["path"].as_str().unwrap_or_default())
+        ),
+        Some("aep") => {
+            // Only command words; flags, values and request bodies stay in the
+            // full receipt, never in the concise activity label.
+            let command = detail["args"]
+                .as_array()
+                .map(|args| {
+                    args.iter()
+                        .take(3)
+                        .filter_map(Value::as_str)
+                        .take_while(|arg| !arg.starts_with('-'))
+                        .map(single_line)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            format!("Executing aep {command}")
+        }
+        Some("finish") => "Validating the engineering plan".into(),
+        _ => "Executing planner tool".into(),
+    };
+    label.chars().take(240).collect()
+}
+
 async fn fingerprint(
     goal: &Value,
     repositories: &[Value],
@@ -635,4 +730,175 @@ fn commit_plan(path: &Path, runner: &ProcessRunner, command: &[String]) -> Resul
         .command(path, "git", &["rev-parse", "HEAD"])?
         .trim()
         .to_owned())
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+
+    fn row(phase: &str, receipt: Value) -> Value {
+        json!({"revision":2,"planning_phase":phase,"planning_reason":"tool refused",
+            "planning_worktree_path":"worktree","planning_receipt":receipt.to_string()})
+    }
+
+    fn normalize(current: &Value, progress: &Value) -> Value {
+        serde_json::from_str(&activity_receipt(current, progress).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn pre_effect_events_never_claim_completion_after_refusal() {
+        for kind in ["intent", "prepare-branch", "adopt", "accept-story"] {
+            let current = row("Provisioning", json!({}));
+            let started = normalize(
+                &current,
+                &row(
+                    "Provisioning",
+                    json!({
+                        "kind":kind,"receipt":{"action":"test","story":"story:test"},"activity_id":"start"
+                    }),
+                ),
+            );
+            assert_eq!(started["last_activity"]["status"], "running", "{kind}");
+            let blocked = normalize(
+                &row("Provisioning", started.clone()),
+                &row("Blocked", started),
+            );
+            assert_eq!(blocked["last_activity"]["action"], "planning.Blocked");
+            assert_eq!(blocked["last_activity"]["status"], "failed");
+            assert!(
+                blocked["activity"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|event| event["status"] != "completed")
+            );
+        }
+    }
+
+    #[test]
+    fn copied_envelope_stays_flat_and_preserves_opaque_fleet_evidence() {
+        let evidence = json!({"namespace":"plan:2","steps":["validated"],"revision":"abc"});
+        let fleet = json!({"assignment":"a","receipt":{"candidate":"def"}});
+        let mut receipt = json!({"activity":[],"planner":evidence,"fleet":fleet});
+        for _ in 0..180 {
+            let current = row("Blocked", receipt.clone());
+            receipt = normalize(&current, &current);
+            assert!(receipt["planner"].get("activity").is_none());
+            assert_eq!(receipt["planner"], evidence);
+            assert_eq!(receipt["fleet"], fleet);
+            assert!(receipt.to_string().len() < 1024);
+        }
+    }
+
+    #[test]
+    fn legacy_receipt_is_evidence_not_a_replayed_event_on_phase_change() {
+        let legacy = json!({"kind":"observation","receipt":"old successful operation"});
+        let receipt = normalize(
+            &row("Provisioning", legacy.clone()),
+            &row("Blocked", legacy.clone()),
+        );
+        assert_eq!(receipt["last_activity"]["action"], "planning.Blocked");
+        assert_eq!(receipt["last_activity"]["status"], "failed");
+        assert!(receipt.get("kind").is_none());
+        assert_eq!(receipt["planner"], legacy);
+    }
+
+    #[test]
+    fn old_nested_envelope_flattens_without_replacing_current_fleet_state() {
+        let evidence = json!({"namespace":"plan:2","revision":"abc","steps":["validated"]});
+        let old = json!({"activity":[],"planner":evidence,"fleet":{"a":"older"}});
+        let current = row(
+            "Planning",
+            json!({"kind":"observation","receipt":"stale",
+            "activity":[],"planner":old,"fleet":{"a":"current"},"acceptance":{"status":"waiting"}}),
+        );
+        let result = normalize(&current, &row("Blocked", old));
+        assert_eq!(result["planner"], evidence);
+        assert_eq!(result["fleet"]["a"], "current");
+        assert_eq!(result["acceptance"]["status"], "waiting");
+        assert!(result.get("kind").is_none());
+        assert_eq!(result["last_activity"]["action"], "planning.Blocked");
+    }
+
+    #[test]
+    fn corrupt_durable_receipt_is_not_silently_replaced() {
+        let mut current = row("Planning", json!({}));
+        current["planning_receipt"] = json!("{broken");
+        assert!(activity_receipt(&current, &row("Blocked", json!({}))).is_err());
+    }
+
+    #[test]
+    fn copied_leaf_activity_id_does_not_hide_final_phase() {
+        let incoming = json!({"kind":"intent","receipt":{"action":"read"},"activity_id":"read"});
+        let receipt = normalize(
+            &row("Planning", json!({})),
+            &row("Planning", incoming.clone()),
+        );
+        let result = normalize(&row("Planning", receipt), &row("Blocked", incoming));
+        assert_eq!(result["last_activity"]["action"], "planning.Blocked");
+        assert_eq!(result["activity"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn intent_labels_include_bounded_targets_but_never_body_or_contents() {
+        for (detail, expected) in [
+            (
+                json!({"action":"read","paths":["README.md","ess/system.yaml"]}),
+                "README.md, ess/system.yaml",
+            ),
+            (
+                json!({"action":"write_specification","path":"ess/system.yaml","contents":"private body"}),
+                "ess/system.yaml",
+            ),
+            (
+                json!({"action":"aep","args":["plan","artifact","create","--body","private body"],"body":"private body"}),
+                "aep plan artifact create",
+            ),
+        ] {
+            let receipt = normalize(
+                &row("Planning", json!({})),
+                &row("Planning", json!({"kind":"intent","receipt":detail})),
+            );
+            let label = receipt["last_activity"]["detail"].as_str().unwrap();
+            assert!(label.contains(expected), "{label}");
+            assert!(!label.contains("private body"));
+        }
+        let receipt = normalize(
+            &row("Planning", json!({})),
+            &row(
+                "Planning",
+                json!({"kind":"intent","receipt":{"action":"read","paths":["長".repeat(2048)]}}),
+            ),
+        );
+        assert!(
+            receipt["last_activity"]["detail"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .count()
+                <= 240
+        );
+    }
+
+    #[test]
+    fn true_observations_and_model_results_remain_completed_and_history_is_bounded() {
+        let mut receipt = json!({"fleet_checkpoint":{"assignment":"a"}});
+        for index in 0..90 {
+            let incoming = match index % 3 {
+                0 => json!({"kind":"observation","receipt":"command exited successfully"}),
+                1 => json!({"kind":"plan-approved","receipt":{"reason":"verified"}}),
+                _ => {
+                    json!({"kind":"activity","receipt":{"action":"model.completed","status":"completed"}})
+                }
+            };
+            let mut incoming = incoming;
+            incoming["activity_id"] = json!(index.to_string());
+            receipt = normalize(&row("Planning", receipt), &row("Planning", incoming));
+            assert_eq!(receipt["last_activity"]["status"], "completed");
+        }
+        assert_eq!(receipt["activity"].as_array().unwrap().len(), 64);
+        assert_eq!(receipt["activity"][0]["id"], "26");
+        assert_eq!(receipt["last_activity"]["id"], "89");
+        assert_eq!(receipt["fleet_checkpoint"]["assignment"], "a");
+    }
 }
