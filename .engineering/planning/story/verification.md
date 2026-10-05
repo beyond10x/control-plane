@@ -10,6 +10,7 @@ relations:
 - depends_on: story:implementation-fleet
 - depends_on: story:operator-console
 - depends_on: story:contract-verification
+- depends_on: story:workspace-directories
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask

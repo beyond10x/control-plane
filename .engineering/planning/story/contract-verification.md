@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:contract-verification
 kind: story
-status: active
+status: implemented
 title: Real durable ESS conformance and generated drift gate
 relations:
 - decomposes: epic:bootstrap
@@ -11,10 +11,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T20:47:07Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T20:47:07Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-05T21:18:26Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 ## Outcome
 Run the generated ESS suite against the real durable contract store and drift-check generated source before planner/fleet qualification. This extracts the independently executable contract gate from story:verification so feedback is available during the next implementation wave. The final two-repository qualification remains with story:verification.

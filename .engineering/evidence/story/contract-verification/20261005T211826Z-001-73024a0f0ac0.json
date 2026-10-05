@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:18:26Z",
+  "actor": "human:timo",
+  "artifact": "story:contract-verification",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Real contract suite152 passed; negative mutation150 passed2 failed; generator repair9 tests passed",
+    "reference": "git:694ec51"
+  }
+}
