@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-contract digest slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+contract digest slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 do not edit: regenerate with `ess generate`
 -->
 
@@ -10,6 +10,12 @@ do not edit: regenerate with `ess generate`
 Local workspace goals and assignments; AEP owns stories, Loom owns agent executions.
 
 `controlplane.host` is one of controlplane's bounded contexts. [Back to the index](../index.md).
+
+## Types
+
+### `PlanningPhase`
+
+`controlplane.host.PlanningPhase` is one of `Idle`, `Provisioning`, `Planning`, `Validated`, `Queued` and `Blocked`.
 
 ## Entities
 
@@ -150,6 +156,14 @@ It holds:
 - `merge_authority` — `Boolean`
 - `revision` — `Integer`
 - `satisfaction_receipt` — `String`
+- `planning_revision` — `Integer`
+- `planning_fingerprint` — `String`
+- `planning_repository` — `String`
+- `planning_worktree_id` — `String`
+- `planning_worktree_path` — `String`
+- `planning_reason` — `String`
+- `planning_receipt` — `String`
+- `planning_phase` — `controlplane.host.PlanningPhase`
 
 It owns any number of [`Assignment`](#assignment), as `assignments`, carried by `Assignment.goal_id`. Its `workspace_id` is what [`Workspace`](#workspace) owns it by, as `goals`.
 
@@ -380,6 +394,14 @@ It exposes:
 - `revision` — `Integer`
 - `satisfaction_receipt` — `String`
 - `state` — `controlplane.host.Goal.State`
+- `planning_revision` — `Integer`
+- `planning_fingerprint` — `String`
+- `planning_repository` — `String`
+- `planning_worktree_id` — `String`
+- `planning_worktree_path` — `String`
+- `planning_reason` — `String`
+- `planning_receipt` — `String`
+- `planning_phase` — `controlplane.host.PlanningPhase`
 
 It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
 
@@ -614,7 +636,7 @@ It takes:
 
 It has one outcome.
 
-**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Goal`, which starts in `Paused`. The new instance's identity is published as `goal_id` on `controlplane.host.GoalCreated`. It emits `controlplane.host.GoalCreated`. It sets `workspace_id` from `input.workspace_id`, `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `"1"` and `satisfaction_receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Goal`, which starts in `Paused`. The new instance's identity is published as `goal_id` on `controlplane.host.GoalCreated`. It emits `controlplane.host.GoalCreated`. It sets `workspace_id` from `input.workspace_id`, `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `"1"`, `satisfaction_receipt` from `""`, `planning_revision` from `"0"`, `planning_fingerprint` from `""`, `planning_repository` from `""`, `planning_worktree_id` from `""`, `planning_worktree_path` from `""`, `planning_reason` from `""`, `planning_receipt` from `""` and `planning_phase` from `"Idle"`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 ### `DisableRepositoryRegistration`
 
@@ -768,6 +790,28 @@ It has three outcomes.
 
 **`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Cancelled`, `Implementing`, `Merged`, `Queued`, `ReadyToMerge` and `Reviewing`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
+### `RecordPlanningProgress`
+
+`controlplane.host.RecordPlanningProgress`.
+
+It takes:
+
+- `goal_id` — `Uuid`
+- `planning_revision` — `Integer`
+- `planning_fingerprint` — `String`
+- `planning_repository` — `String`
+- `planning_worktree_id` — `String`
+- `planning_worktree_path` — `String`
+- `planning_reason` — `String`
+- `planning_receipt` — `String`
+- `planning_phase` — `controlplane.host.PlanningPhase`
+
+It has two outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It changes a `controlplane.host.Goal` without moving it along its lifecycle. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.PlanningProgressRecorded`. It sets `planning_revision` from `input.planning_revision`, `planning_fingerprint` from `input.planning_fingerprint`, `planning_repository` from `input.planning_repository`, `planning_worktree_id` from `input.planning_worktree_id`, `planning_worktree_path` from `input.planning_worktree_path`, `planning_reason` from `input.planning_reason`, `planning_receipt` from `input.planning_receipt` and `planning_phase` from `input.planning_phase`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
 ### `RegisterRepository`
 
 `controlplane.host.RegisterRepository`.
@@ -887,7 +931,7 @@ It takes:
 
 It has two outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It changes a `controlplane.host.Goal` without moving it along its lifecycle. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.UpdateGoalApplied`. It sets `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `its previous value plus 1` and `satisfaction_receipt` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It changes a `controlplane.host.Goal` without moving it along its lifecycle. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.UpdateGoalApplied`. It sets `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `its previous value plus 1`, `satisfaction_receipt` from `""` and `planning_fingerprint` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
@@ -1062,6 +1106,14 @@ It carries:
 - `implementor_model` — `String`
 - `reviewer_model` — `String`
 - `merge_authority` — `Boolean`
+- `planning_revision` — `Integer`
+- `planning_fingerprint` — `String`
+- `planning_repository` — `String`
+- `planning_worktree_id` — `String`
+- `planning_worktree_path` — `String`
+- `planning_reason` — `String`
+- `planning_receipt` — `String`
+- `planning_phase` — `controlplane.host.PlanningPhase`
 
 Emitted by `controlplane.host.CreateGoal` on its `created` outcome.
 
@@ -1100,6 +1152,26 @@ It carries:
 - `goal_id` — `Uuid`
 
 Emitted by `controlplane.host.PauseGoal` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `PlanningProgressRecorded`
+
+`controlplane.host.PlanningProgressRecorded`.
+
+It carries:
+
+- `goal_id` — `Uuid`
+- `planning_revision` — `Integer`
+- `planning_fingerprint` — `String`
+- `planning_repository` — `String`
+- `planning_worktree_id` — `String`
+- `planning_worktree_path` — `String`
+- `planning_reason` — `String`
+- `planning_receipt` — `String`
+- `planning_phase` — `controlplane.host.PlanningPhase`
+
+Emitted by `controlplane.host.RecordPlanningProgress` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
@@ -1315,6 +1387,8 @@ Reported by `controlplane.host.CancelGoal` on its `not-found` outcome.
 
 Reported by `controlplane.host.PauseGoal` on its `not-found` outcome.
 
+Reported by `controlplane.host.RecordPlanningProgress` on its `not-found` outcome.
+
 Reported by `controlplane.host.SatisfyGoal` on its `not-found` outcome.
 
 Reported by `controlplane.host.StartGoal` on its `not-found` outcome.
@@ -1411,9 +1485,9 @@ It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoa
 
 `controlplane.host.Supervisor`.
 
-It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`CompleteAssignment`](#completeassignment), [`ConfirmPublication`](#confirmpublication), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MarkPublicationUncertain`](#markpublicationuncertain), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`PreparePublication`](#preparepublication), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`ReconcileAssignment`](#reconcileassignment), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
+It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`CompleteAssignment`](#completeassignment), [`ConfirmPublication`](#confirmpublication), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MarkPublicationUncertain`](#markpublicationuncertain), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`PreparePublication`](#preparepublication), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`ReconcileAssignment`](#reconcileassignment), [`RecordPlanningProgress`](#recordplanningprogress), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
 
 
 ---
 
-Generated from controlplane v1 · model digest `d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a` · contract digest `slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b` · contract digest `slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55`. Do not edit this file; change the specification and regenerate it with `ess generate`.

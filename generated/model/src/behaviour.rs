@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -382,8 +382,16 @@ where
             merge_authority: input.merge_authority.clone(),
             revision: 1,
             satisfaction_receipt: "".to_owned(),
+            planning_revision: 0,
+            planning_fingerprint: "".to_owned(),
+            planning_repository: "".to_owned(),
+            planning_worktree_id: "".to_owned(),
+            planning_worktree_path: "".to_owned(),
+            planning_reason: "".to_owned(),
+            planning_receipt: "".to_owned(),
+            planning_phase: crate::host::PlanningPhase::Idle,
         };
-        let answer = crate::host::CreateGoalOutcome::Created { goal_created: crate::host::GoalCreated { goal_id: identity.clone(), workspace_id: input.workspace_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
+        let answer = crate::host::CreateGoalOutcome::Created { goal_created: crate::host::GoalCreated { goal_id: identity.clone(), workspace_id: input.workspace_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone(), planning_revision: 0, planning_fingerprint: "".to_owned(), planning_repository: "".to_owned(), planning_worktree_id: "".to_owned(), planning_worktree_path: "".to_owned(), planning_reason: "".to_owned(), planning_receipt: "".to_owned(), planning_phase: crate::host::PlanningPhase::Idle } };
         GoalStorage::put(&mut self.ports, crate::host::AnyGoal::Paused(crate::host::Goal::new(data)).snapshot());
         return Ok(answer);
     }
@@ -617,6 +625,33 @@ where
     }
 }
 
+/// `controlplane.host.RecordPlanningProgress`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::RecordPlanningProgressBehavior for Generated<P>
+where
+    P: GoalStorage,
+{
+    fn record_planning_progress(&mut self, input: crate::host::RecordPlanningProgress) -> Result<crate::host::RecordPlanningProgressOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+            return Ok(crate::host::RecordPlanningProgressOutcome::NotFound { error: crate::host::GoalNotFound });
+        };
+        let _ = &held;
+        let mut next = held;
+        next.data.planning_revision = input.planning_revision.clone();
+        next.data.planning_fingerprint = input.planning_fingerprint.clone();
+        next.data.planning_repository = input.planning_repository.clone();
+        next.data.planning_worktree_id = input.planning_worktree_id.clone();
+        next.data.planning_worktree_path = input.planning_worktree_path.clone();
+        next.data.planning_reason = input.planning_reason.clone();
+        next.data.planning_receipt = input.planning_receipt.clone();
+        next.data.planning_phase = input.planning_phase.clone();
+        let answer = crate::host::RecordPlanningProgressOutcome::Applied { planning_progress_recorded: crate::host::PlanningProgressRecorded { goal_id: input.goal_id.clone(), planning_revision: input.planning_revision.clone(), planning_fingerprint: input.planning_fingerprint.clone(), planning_repository: input.planning_repository.clone(), planning_worktree_id: input.planning_worktree_id.clone(), planning_worktree_path: input.planning_worktree_path.clone(), planning_reason: input.planning_reason.clone(), planning_receipt: input.planning_receipt.clone(), planning_phase: input.planning_phase.clone() } };
+        GoalStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.RegisterRepository`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::RegisterRepositoryBehavior for Generated<P>
 where
@@ -794,6 +829,7 @@ where
         next.data.merge_authority = input.merge_authority.clone();
         next.data.revision = before.revision + 1;
         next.data.satisfaction_receipt = "".to_owned();
+        next.data.planning_fingerprint = "".to_owned();
         let answer = crate::host::UpdateGoalOutcome::Applied { update_goal_applied: crate::host::UpdateGoalApplied { goal_id: input.goal_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
         GoalStorage::put(&mut self.ports, next);
         return Ok(answer);
@@ -856,6 +892,14 @@ where
                 revision: held.data.revision,
                 satisfaction_receipt: held.data.satisfaction_receipt,
                 state: held.state,
+                planning_revision: held.data.planning_revision,
+                planning_fingerprint: held.data.planning_fingerprint,
+                planning_repository: held.data.planning_repository,
+                planning_worktree_id: held.data.planning_worktree_id,
+                planning_worktree_path: held.data.planning_worktree_path,
+                planning_reason: held.data.planning_reason,
+                planning_receipt: held.data.planning_receipt,
+                planning_phase: held.data.planning_phase,
             })
             .collect())
     }
