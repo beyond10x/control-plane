@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-// contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -65,6 +65,29 @@ pub fn decode_controlplane_host_goal_state(value: &json::Value, at: &str) -> Res
         "Running" => crate::host::GoalState::Running,
         "Satisfied" => crate::host::GoalState::Satisfied,
         other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Cancelled`, `Paused`, `Running`, `Satisfied`".to_owned(), found: format!("`{other}`") }),
+    })
+}
+
+/// Writes `controlplane.host.PublicationIntent.State` as JSON.
+pub fn encode_controlplane_host_publication_intent_state(value: &crate::host::PublicationIntentState, out: &mut String) {
+    match value {
+        crate::host::PublicationIntentState::Confirmed => json::push_text(out, "Confirmed"),
+        crate::host::PublicationIntentState::Prepared => json::push_text(out, "Prepared"),
+        crate::host::PublicationIntentState::Uncertain => json::push_text(out, "Uncertain"),
+    }
+}
+
+/// Reads `controlplane.host.PublicationIntent.State` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_controlplane_host_publication_intent_state(value: &json::Value, at: &str) -> Result<crate::host::PublicationIntentState, json::DecodeError> {
+    Ok(match json::text_at(value, at, "one of `Confirmed`, `Prepared`, `Uncertain`")? {
+        "Confirmed" => crate::host::PublicationIntentState::Confirmed,
+        "Prepared" => crate::host::PublicationIntentState::Prepared,
+        "Uncertain" => crate::host::PublicationIntentState::Uncertain,
+        other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Confirmed`, `Prepared`, `Uncertain`".to_owned(), found: format!("`{other}`") }),
     })
 }
 
@@ -143,6 +166,8 @@ pub fn encode_event_controlplane_host_assignment_created(value: &crate::host::As
     json::push_text(out, &value.implementor_run);
     json::member(out, "reviewer_run");
     json::push_text(out, &value.reviewer_run);
+    json::member(out, "goal_revision");
+    json::push_integer(out, value.goal_revision);
     out.push('}');
 }
 
@@ -151,6 +176,8 @@ pub fn encode_event_controlplane_host_block_assignment_applied(value: &crate::ho
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
     out.push('}');
 }
 
@@ -175,6 +202,12 @@ pub fn encode_event_controlplane_host_claim_assignment_applied(value: &crate::ho
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "worktree_id");
+    json::push_text(out, &value.worktree_id);
+    json::member(out, "implementor_run");
+    json::push_text(out, &value.implementor_run);
+    json::member(out, "base_revision");
+    json::push_text(out, &value.base_revision);
     out.push('}');
 }
 
@@ -183,6 +216,32 @@ pub fn encode_event_controlplane_host_complete_assignment_applied(value: &crate:
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "merge_receipt");
+    json::push_text(out, &value.merge_receipt);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.ConfigureRepositoryApplied` as JSON.
+pub fn encode_event_controlplane_host_configure_repository_applied(value: &crate::host::ConfigureRepositoryApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "repository_id");
+    json::push_text(out, &value.repository_id.0);
+    json::member(out, "base_branch");
+    json::push_text(out, &value.base_branch);
+    json::member(out, "test_command");
+    json::push_text(out, &value.test_command);
+    json::member(out, "publish_command");
+    json::push_text(out, &value.publish_command);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.ConfirmPublicationApplied` as JSON.
+pub fn encode_event_controlplane_host_confirm_publication_applied(value: &crate::host::ConfirmPublicationApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    json::member(out, "receipt");
+    json::push_text(out, &value.receipt);
     out.push('}');
 }
 
@@ -230,6 +289,14 @@ pub fn encode_event_controlplane_host_goal_created(value: &crate::host::GoalCrea
     out.push('}');
 }
 
+/// Writes the event `controlplane.host.MarkPublicationUncertainApplied` as JSON.
+pub fn encode_event_controlplane_host_mark_publication_uncertain_applied(value: &crate::host::MarkPublicationUncertainApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    out.push('}');
+}
+
 /// Writes the event `controlplane.host.MergeAssignmentApplied` as JSON.
 pub fn encode_event_controlplane_host_merge_assignment_applied(value: &crate::host::MergeAssignmentApplied, out: &mut String) {
     out.push('{');
@@ -246,11 +313,41 @@ pub fn encode_event_controlplane_host_pause_goal_applied(value: &crate::host::Pa
     out.push('}');
 }
 
+/// Writes the event `controlplane.host.PublicationIntentCreated` as JSON.
+pub fn encode_event_controlplane_host_publication_intent_created(value: &crate::host::PublicationIntentCreated, out: &mut String) {
+    out.push('{');
+    json::member(out, "assignment_id");
+    json::push_text(out, &value.assignment_id.0);
+    json::member(out, "candidate");
+    json::push_text(out, &value.candidate);
+    json::member(out, "target");
+    json::push_text(out, &value.target);
+    json::member(out, "expected_base");
+    json::push_text(out, &value.expected_base);
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    out.push('}');
+}
+
 /// Writes the event `controlplane.host.ReadyAssignmentApplied` as JSON.
 pub fn encode_event_controlplane_host_ready_assignment_applied(value: &crate::host::ReadyAssignmentApplied, out: &mut String) {
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reviewer_run");
+    json::push_text(out, &value.reviewer_run);
+    json::member(out, "review_revision");
+    json::push_text(out, &value.review_revision);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.ReconcileAssignmentApplied` as JSON.
+pub fn encode_event_controlplane_host_reconcile_assignment_applied(value: &crate::host::ReconcileAssignmentApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "assignment_id");
+    json::push_text(out, &value.assignment_id.0);
+    json::member(out, "merge_receipt");
+    json::push_text(out, &value.merge_receipt);
     out.push('}');
 }
 
@@ -259,6 +356,10 @@ pub fn encode_event_controlplane_host_repair_assignment_applied(value: &crate::h
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
+    json::member(out, "implementor_run");
+    json::push_text(out, &value.implementor_run);
     out.push('}');
 }
 
@@ -289,6 +390,10 @@ pub fn encode_event_controlplane_host_review_assignment_applied(value: &crate::h
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "candidate");
+    json::push_text(out, &value.candidate);
+    json::member(out, "test_revision");
+    json::push_text(out, &value.test_revision);
     out.push('}');
 }
 
@@ -297,6 +402,8 @@ pub fn encode_event_controlplane_host_satisfy_goal_applied(value: &crate::host::
     out.push('{');
     json::member(out, "goal_id");
     json::push_text(out, &value.goal_id.0);
+    json::member(out, "satisfaction_receipt");
+    json::push_text(out, &value.satisfaction_receipt);
     out.push('}');
 }
 
@@ -305,6 +412,32 @@ pub fn encode_event_controlplane_host_start_goal_applied(value: &crate::host::St
     out.push('{');
     json::member(out, "goal_id");
     json::push_text(out, &value.goal_id.0);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.UpdateGoalApplied` as JSON.
+pub fn encode_event_controlplane_host_update_goal_applied(value: &crate::host::UpdateGoalApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
+    json::member(out, "objective");
+    json::push_text(out, &value.objective);
+    json::member(out, "acceptance");
+    json::push_text(out, &value.acceptance);
+    json::member(out, "max_workers");
+    json::push_integer(out, value.max_workers);
+    json::member(out, "max_attempts");
+    json::push_integer(out, value.max_attempts);
+    json::member(out, "max_minutes");
+    json::push_integer(out, value.max_minutes);
+    json::member(out, "planner_model");
+    json::push_text(out, &value.planner_model);
+    json::member(out, "implementor_model");
+    json::push_text(out, &value.implementor_model);
+    json::member(out, "reviewer_model");
+    json::push_text(out, &value.reviewer_model);
+    json::member(out, "merge_authority");
+    json::push_bool(out, value.merge_authority);
     out.push('}');
 }
 
@@ -345,6 +478,20 @@ pub fn encode_error_controlplane_host_goal_state_conflict(value: &crate::host::G
     out.push('{');
     json::member(out, "state");
     encode_controlplane_host_goal_state(&value.state, out);
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.PublicationIntentNotFound` as JSON.
+pub fn encode_error_controlplane_host_publication_intent_not_found(_value: &crate::host::PublicationIntentNotFound, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.PublicationIntentStateConflict` as JSON.
+pub fn encode_error_controlplane_host_publication_intent_state_conflict(value: &crate::host::PublicationIntentStateConflict, out: &mut String) {
+    out.push('{');
+    json::member(out, "state");
+    encode_controlplane_host_publication_intent_state(&value.state, out);
     out.push('}');
 }
 
@@ -401,6 +548,16 @@ pub fn encode_view_controlplane_host_assignment_list(value: &crate::host::Assign
     json::push_text(out, &value.implementor_run);
     json::member(out, "reviewer_run");
     json::push_text(out, &value.reviewer_run);
+    json::member(out, "goal_revision");
+    json::push_integer(out, value.goal_revision);
+    json::member(out, "base_revision");
+    json::push_text(out, &value.base_revision);
+    json::member(out, "test_revision");
+    json::push_text(out, &value.test_revision);
+    json::member(out, "review_revision");
+    json::push_text(out, &value.review_revision);
+    json::member(out, "merge_receipt");
+    json::push_text(out, &value.merge_receipt);
     json::member(out, "state");
     encode_controlplane_host_assignment_state(&value.state, out);
     out.push('}');
@@ -431,8 +588,32 @@ pub fn encode_view_controlplane_host_goal_list(value: &crate::host::GoalList, ou
     json::push_text(out, &value.reviewer_model);
     json::member(out, "merge_authority");
     json::push_bool(out, value.merge_authority);
+    json::member(out, "revision");
+    json::push_integer(out, value.revision);
+    json::member(out, "satisfaction_receipt");
+    json::push_text(out, &value.satisfaction_receipt);
     json::member(out, "state");
     encode_controlplane_host_goal_state(&value.state, out);
+    out.push('}');
+}
+
+/// Writes one row of the view `controlplane.host.PublicationIntentList` as JSON.
+pub fn encode_view_controlplane_host_publication_intent_list(value: &crate::host::PublicationIntentList, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    json::member(out, "assignment_id");
+    json::push_text(out, &value.assignment_id.0);
+    json::member(out, "candidate");
+    json::push_text(out, &value.candidate);
+    json::member(out, "target");
+    json::push_text(out, &value.target);
+    json::member(out, "expected_base");
+    json::push_text(out, &value.expected_base);
+    json::member(out, "receipt");
+    json::push_text(out, &value.receipt);
+    json::member(out, "state");
+    encode_controlplane_host_publication_intent_state(&value.state, out);
     out.push('}');
 }
 
@@ -552,6 +733,8 @@ pub fn encode_command_controlplane_host_block_assignment(value: &crate::host::Bl
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
     out.push('}');
 }
 
@@ -566,6 +749,11 @@ pub fn decode_command_controlplane_host_block_assignment(value: &json::Value, at
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        reason: {
+            let at1 = json::nested(at, "reason");
+            let member1 = json::member_at(value, at, "reason")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
         },
     })
 }
@@ -771,6 +959,12 @@ pub fn encode_command_controlplane_host_claim_assignment(value: &crate::host::Cl
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "worktree_id");
+    json::push_text(out, &value.worktree_id);
+    json::member(out, "implementor_run");
+    json::push_text(out, &value.implementor_run);
+    json::member(out, "base_revision");
+    json::push_text(out, &value.base_revision);
     out.push('}');
 }
 
@@ -785,6 +979,21 @@ pub fn decode_command_controlplane_host_claim_assignment(value: &json::Value, at
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        worktree_id: {
+            let at1 = json::nested(at, "worktree_id");
+            let member1 = json::member_at(value, at, "worktree_id")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        implementor_run: {
+            let at2 = json::nested(at, "implementor_run");
+            let member2 = json::member_at(value, at, "implementor_run")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
+        },
+        base_revision: {
+            let at3 = json::nested(at, "base_revision");
+            let member3 = json::member_at(value, at, "base_revision")?;
+            json::text_at(member3, &at3, "a string")?.to_owned()
         },
     })
 }
@@ -844,6 +1053,8 @@ pub fn encode_command_controlplane_host_complete_assignment(value: &crate::host:
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "merge_receipt");
+    json::push_text(out, &value.merge_receipt);
     out.push('}');
 }
 
@@ -858,6 +1069,11 @@ pub fn decode_command_controlplane_host_complete_assignment(value: &json::Value,
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        merge_receipt: {
+            let at1 = json::nested(at, "merge_receipt");
+            let member1 = json::member_at(value, at, "merge_receipt")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
         },
     })
 }
@@ -906,6 +1122,166 @@ pub fn encode_outcome_controlplane_host_complete_assignment(value: &crate::host:
             json::push_text(out, "controlplane.host.AssignmentNotFound");
             json::member(out, "payload");
             encode_error_controlplane_host_assignment_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.ConfigureRepository` as JSON.
+pub fn encode_command_controlplane_host_configure_repository(value: &crate::host::ConfigureRepository, out: &mut String) {
+    out.push('{');
+    json::member(out, "repository_id");
+    json::push_text(out, &value.repository_id.0);
+    json::member(out, "base_branch");
+    json::push_text(out, &value.base_branch);
+    json::member(out, "test_command");
+    json::push_text(out, &value.test_command);
+    json::member(out, "publish_command");
+    json::push_text(out, &value.publish_command);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.ConfigureRepository` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_configure_repository(value: &json::Value, at: &str) -> Result<crate::host::ConfigureRepository, json::DecodeError> {
+    Ok(crate::host::ConfigureRepository {
+        repository_id: {
+            let at0 = json::nested(at, "repository_id");
+            let member0 = json::member_at(value, at, "repository_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        base_branch: {
+            let at1 = json::nested(at, "base_branch");
+            let member1 = json::member_at(value, at, "base_branch")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        test_command: {
+            let at2 = json::nested(at, "test_command");
+            let member2 = json::member_at(value, at, "test_command")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
+        },
+        publish_command: {
+            let at3 = json::nested(at, "publish_command");
+            let member3 = json::member_at(value, at, "publish_command")?;
+            json::text_at(member3, &at3, "a string")?.to_owned()
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.ConfigureRepository` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_configure_repository(value: &crate::host::ConfigureRepositoryOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::ConfigureRepositoryOutcome::Applied { configure_repository_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.ConfigureRepositoryApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_configure_repository_applied(configure_repository_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::ConfigureRepositoryOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.RepositoryRegistrationNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_repository_registration_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.ConfirmPublication` as JSON.
+pub fn encode_command_controlplane_host_confirm_publication(value: &crate::host::ConfirmPublication, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    json::member(out, "receipt");
+    json::push_text(out, &value.receipt);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.ConfirmPublication` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_confirm_publication(value: &json::Value, at: &str) -> Result<crate::host::ConfirmPublication, json::DecodeError> {
+    Ok(crate::host::ConfirmPublication {
+        publication_id: {
+            let at0 = json::nested(at, "publication_id");
+            let member0 = json::member_at(value, at, "publication_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        receipt: {
+            let at1 = json::nested(at, "receipt");
+            let member1 = json::member_at(value, at, "receipt")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.ConfirmPublication` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_confirm_publication(value: &crate::host::ConfirmPublicationOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::ConfirmPublicationOutcome::Applied { confirm_publication_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.ConfirmPublicationApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_confirm_publication_applied(confirm_publication_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::ConfirmPublicationOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_not_found(error, out);
+            out.push('}');
+        }
+        crate::host::ConfirmPublicationOutcome::WrongState { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "wrong-state");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_state_conflict(error, out);
             out.push('}');
         }
     }
@@ -1166,6 +1542,79 @@ pub fn encode_outcome_controlplane_host_enable_repository_registration(value: &c
     out.push('}');
 }
 
+/// Writes the input of `controlplane.host.MarkPublicationUncertain` as JSON.
+pub fn encode_command_controlplane_host_mark_publication_uncertain(value: &crate::host::MarkPublicationUncertain, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.MarkPublicationUncertain` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_mark_publication_uncertain(value: &json::Value, at: &str) -> Result<crate::host::MarkPublicationUncertain, json::DecodeError> {
+    Ok(crate::host::MarkPublicationUncertain {
+        publication_id: {
+            let at0 = json::nested(at, "publication_id");
+            let member0 = json::member_at(value, at, "publication_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.MarkPublicationUncertain` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_mark_publication_uncertain(value: &crate::host::MarkPublicationUncertainOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::MarkPublicationUncertainOutcome::Applied { mark_publication_uncertain_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.MarkPublicationUncertainApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_mark_publication_uncertain_applied(mark_publication_uncertain_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::MarkPublicationUncertainOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_not_found(error, out);
+            out.push('}');
+        }
+        crate::host::MarkPublicationUncertainOutcome::WrongState { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "wrong-state");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_state_conflict(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
 /// Writes the input of `controlplane.host.MergeAssignment` as JSON.
 pub fn encode_command_controlplane_host_merge_assignment(value: &crate::host::MergeAssignment, out: &mut String) {
     out.push('{');
@@ -1312,6 +1761,72 @@ pub fn encode_outcome_controlplane_host_pause_goal(value: &crate::host::PauseGoa
     out.push('}');
 }
 
+/// Writes the input of `controlplane.host.PreparePublication` as JSON.
+pub fn encode_command_controlplane_host_prepare_publication(value: &crate::host::PreparePublication, out: &mut String) {
+    out.push('{');
+    json::member(out, "assignment_id");
+    json::push_text(out, &value.assignment_id.0);
+    json::member(out, "candidate");
+    json::push_text(out, &value.candidate);
+    json::member(out, "target");
+    json::push_text(out, &value.target);
+    json::member(out, "expected_base");
+    json::push_text(out, &value.expected_base);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.PreparePublication` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_prepare_publication(value: &json::Value, at: &str) -> Result<crate::host::PreparePublication, json::DecodeError> {
+    Ok(crate::host::PreparePublication {
+        assignment_id: {
+            let at0 = json::nested(at, "assignment_id");
+            let member0 = json::member_at(value, at, "assignment_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        candidate: {
+            let at1 = json::nested(at, "candidate");
+            let member1 = json::member_at(value, at, "candidate")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        target: {
+            let at2 = json::nested(at, "target");
+            let member2 = json::member_at(value, at, "target")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
+        },
+        expected_base: {
+            let at3 = json::nested(at, "expected_base");
+            let member3 = json::member_at(value, at, "expected_base")?;
+            json::text_at(member3, &at3, "a string")?.to_owned()
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.PreparePublication` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_prepare_publication(value: &crate::host::PreparePublicationOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::PreparePublicationOutcome::Created { publication_intent_created } => {
+            json::member(out, "outcome");
+            json::push_text(out, "created");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.PublicationIntentCreated");
+            json::member(out, "payload");
+            encode_event_controlplane_host_publication_intent_created(publication_intent_created, out);
+            out.push('}');
+            out.push(']');
+        }
+    }
+    out.push('}');
+}
+
 /// Writes the input of `controlplane.host.QueueAssignment` as JSON.
 pub fn encode_command_controlplane_host_queue_assignment(value: &crate::host::QueueAssignment, out: &mut String) {
     out.push('{');
@@ -1335,6 +1850,8 @@ pub fn encode_command_controlplane_host_queue_assignment(value: &crate::host::Qu
     json::push_text(out, &value.implementor_run);
     json::member(out, "reviewer_run");
     json::push_text(out, &value.reviewer_run);
+    json::member(out, "goal_revision");
+    json::push_integer(out, value.goal_revision);
     out.push('}');
 }
 
@@ -1395,6 +1912,11 @@ pub fn decode_command_controlplane_host_queue_assignment(value: &json::Value, at
             let member9 = json::member_at(value, at, "reviewer_run")?;
             json::text_at(member9, &at9, "a string")?.to_owned()
         },
+        goal_revision: {
+            let at10 = json::nested(at, "goal_revision");
+            let member10 = json::member_at(value, at, "goal_revision")?;
+            json::integer_at(member10, &at10, "an integer")?
+        },
     })
 }
 
@@ -1425,6 +1947,10 @@ pub fn encode_command_controlplane_host_ready_assignment(value: &crate::host::Re
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reviewer_run");
+    json::push_text(out, &value.reviewer_run);
+    json::member(out, "review_revision");
+    json::push_text(out, &value.review_revision);
     out.push('}');
 }
 
@@ -1439,6 +1965,16 @@ pub fn decode_command_controlplane_host_ready_assignment(value: &json::Value, at
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        reviewer_run: {
+            let at1 = json::nested(at, "reviewer_run");
+            let member1 = json::member_at(value, at, "reviewer_run")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        review_revision: {
+            let at2 = json::nested(at, "review_revision");
+            let member2 = json::member_at(value, at, "review_revision")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
         },
     })
 }
@@ -1487,6 +2023,86 @@ pub fn encode_outcome_controlplane_host_ready_assignment(value: &crate::host::Re
             json::push_text(out, "controlplane.host.AssignmentNotFound");
             json::member(out, "payload");
             encode_error_controlplane_host_assignment_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.ReconcileAssignment` as JSON.
+pub fn encode_command_controlplane_host_reconcile_assignment(value: &crate::host::ReconcileAssignment, out: &mut String) {
+    out.push('{');
+    json::member(out, "assignment_id");
+    json::push_text(out, &value.assignment_id.0);
+    json::member(out, "merge_receipt");
+    json::push_text(out, &value.merge_receipt);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.ReconcileAssignment` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_reconcile_assignment(value: &json::Value, at: &str) -> Result<crate::host::ReconcileAssignment, json::DecodeError> {
+    Ok(crate::host::ReconcileAssignment {
+        assignment_id: {
+            let at0 = json::nested(at, "assignment_id");
+            let member0 = json::member_at(value, at, "assignment_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        merge_receipt: {
+            let at1 = json::nested(at, "merge_receipt");
+            let member1 = json::member_at(value, at, "merge_receipt")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.ReconcileAssignment` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_reconcile_assignment(value: &crate::host::ReconcileAssignmentOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.ReconcileAssignmentApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_reconcile_assignment_applied(reconcile_assignment_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::ReconcileAssignmentOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.AssignmentNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_assignment_not_found(error, out);
+            out.push('}');
+        }
+        crate::host::ReconcileAssignmentOutcome::WrongState { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "wrong-state");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.AssignmentStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_assignment_state_conflict(error, out);
             out.push('}');
         }
     }
@@ -1637,6 +2253,10 @@ pub fn encode_command_controlplane_host_repair_assignment(value: &crate::host::R
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
+    json::member(out, "implementor_run");
+    json::push_text(out, &value.implementor_run);
     out.push('}');
 }
 
@@ -1651,6 +2271,16 @@ pub fn decode_command_controlplane_host_repair_assignment(value: &json::Value, a
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        reason: {
+            let at1 = json::nested(at, "reason");
+            let member1 = json::member_at(value, at, "reason")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        implementor_run: {
+            let at2 = json::nested(at, "implementor_run");
+            let member2 = json::member_at(value, at, "implementor_run")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
         },
     })
 }
@@ -1710,6 +2340,10 @@ pub fn encode_command_controlplane_host_review_assignment(value: &crate::host::R
     out.push('{');
     json::member(out, "assignment_id");
     json::push_text(out, &value.assignment_id.0);
+    json::member(out, "candidate");
+    json::push_text(out, &value.candidate);
+    json::member(out, "test_revision");
+    json::push_text(out, &value.test_revision);
     out.push('}');
 }
 
@@ -1724,6 +2358,16 @@ pub fn decode_command_controlplane_host_review_assignment(value: &json::Value, a
             let at0 = json::nested(at, "assignment_id");
             let member0 = json::member_at(value, at, "assignment_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        candidate: {
+            let at1 = json::nested(at, "candidate");
+            let member1 = json::member_at(value, at, "candidate")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        test_revision: {
+            let at2 = json::nested(at, "test_revision");
+            let member2 = json::member_at(value, at, "test_revision")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
         },
     })
 }
@@ -1783,6 +2427,8 @@ pub fn encode_command_controlplane_host_satisfy_goal(value: &crate::host::Satisf
     out.push('{');
     json::member(out, "goal_id");
     json::push_text(out, &value.goal_id.0);
+    json::member(out, "satisfaction_receipt");
+    json::push_text(out, &value.satisfaction_receipt);
     out.push('}');
 }
 
@@ -1797,6 +2443,11 @@ pub fn decode_command_controlplane_host_satisfy_goal(value: &json::Value, at: &s
             let at0 = json::nested(at, "goal_id");
             let member0 = json::member_at(value, at, "goal_id")?;
             crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        satisfaction_receipt: {
+            let at1 = json::nested(at, "satisfaction_receipt");
+            let member1 = json::member_at(value, at, "satisfaction_receipt")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
         },
     })
 }
@@ -1924,6 +2575,128 @@ pub fn encode_outcome_controlplane_host_start_goal(value: &crate::host::StartGoa
     out.push('}');
 }
 
+/// Writes the input of `controlplane.host.UpdateGoal` as JSON.
+pub fn encode_command_controlplane_host_update_goal(value: &crate::host::UpdateGoal, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
+    json::member(out, "objective");
+    json::push_text(out, &value.objective);
+    json::member(out, "acceptance");
+    json::push_text(out, &value.acceptance);
+    json::member(out, "max_workers");
+    json::push_integer(out, value.max_workers);
+    json::member(out, "max_attempts");
+    json::push_integer(out, value.max_attempts);
+    json::member(out, "max_minutes");
+    json::push_integer(out, value.max_minutes);
+    json::member(out, "planner_model");
+    json::push_text(out, &value.planner_model);
+    json::member(out, "implementor_model");
+    json::push_text(out, &value.implementor_model);
+    json::member(out, "reviewer_model");
+    json::push_text(out, &value.reviewer_model);
+    json::member(out, "merge_authority");
+    json::push_bool(out, value.merge_authority);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.UpdateGoal` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_update_goal(value: &json::Value, at: &str) -> Result<crate::host::UpdateGoal, json::DecodeError> {
+    Ok(crate::host::UpdateGoal {
+        goal_id: {
+            let at0 = json::nested(at, "goal_id");
+            let member0 = json::member_at(value, at, "goal_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        objective: {
+            let at1 = json::nested(at, "objective");
+            let member1 = json::member_at(value, at, "objective")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        acceptance: {
+            let at2 = json::nested(at, "acceptance");
+            let member2 = json::member_at(value, at, "acceptance")?;
+            json::text_at(member2, &at2, "a string")?.to_owned()
+        },
+        max_workers: {
+            let at3 = json::nested(at, "max_workers");
+            let member3 = json::member_at(value, at, "max_workers")?;
+            json::integer_at(member3, &at3, "an integer")?
+        },
+        max_attempts: {
+            let at4 = json::nested(at, "max_attempts");
+            let member4 = json::member_at(value, at, "max_attempts")?;
+            json::integer_at(member4, &at4, "an integer")?
+        },
+        max_minutes: {
+            let at5 = json::nested(at, "max_minutes");
+            let member5 = json::member_at(value, at, "max_minutes")?;
+            json::integer_at(member5, &at5, "an integer")?
+        },
+        planner_model: {
+            let at6 = json::nested(at, "planner_model");
+            let member6 = json::member_at(value, at, "planner_model")?;
+            json::text_at(member6, &at6, "a string")?.to_owned()
+        },
+        implementor_model: {
+            let at7 = json::nested(at, "implementor_model");
+            let member7 = json::member_at(value, at, "implementor_model")?;
+            json::text_at(member7, &at7, "a string")?.to_owned()
+        },
+        reviewer_model: {
+            let at8 = json::nested(at, "reviewer_model");
+            let member8 = json::member_at(value, at, "reviewer_model")?;
+            json::text_at(member8, &at8, "a string")?.to_owned()
+        },
+        merge_authority: {
+            let at9 = json::nested(at, "merge_authority");
+            let member9 = json::member_at(value, at, "merge_authority")?;
+            json::bool_at(member9, &at9, "a boolean")?
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.UpdateGoal` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_update_goal(value: &crate::host::UpdateGoalOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::UpdateGoalOutcome::Applied { update_goal_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.UpdateGoalApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_update_goal_applied(update_goal_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::UpdateGoalOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
 /// Writes any event on the system's log as JSON: its qualified name and its payload,
 /// `{"event": …, "payload": {…}}`, the envelope a command's answer lists it in.
 pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
@@ -1939,17 +2712,23 @@ pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
         crate::system::SystemEvent::CancelGoalApplied(event) => encode_event_controlplane_host_cancel_goal_applied(event, &mut out),
         crate::system::SystemEvent::ClaimAssignmentApplied(event) => encode_event_controlplane_host_claim_assignment_applied(event, &mut out),
         crate::system::SystemEvent::CompleteAssignmentApplied(event) => encode_event_controlplane_host_complete_assignment_applied(event, &mut out),
+        crate::system::SystemEvent::ConfigureRepositoryApplied(event) => encode_event_controlplane_host_configure_repository_applied(event, &mut out),
+        crate::system::SystemEvent::ConfirmPublicationApplied(event) => encode_event_controlplane_host_confirm_publication_applied(event, &mut out),
         crate::system::SystemEvent::DisableRepositoryRegistrationApplied(event) => encode_event_controlplane_host_disable_repository_registration_applied(event, &mut out),
         crate::system::SystemEvent::EnableRepositoryRegistrationApplied(event) => encode_event_controlplane_host_enable_repository_registration_applied(event, &mut out),
         crate::system::SystemEvent::GoalCreated(event) => encode_event_controlplane_host_goal_created(event, &mut out),
+        crate::system::SystemEvent::MarkPublicationUncertainApplied(event) => encode_event_controlplane_host_mark_publication_uncertain_applied(event, &mut out),
         crate::system::SystemEvent::MergeAssignmentApplied(event) => encode_event_controlplane_host_merge_assignment_applied(event, &mut out),
         crate::system::SystemEvent::PauseGoalApplied(event) => encode_event_controlplane_host_pause_goal_applied(event, &mut out),
+        crate::system::SystemEvent::PublicationIntentCreated(event) => encode_event_controlplane_host_publication_intent_created(event, &mut out),
         crate::system::SystemEvent::ReadyAssignmentApplied(event) => encode_event_controlplane_host_ready_assignment_applied(event, &mut out),
+        crate::system::SystemEvent::ReconcileAssignmentApplied(event) => encode_event_controlplane_host_reconcile_assignment_applied(event, &mut out),
         crate::system::SystemEvent::RepairAssignmentApplied(event) => encode_event_controlplane_host_repair_assignment_applied(event, &mut out),
         crate::system::SystemEvent::RepositoryRegistrationCreated(event) => encode_event_controlplane_host_repository_registration_created(event, &mut out),
         crate::system::SystemEvent::ReviewAssignmentApplied(event) => encode_event_controlplane_host_review_assignment_applied(event, &mut out),
         crate::system::SystemEvent::SatisfyGoalApplied(event) => encode_event_controlplane_host_satisfy_goal_applied(event, &mut out),
         crate::system::SystemEvent::StartGoalApplied(event) => encode_event_controlplane_host_start_goal_applied(event, &mut out),
+        crate::system::SystemEvent::UpdateGoalApplied(event) => encode_event_controlplane_host_update_goal_applied(event, &mut out),
         crate::system::SystemEvent::WorkspaceCreated(event) => encode_event_controlplane_host_workspace_created(event, &mut out),
     }
     out.push('}');

@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest 8e307f3ce0541f736b4688846bf3bc3617af6ba4bd43e0b156673e614f1f8a57
-  contract digest c4a296ae41814f3a2a24c5f55da9b458369ad96cbca829869fd81211af1fd1ed
+  model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
+  contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-85 capabilities: **85 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+109 capabilities: **109 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -16,10 +16,12 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | --- | --- |
 | domain type | `controlplane.host.Assignment.State` |
 | domain type | `controlplane.host.Goal.State` |
+| domain type | `controlplane.host.PublicationIntent.State` |
 | domain type | `controlplane.host.RepositoryRegistration.State` |
 | domain type | `controlplane.host.Workspace.State` |
 | entity lifecycle | `controlplane.host.Assignment` |
 | entity lifecycle | `controlplane.host.Goal` |
+| entity lifecycle | `controlplane.host.PublicationIntent` |
 | entity lifecycle | `controlplane.host.RepositoryRegistration` |
 | entity lifecycle | `controlplane.host.Workspace` |
 | command contract | `controlplane.host.ArchiveWorkspace` |
@@ -34,20 +36,30 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.ClaimAssignment` |
 | command contract | `controlplane.host.CompleteAssignment` |
 | command behaviour | `controlplane.host.CompleteAssignment` |
+| command contract | `controlplane.host.ConfigureRepository` |
+| command behaviour | `controlplane.host.ConfigureRepository` |
+| command contract | `controlplane.host.ConfirmPublication` |
+| command behaviour | `controlplane.host.ConfirmPublication` |
 | command contract | `controlplane.host.CreateGoal` |
 | command behaviour | `controlplane.host.CreateGoal` |
 | command contract | `controlplane.host.DisableRepositoryRegistration` |
 | command behaviour | `controlplane.host.DisableRepositoryRegistration` |
 | command contract | `controlplane.host.EnableRepositoryRegistration` |
 | command behaviour | `controlplane.host.EnableRepositoryRegistration` |
+| command contract | `controlplane.host.MarkPublicationUncertain` |
+| command behaviour | `controlplane.host.MarkPublicationUncertain` |
 | command contract | `controlplane.host.MergeAssignment` |
 | command behaviour | `controlplane.host.MergeAssignment` |
 | command contract | `controlplane.host.PauseGoal` |
 | command behaviour | `controlplane.host.PauseGoal` |
+| command contract | `controlplane.host.PreparePublication` |
+| command behaviour | `controlplane.host.PreparePublication` |
 | command contract | `controlplane.host.QueueAssignment` |
 | command behaviour | `controlplane.host.QueueAssignment` |
 | command contract | `controlplane.host.ReadyAssignment` |
 | command behaviour | `controlplane.host.ReadyAssignment` |
+| command contract | `controlplane.host.ReconcileAssignment` |
+| command behaviour | `controlplane.host.ReconcileAssignment` |
 | command contract | `controlplane.host.RegisterRepository` |
 | command behaviour | `controlplane.host.RegisterRepository` |
 | command contract | `controlplane.host.RegisterWorkspace` |
@@ -60,6 +72,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.SatisfyGoal` |
 | command contract | `controlplane.host.StartGoal` |
 | command behaviour | `controlplane.host.StartGoal` |
+| command contract | `controlplane.host.UpdateGoal` |
+| command behaviour | `controlplane.host.UpdateGoal` |
 | event type | `controlplane.host.ArchiveWorkspaceApplied` |
 | event type | `controlplane.host.AssignmentCreated` |
 | event type | `controlplane.host.BlockAssignmentApplied` |
@@ -67,22 +81,30 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.CancelGoalApplied` |
 | event type | `controlplane.host.ClaimAssignmentApplied` |
 | event type | `controlplane.host.CompleteAssignmentApplied` |
+| event type | `controlplane.host.ConfigureRepositoryApplied` |
+| event type | `controlplane.host.ConfirmPublicationApplied` |
 | event type | `controlplane.host.DisableRepositoryRegistrationApplied` |
 | event type | `controlplane.host.EnableRepositoryRegistrationApplied` |
 | event type | `controlplane.host.GoalCreated` |
+| event type | `controlplane.host.MarkPublicationUncertainApplied` |
 | event type | `controlplane.host.MergeAssignmentApplied` |
 | event type | `controlplane.host.PauseGoalApplied` |
+| event type | `controlplane.host.PublicationIntentCreated` |
 | event type | `controlplane.host.ReadyAssignmentApplied` |
+| event type | `controlplane.host.ReconcileAssignmentApplied` |
 | event type | `controlplane.host.RepairAssignmentApplied` |
 | event type | `controlplane.host.RepositoryRegistrationCreated` |
 | event type | `controlplane.host.ReviewAssignmentApplied` |
 | event type | `controlplane.host.SatisfyGoalApplied` |
 | event type | `controlplane.host.StartGoalApplied` |
+| event type | `controlplane.host.UpdateGoalApplied` |
 | event type | `controlplane.host.WorkspaceCreated` |
 | error type | `controlplane.host.AssignmentNotFound` |
 | error type | `controlplane.host.AssignmentStateConflict` |
 | error type | `controlplane.host.GoalNotFound` |
 | error type | `controlplane.host.GoalStateConflict` |
+| error type | `controlplane.host.PublicationIntentNotFound` |
+| error type | `controlplane.host.PublicationIntentStateConflict` |
 | error type | `controlplane.host.RepositoryRegistrationNotFound` |
 | error type | `controlplane.host.RepositoryRegistrationStateConflict` |
 | error type | `controlplane.host.WorkspaceNotFound` |
@@ -91,6 +113,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | view query | `controlplane.host.AssignmentList` |
 | view type | `controlplane.host.GoalList` |
 | view query | `controlplane.host.GoalList` |
+| view type | `controlplane.host.PublicationIntentList` |
+| view query | `controlplane.host.PublicationIntentList` |
 | view type | `controlplane.host.RepositoryRegistrationList` |
 | view query | `controlplane.host.RepositoryRegistrationList` |
 | view type | `controlplane.host.WorkspaceList` |
