@@ -8,6 +8,7 @@ relations:
 - decomposes: epic:bootstrap
 - serves: vision:autonomous-engineering
 - depends_on: story:workspace-host
+- depends_on: story:governed-protocols
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime
