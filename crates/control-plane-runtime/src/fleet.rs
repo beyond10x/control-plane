@@ -393,6 +393,15 @@ fn retire_stale(host: &Host) -> Result<()> {
                 "CancelAssignment",
                 json!({"assignment_id":a["assignment_id"]}),
             )?;
+        } else if matches!(
+            a["state"].as_str(),
+            Some("Implementing" | "Reviewing" | "ReadyToMerge")
+        ) && a["attempt"].as_i64().context("invalid attempt count")?
+            >= goal["max_attempts"]
+                .as_i64()
+                .context("invalid attempt limit")?
+        {
+            host.block(&a["assignment_id"],"Interrupted attempt exhausted max_attempts; no further model or implementation effects are permitted")?;
         }
     }
     Ok(())
@@ -869,47 +878,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 )?;
             }
             ImplementationAction::Run { program, args } => {
-                ensure!(args.len() <= 128, "command argument limit");
-                ensure!(
-                    matches!(program.as_str(), "cargo" | "rg" | "git" | "ess"),
-                    "model command is not admitted"
-                );
-                if program == "git" {
-                    ensure!(
-                        args.first().is_some_and(|a| matches!(
-                            a.as_str(),
-                            "status" | "diff" | "log" | "show" | "ls-files"
-                        )),
-                        "model cannot mutate Git or publish"
-                    );
-                }
-                if program == "cargo" {
-                    ensure!(
-                        args.first().is_some_and(|a| matches!(
-                            a.as_str(),
-                            "test" | "check" | "clippy" | "fmt" | "build"
-                        )),
-                        "model cargo operation is not admitted"
-                    );
-                }
-                if program == "ess" {
-                    ensure!(
-                        args.starts_with(&["specify".into(), "validate".into()]),
-                        "model ESS operation is not admitted"
-                    );
-                }
-                ensure!(
-                    !args.iter().any(|arg| arg.starts_with('/')
-                        || arg.contains("=/")
-                        || arg.contains("../")
-                        || arg.starts_with("--pre")
-                        || arg.starts_with("--ext-diff")
-                        || arg.starts_with("--textconv")
-                        || arg.starts_with("--git-dir")
-                        || arg.starts_with("--work-tree")
-                        || arg.starts_with("--config")),
-                    "command escapes managed worktree"
-                );
+                let args = inspection_arguments(path, &program, &args)?;
                 let mut runner = host.runner.clone();
                 runner.timeout = runner.timeout.min(remaining);
                 host.progress(
@@ -950,6 +919,146 @@ fn implementation_schema() -> Value {
         {"type":"object","properties":{"action":{"const":"run"},"program":{"type":"string"},"args":{"type":"array","items":{"type":"string"}}},"required":["action","program","args"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"finish"},"summary":{"type":"string"}},"required":["action","summary"],"additionalProperties":false}
     ]})
+}
+
+// Model-facing process arguments are a closed grammar. In particular, naming a
+// read-oriented executable is not proof that its options cannot write or execute.
+fn inspection_arguments(root: &Path, program: &str, args: &[String]) -> Result<Vec<String>> {
+    ensure!(args.len() <= 128, "command argument limit");
+    let verb = args
+        .first()
+        .context("inspection command missing arguments")?
+        .as_str();
+    let atom = |value: &str| {
+        !value.is_empty()
+            && value
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_-.,/".contains(&c))
+            && !value.contains("..")
+            && !value.starts_with('/')
+    };
+    match program {
+        "git" => {
+            let flags: &[&str] = match verb {
+                "status" => &["--short", "--porcelain", "--branch"],
+                "diff" => &[
+                    "--stat",
+                    "--name-only",
+                    "--name-status",
+                    "--cached",
+                    "--staged",
+                ],
+                "log" => &["--oneline", "--stat", "--name-only", "--name-status"],
+                "show" => &["--stat", "--name-only", "--name-status"],
+                "ls-files" => &["--cached", "--others", "--exclude-standard", "--stage"],
+                _ => bail!("model Git operation is not admitted"),
+            };
+            for arg in &args[1..] {
+                let revision = matches!(verb, "diff" | "log" | "show")
+                    && !arg.starts_with('-')
+                    && !arg.starts_with('/')
+                    && !arg.is_empty()
+                    && arg
+                        .bytes()
+                        .all(|c| c.is_ascii_alphanumeric() || b"_/.~^:-".contains(&c));
+                ensure!(
+                    flags.contains(&arg.as_str()) || revision,
+                    "Git inspection option is not admitted: {arg}"
+                );
+            }
+            let mut normalized = vec![
+                "--no-pager".into(),
+                "-c".into(),
+                "core.fsmonitor=false".into(),
+                verb.into(),
+            ];
+            if matches!(verb, "diff" | "log" | "show") {
+                normalized.extend(["--no-ext-diff".into(), "--no-textconv".into()]);
+            }
+            if verb == "log" {
+                normalized.push("--max-count=30".into());
+            }
+            normalized.extend_from_slice(&args[1..]);
+            Ok(normalized)
+        }
+        "cargo" => {
+            if verb == "fmt" {
+                ensure!(
+                    args == ["fmt", "--check"],
+                    "model formatting must be read-only: cargo fmt --check"
+                );
+                return Ok(args.to_vec());
+            }
+            ensure!(
+                matches!(verb, "test" | "check" | "clippy" | "build"),
+                "model Cargo operation is not admitted"
+            );
+            let mut index = 1;
+            while index < args.len() {
+                match args[index].as_str() {
+                    "--quiet"
+                    | "-q"
+                    | "--release"
+                    | "--offline"
+                    | "--locked"
+                    | "--frozen"
+                    | "--workspace"
+                    | "--all-targets"
+                    | "--all-features"
+                    | "--no-default-features"
+                    | "--lib"
+                    | "--bins"
+                    | "--tests"
+                    | "--examples"
+                    | "--benches" => {}
+                    "--package" | "-p" | "--features" | "--bin" | "--test" | "--example"
+                    | "--bench" => {
+                        index += 1;
+                        ensure!(
+                            args.get(index).is_some_and(|value| atom(value)),
+                            "Cargo selector is missing or invalid"
+                        );
+                    }
+                    other => bail!("Cargo inspection option is not admitted: {other}"),
+                }
+                index += 1;
+            }
+            Ok(args.to_vec())
+        }
+        "rg" => {
+            if args == ["--files"] {
+                return Ok(vec!["--no-config".into(), "--files".into()]);
+            }
+            ensure!(
+                !verb.starts_with('-'),
+                "search grammar is rg PATTERN [relative paths] or rg --files"
+            );
+            let mut normalized = vec![
+                "--no-config".into(),
+                "--line-number".into(),
+                "--fixed-strings".into(),
+                "--".into(),
+                verb.into(),
+            ];
+            for relative in &args[1..] {
+                ensure!(
+                    !relative.starts_with('-'),
+                    "search options are not admitted"
+                );
+                engine::confined(root, relative, false)?;
+                normalized.push(relative.clone());
+            }
+            Ok(normalized)
+        }
+        "ess" => {
+            ensure!(
+                args == ["specify", "validate"],
+                "model ESS operation is limited to specify validate"
+            );
+            Ok(args.to_vec())
+        }
+        _ => bail!("model command is not admitted"),
+    }
 }
 fn attestation(
     kind: &str,
@@ -1517,5 +1626,58 @@ mod tests {
     #[test]
     fn impossible_deadline_is_a_blocker_instead_of_a_panic() {
         assert!(attempt_budget(&json!({"max_minutes":u64::MAX})).is_err());
+    }
+
+    #[test]
+    fn process_grammar_refuses_output_execution_and_path_override_options() {
+        for (program, args) in [
+            ("git", vec!["diff", "--output=tests/sentinel"]),
+            ("git", vec!["show", "--output", "tests/sentinel"]),
+            ("git", vec!["diff", "--ext-diff"]),
+            ("git", vec!["log", "--textconv"]),
+            ("git", vec!["-c", "core.pager=command", "show"]),
+            ("rg", vec!["--pre=command", "needle"]),
+            ("rg", vec!["needle", "--follow"]),
+            ("cargo", vec!["fmt"]),
+            ("cargo", vec!["fmt", "--", "--emit=files"]),
+            ("cargo", vec!["test", "--target-dir=outside"]),
+            (
+                "cargo",
+                vec!["check", "--manifest-path", "outside/Cargo.toml"],
+            ),
+            ("cargo", vec!["test", "--config", "runner=command"]),
+            ("ess", vec!["specify", "validate", "--output", "outside"]),
+        ] {
+            let args = args.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            assert!(
+                inspection_arguments(Path::new("."), program, &args).is_err(),
+                "admitted {program} {args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalized_git_inspection_executes_without_output_or_external_diff_hooks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for args in [
+            vec!["status", "--short"],
+            vec!["diff", "--stat"],
+            vec!["log", "--oneline"],
+            vec!["show", "HEAD", "--stat"],
+            vec!["ls-files"],
+        ] {
+            let args = args.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            let normalized = inspection_arguments(root, "git", &args).unwrap();
+            let output = std::process::Command::new("git")
+                .current_dir(root)
+                .args(normalized)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 }
