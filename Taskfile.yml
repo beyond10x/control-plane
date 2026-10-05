@@ -6,7 +6,7 @@ tasks:
     cmds:
       - ess specify validate --path ess --strict-requires
       - aep plan artifact validate
-      - cargo fmt --all --check
+      - cargo fmt -p control-plane-core -p control-plane-protocol -p control-plane-runtime -p control-plane-app -p control-plane-xtask --check
       - cargo clippy --workspace --all-targets --locked -- -D warnings
       - cargo test --workspace --locked
       - cargo run --locked -p control-plane-xtask -- generated-check

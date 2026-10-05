@@ -1,0 +1,31 @@
+format: protocol/1
+protocol:
+  id: engineering.plan
+  revision: 1
+  description: Produce a validated plan bound to the standing goal and inspected inputs.
+artifacts:
+  plan:
+    description: A plan revision digest including the goal, specification and repository observations.
+evidence_kinds:
+  plan_validation:
+    description: The host's actual specification, AEP and critic validation result, pass or fail.
+claims:
+  plan.validated:
+    true_when:
+      evidence:
+        kind: plan_validation
+        result: pass
+        subject: plan
+actions:
+  repository.inspect:
+    effect: read
+  plan.edit:
+    effect: write
+  plan.validate:
+    effect: read
+    may_produce:
+      - evidence: plan_validation
+outcomes:
+  accepted:
+    requires:
+      claim: plan.validated

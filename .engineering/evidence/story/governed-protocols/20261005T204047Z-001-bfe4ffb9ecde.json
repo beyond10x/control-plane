@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T20:40:47Z",
+  "actor": "human:timo",
+  "artifact": "story:governed-protocols",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "Independent source review and Canon assertions: VERIFIED against red commit 2fc493d",
+    "reference": "review-result:governed-protocols-review-1"
+  }
+}

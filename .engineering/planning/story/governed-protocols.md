@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:governed-protocols
 kind: story
-status: active
+status: implemented
 title: Planning and verified-merge protocols over Canon
 relations:
 - decomposes: epic:bootstrap
@@ -10,10 +10,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-protocol
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T20:30:36Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T20:30:36Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-05T20:40:47Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1,"verification":1}}}
 ---
 ## Outcome
 Compile control-plane's planning and verified-merge protocols with the existing Canon foundation. This is a dependency of the existing autonomous-planner and implementation-fleet stories, extracted after inspection showed stock engineering protocols have broader release/deployment outcomes.
