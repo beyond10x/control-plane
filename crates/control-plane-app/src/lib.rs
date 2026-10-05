@@ -189,7 +189,9 @@ async fn request_guard(
     let headers = response.headers_mut();
     headers.insert("cache-control", "no-store".parse().unwrap());
     headers.insert("x-content-type-options", "nosniff".parse().unwrap());
-    headers.insert("referrer-policy", "no-referrer".parse().unwrap());
+    // Native form navigation with no-referrer sends Origin: null in Chromium.
+    // Keep local form origins verifiable without sharing referrers cross-origin.
+    headers.insert("referrer-policy", "same-origin".parse().unwrap());
     headers.insert("content-security-policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     response
 }
