@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `controlplane` system, v1: its components assembled, its bindings wired, and its one transport.
@@ -49,6 +49,8 @@ pub enum SystemEvent {
     MergeAssignmentApplied(crate::host::MergeAssignmentApplied),
     /// `controlplane.host.PauseGoalApplied`.
     PauseGoalApplied(crate::host::PauseGoalApplied),
+    /// `controlplane.host.PlanningProgressRecorded`.
+    PlanningProgressRecorded(crate::host::PlanningProgressRecorded),
     /// `controlplane.host.PublicationIntentCreated`.
     PublicationIntentCreated(crate::host::PublicationIntentCreated),
     /// `controlplane.host.ReadyAssignmentApplied`.
@@ -90,6 +92,7 @@ impl SystemEvent {
             Self::MarkPublicationUncertainApplied(_) => "controlplane.host.MarkPublicationUncertainApplied",
             Self::MergeAssignmentApplied(_) => "controlplane.host.MergeAssignmentApplied",
             Self::PauseGoalApplied(_) => "controlplane.host.PauseGoalApplied",
+            Self::PlanningProgressRecorded(_) => "controlplane.host.PlanningProgressRecorded",
             Self::PublicationIntentCreated(_) => "controlplane.host.PublicationIntentCreated",
             Self::ReadyAssignmentApplied(_) => "controlplane.host.ReadyAssignmentApplied",
             Self::ReconcileAssignmentApplied(_) => "controlplane.host.ReconcileAssignmentApplied",
@@ -122,6 +125,7 @@ impl From<crate::ports::control_plane::PublishedEvent> for SystemEvent {
             crate::ports::control_plane::PublishedEvent::MarkPublicationUncertainApplied(event) => Self::MarkPublicationUncertainApplied(event),
             crate::ports::control_plane::PublishedEvent::MergeAssignmentApplied(event) => Self::MergeAssignmentApplied(event),
             crate::ports::control_plane::PublishedEvent::PauseGoalApplied(event) => Self::PauseGoalApplied(event),
+            crate::ports::control_plane::PublishedEvent::PlanningProgressRecorded(event) => Self::PlanningProgressRecorded(event),
             crate::ports::control_plane::PublishedEvent::PublicationIntentCreated(event) => Self::PublicationIntentCreated(event),
             crate::ports::control_plane::PublishedEvent::ReadyAssignmentApplied(event) => Self::ReadyAssignmentApplied(event),
             crate::ports::control_plane::PublishedEvent::ReconcileAssignmentApplied(event) => Self::ReconcileAssignmentApplied(event),
@@ -179,7 +183,7 @@ impl<ControlPlaneBehaviors> System<ControlPlaneBehaviors> {
 
 impl<ControlPlaneBehaviors> System<ControlPlaneBehaviors>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     /// Delivers until quiescent: collects every component's outbox onto the log. No binding
     /// reacts to anything this specification publishes, so collecting is the whole delivery.

@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-# contract digest slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+# model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+# contract digest slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-    contract_digest: slice-sha256/2:d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+    source_digest: 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+    contract_digest: slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
   x-ess-reached-by: network
 tags:
 - name: host
@@ -1268,6 +1268,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
+  /host/commands/RecordPlanningProgress:
+    post:
+      operationId: controlplane.host.RecordPlanningProgress
+      summary: RecordPlanningProgress
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.RecordPlanningProgress` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.RecordPlanningProgress.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.RecordPlanningProgress.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.RecordPlanningProgress.not-found.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -3107,6 +3173,22 @@ components:
           type: string
         merge_authority:
           type: boolean
+        planning_revision:
+          type: integer
+        planning_fingerprint:
+          type: string
+        planning_repository:
+          type: string
+        planning_worktree_id:
+          type: string
+        planning_worktree_path:
+          type: string
+        planning_reason:
+          type: string
+        planning_receipt:
+          type: string
+        planning_phase:
+          $ref: '#/components/schemas/controlplane.host.PlanningPhase'
       required:
       - goal_id
       - workspace_id
@@ -3119,6 +3201,14 @@ components:
       - implementor_model
       - reviewer_model
       - merge_authority
+      - planning_revision
+      - planning_fingerprint
+      - planning_repository
+      - planning_worktree_id
+      - planning_worktree_path
+      - planning_reason
+      - planning_receipt
+      - planning_phase
       additionalProperties: false
     controlplane.host.GoalList.Response:
       additionalProperties: false
@@ -3170,6 +3260,22 @@ components:
           type: string
         state:
           $ref: '#/components/schemas/controlplane.host.Goal.State'
+        planning_revision:
+          type: integer
+        planning_fingerprint:
+          type: string
+        planning_repository:
+          type: string
+        planning_worktree_id:
+          type: string
+        planning_worktree_path:
+          type: string
+        planning_reason:
+          type: string
+        planning_receipt:
+          type: string
+        planning_phase:
+          $ref: '#/components/schemas/controlplane.host.PlanningPhase'
       required:
       - goal_id
       - workspace_id
@@ -3185,6 +3291,14 @@ components:
       - revision
       - satisfaction_receipt
       - state
+      - planning_revision
+      - planning_fingerprint
+      - planning_repository
+      - planning_worktree_id
+      - planning_worktree_path
+      - planning_reason
+      - planning_receipt
+      - planning_phase
       additionalProperties: false
     controlplane.host.GoalStateConflict.Error:
       title: GoalStateConflict payload
@@ -3489,6 +3603,55 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       required:
       - goal_id
+      additionalProperties: false
+    controlplane.host.PlanningPhase:
+      title: PlanningPhase
+      x-ess-name: controlplane.host.PlanningPhase
+      x-ess-kind: enum
+      type: string
+      enum:
+      - Idle
+      - Provisioning
+      - Planning
+      - Validated
+      - Queued
+      - Blocked
+    controlplane.host.PlanningProgressRecorded.Event:
+      title: PlanningProgressRecorded payload
+      x-ess-name: controlplane.host.PlanningProgressRecorded
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        planning_revision:
+          type: integer
+        planning_fingerprint:
+          type: string
+        planning_repository:
+          type: string
+        planning_worktree_id:
+          type: string
+        planning_worktree_path:
+          type: string
+        planning_reason:
+          type: string
+        planning_receipt:
+          type: string
+        planning_phase:
+          $ref: '#/components/schemas/controlplane.host.PlanningPhase'
+      required:
+      - goal_id
+      - planning_revision
+      - planning_fingerprint
+      - planning_repository
+      - planning_worktree_id
+      - planning_worktree_path
+      - planning_reason
+      - planning_receipt
+      - planning_phase
       additionalProperties: false
     controlplane.host.PreparePublication.Input:
       title: PreparePublication input
@@ -3921,6 +4084,92 @@ components:
       - assignment_id
       - merge_receipt
       additionalProperties: false
+    controlplane.host.RecordPlanningProgress.Input:
+      title: RecordPlanningProgress input
+      x-ess-name: controlplane.host.RecordPlanningProgress
+      x-ess-kind: command-input
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        planning_revision:
+          type: integer
+        planning_fingerprint:
+          type: string
+        planning_repository:
+          type: string
+        planning_worktree_id:
+          type: string
+        planning_worktree_path:
+          type: string
+        planning_reason:
+          type: string
+        planning_receipt:
+          type: string
+        planning_phase:
+          $ref: '#/components/schemas/controlplane.host.PlanningPhase'
+      required:
+      - goal_id
+      - planning_revision
+      - planning_fingerprint
+      - planning_repository
+      - planning_worktree_id
+      - planning_worktree_path
+      - planning_reason
+      - planning_receipt
+      - planning_phase
+      additionalProperties: false
+    controlplane.host.RecordPlanningProgress.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.Goal` has changed, and its state is unchanged. The instance is the one `goal_id` names. Emits `PlanningProgressRecorded`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.PlanningProgressRecorded
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.PlanningProgressRecorded.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.RecordPlanningProgress.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.GoalNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.RegisterRepository.Input:
       title: RegisterRepository input
       x-ess-name: controlplane.host.RegisterRepository
@@ -4895,6 +5144,22 @@ x-ess-entities:
         type: integer
       satisfaction_receipt:
         type: string
+      planning_revision:
+        type: integer
+      planning_fingerprint:
+        type: string
+      planning_repository:
+        type: string
+      planning_worktree_id:
+        type: string
+      planning_worktree_path:
+        type: string
+      planning_reason:
+        type: string
+      planning_receipt:
+        type: string
+      planning_phase:
+        $ref: '#/x-ess-entities/controlplane.host.PlanningPhase'
       state:
         $ref: '#/x-ess-entities/controlplane.host.Goal.State'
     required:
@@ -4911,6 +5176,14 @@ x-ess-entities:
     - merge_authority
     - revision
     - satisfaction_receipt
+    - planning_revision
+    - planning_fingerprint
+    - planning_repository
+    - planning_worktree_id
+    - planning_worktree_path
+    - planning_reason
+    - planning_receipt
+    - planning_phase
     - state
     additionalProperties: false
   controlplane.host.Goal.State:
@@ -4923,6 +5196,18 @@ x-ess-entities:
     - Paused
     - Running
     - Satisfied
+  controlplane.host.PlanningPhase:
+    title: PlanningPhase
+    x-ess-name: controlplane.host.PlanningPhase
+    x-ess-kind: enum
+    type: string
+    enum:
+    - Idle
+    - Provisioning
+    - Planning
+    - Validated
+    - Queued
+    - Blocked
   controlplane.host.PublicationIntent:
     title: PublicationIntent
     x-ess-name: controlplane.host.PublicationIntent
