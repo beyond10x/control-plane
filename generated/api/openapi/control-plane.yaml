@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-# contract digest slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+# model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+# contract digest slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,13 +18,73 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-    contract_digest: slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+    source_digest: 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+    contract_digest: slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
   x-ess-reached-by: network
 tags:
 - name: host
   description: Local workspace goals and assignments; AEP owns stories, Loom owns agent executions.
 paths:
+  /host/commands/AddWorkspaceDirectory:
+    post:
+      operationId: controlplane.host.AddWorkspaceDirectory
+      summary: AddWorkspaceDirectory
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Operator
+      requestBody:
+        description: The input `controlplane.host.AddWorkspaceDirectory` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.AddWorkspaceDirectory.Input'
+      responses:
+        '202':
+          description: 'Outcome `created`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.AddWorkspaceDirectory.created.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/commands/ArchiveWorkspace:
     post:
       operationId: controlplane.host.ArchiveWorkspace
@@ -1473,6 +1533,78 @@ paths:
                 - refused
                 - committed
                 type: object
+  /host/commands/RemoveWorkspaceDirectory:
+    post:
+      operationId: controlplane.host.RemoveWorkspaceDirectory
+      summary: RemoveWorkspaceDirectory
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Operator
+      requestBody:
+        description: The input `controlplane.host.RemoveWorkspaceDirectory` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.RemoveWorkspaceDirectory.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.RemoveWorkspaceDirectory.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.RemoveWorkspaceDirectory.not-found.Response'
+        '409':
+          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.RemoveWorkspaceDirectory.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
   /host/commands/RepairAssignment:
     post:
       operationId: controlplane.host.RepairAssignment
@@ -1884,6 +2016,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/controlplane.host.RepositoryRegistrationList.Response'
+  /host/views/WorkspaceDirectoryList:
+    get:
+      operationId: controlplane.host.WorkspaceDirectoryList
+      summary: WorkspaceDirectoryList
+      tags:
+      - host
+      x-ess-consistency: read_your_writes
+      responses:
+        '200':
+          description: 'Every row of `controlplane.host.WorkspaceDirectoryList`, a projection of `controlplane.host.WorkspaceDirectory`. Contains every instance. Read-your-writes: a caller that has just issued a command sees its effect here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.WorkspaceDirectoryList.Response'
   /host/views/WorkspaceList:
     get:
       operationId: controlplane.host.WorkspaceList
@@ -1900,6 +2046,61 @@ paths:
                 $ref: '#/components/schemas/controlplane.host.WorkspaceList.Response'
 components:
   schemas:
+    controlplane.host.AddWorkspaceDirectory.Input:
+      title: AddWorkspaceDirectory input
+      x-ess-name: controlplane.host.AddWorkspaceDirectory
+      x-ess-kind: command-input
+      type: object
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        path:
+          type: string
+        repository_common_dirs:
+          type: array
+          items:
+            type: string
+        managed_common_dirs:
+          type: array
+          items:
+            type: string
+      required:
+      - workspace_id
+      - path
+      - repository_common_dirs
+      - managed_common_dirs
+      additionalProperties: false
+    controlplane.host.AddWorkspaceDirectory.created.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.WorkspaceDirectory` now exists, in `Registered`. Its identity is published as `directory_id` on `controlplane.host.WorkspaceDirectoryCreated`. Emits `WorkspaceDirectoryCreated`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: created
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.WorkspaceDirectoryCreated
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.WorkspaceDirectoryCreated.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
     controlplane.host.ArchiveWorkspace.Input:
       title: ArchiveWorkspace input
       x-ess-name: controlplane.host.ArchiveWorkspace
@@ -4273,6 +4474,89 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.RemoveWorkspaceDirectory.Input:
+      title: RemoveWorkspaceDirectory input
+      x-ess-name: controlplane.host.RemoveWorkspaceDirectory
+      x-ess-kind: command-input
+      type: object
+      properties:
+        directory_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - directory_id
+      additionalProperties: false
+    controlplane.host.RemoveWorkspaceDirectory.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.WorkspaceDirectory` has moved to `Removed`, along `remove`. The instance is the one `directory_id` names. Emits `WorkspaceDirectoryRemoved`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.WorkspaceDirectoryRemoved
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.WorkspaceDirectoryRemoved.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.RemoveWorkspaceDirectory.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.WorkspaceDirectoryNotFound
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.RemoveWorkspaceDirectory.wrong-state.Response:
+      additionalProperties: false
+      description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
+      properties:
+        error:
+          const: controlplane.host.WorkspaceDirectoryStateConflict
+          type: string
+        outcome:
+          const: wrong-state
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.WorkspaceDirectoryStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
     controlplane.host.RepairAssignment.Input:
       title: RepairAssignment input
       x-ess-name: controlplane.host.RepairAssignment
@@ -4958,6 +5242,115 @@ components:
       - path
       - name
       additionalProperties: false
+    controlplane.host.WorkspaceDirectory.State:
+      title: State
+      x-ess-name: controlplane.host.WorkspaceDirectory.State
+      x-ess-kind: enum
+      type: string
+      enum:
+      - Registered
+      - Removed
+    controlplane.host.WorkspaceDirectoryCreated.Event:
+      title: WorkspaceDirectoryCreated payload
+      x-ess-name: controlplane.host.WorkspaceDirectoryCreated
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        directory_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workspace_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        path:
+          type: string
+        repository_common_dirs:
+          type: array
+          items:
+            type: string
+        managed_common_dirs:
+          type: array
+          items:
+            type: string
+      required:
+      - directory_id
+      - workspace_id
+      - path
+      - repository_common_dirs
+      - managed_common_dirs
+      additionalProperties: false
+    controlplane.host.WorkspaceDirectoryList.Response:
+      additionalProperties: false
+      description: The rows of `controlplane.host.WorkspaceDirectoryList`.
+      properties:
+        rows:
+          description: Every row the projection holds, in the order it holds them.
+          items:
+            $ref: '#/components/schemas/controlplane.host.WorkspaceDirectoryList.Row'
+          type: array
+      required:
+      - rows
+      type: object
+    controlplane.host.WorkspaceDirectoryList.Row:
+      title: WorkspaceDirectoryList row
+      x-ess-name: controlplane.host.WorkspaceDirectoryList
+      x-ess-kind: view-row
+      type: object
+      properties:
+        directory_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workspace_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        path:
+          type: string
+        repository_common_dirs:
+          type: array
+          items:
+            type: string
+        managed_common_dirs:
+          type: array
+          items:
+            type: string
+        state:
+          $ref: '#/components/schemas/controlplane.host.WorkspaceDirectory.State'
+      required:
+      - directory_id
+      - workspace_id
+      - path
+      - repository_common_dirs
+      - managed_common_dirs
+      - state
+      additionalProperties: false
+    controlplane.host.WorkspaceDirectoryRemoved.Event:
+      title: WorkspaceDirectoryRemoved payload
+      x-ess-name: controlplane.host.WorkspaceDirectoryRemoved
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        directory_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - directory_id
+      additionalProperties: false
+    controlplane.host.WorkspaceDirectoryStateConflict.Error:
+      title: WorkspaceDirectoryStateConflict payload
+      x-ess-name: controlplane.host.WorkspaceDirectoryStateConflict
+      x-ess-kind: error-payload
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/controlplane.host.WorkspaceDirectory.State'
+      required:
+      - state
+      additionalProperties: false
     controlplane.host.WorkspaceList.Response:
       additionalProperties: false
       description: The rows of `controlplane.host.WorkspaceList`.
@@ -5343,3 +5736,53 @@ x-ess-entities:
     enum:
     - Archived
     - Registered
+  controlplane.host.WorkspaceDirectory:
+    title: WorkspaceDirectory
+    x-ess-name: controlplane.host.WorkspaceDirectory
+    x-ess-kind: entity
+    type: object
+    properties:
+      directory_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      workspace_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        x-ess-relation:
+          name: directories
+          kind: owns
+          source: controlplane.host.Workspace
+          target: controlplane.host.WorkspaceDirectory
+          cardinality: many
+          via: workspace_id
+          $ref: '#/x-ess-entities/controlplane.host.Workspace'
+      path:
+        type: string
+      repository_common_dirs:
+        type: array
+        items:
+          type: string
+      managed_common_dirs:
+        type: array
+        items:
+          type: string
+      state:
+        $ref: '#/x-ess-entities/controlplane.host.WorkspaceDirectory.State'
+    required:
+    - directory_id
+    - workspace_id
+    - path
+    - repository_common_dirs
+    - managed_common_dirs
+    - state
+    additionalProperties: false
+  controlplane.host.WorkspaceDirectory.State:
+    title: State
+    x-ess-name: controlplane.host.WorkspaceDirectory.State
+    x-ess-kind: enum
+    type: string
+    enum:
+    - Registered
+    - Removed

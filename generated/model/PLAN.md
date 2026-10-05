@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-  contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+  model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+  contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-113 capabilities: **113 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+125 capabilities: **125 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -20,11 +20,15 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | domain type | `controlplane.host.PublicationIntent.State` |
 | domain type | `controlplane.host.RepositoryRegistration.State` |
 | domain type | `controlplane.host.Workspace.State` |
+| domain type | `controlplane.host.WorkspaceDirectory.State` |
 | entity lifecycle | `controlplane.host.Assignment` |
 | entity lifecycle | `controlplane.host.Goal` |
 | entity lifecycle | `controlplane.host.PublicationIntent` |
 | entity lifecycle | `controlplane.host.RepositoryRegistration` |
 | entity lifecycle | `controlplane.host.Workspace` |
+| entity lifecycle | `controlplane.host.WorkspaceDirectory` |
+| command contract | `controlplane.host.AddWorkspaceDirectory` |
+| command behaviour | `controlplane.host.AddWorkspaceDirectory` |
 | command contract | `controlplane.host.ArchiveWorkspace` |
 | command behaviour | `controlplane.host.ArchiveWorkspace` |
 | command contract | `controlplane.host.BlockAssignment` |
@@ -67,6 +71,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.RegisterRepository` |
 | command contract | `controlplane.host.RegisterWorkspace` |
 | command behaviour | `controlplane.host.RegisterWorkspace` |
+| command contract | `controlplane.host.RemoveWorkspaceDirectory` |
+| command behaviour | `controlplane.host.RemoveWorkspaceDirectory` |
 | command contract | `controlplane.host.RepairAssignment` |
 | command behaviour | `controlplane.host.RepairAssignment` |
 | command contract | `controlplane.host.ReviewAssignment` |
@@ -103,6 +109,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.StartGoalApplied` |
 | event type | `controlplane.host.UpdateGoalApplied` |
 | event type | `controlplane.host.WorkspaceCreated` |
+| event type | `controlplane.host.WorkspaceDirectoryCreated` |
+| event type | `controlplane.host.WorkspaceDirectoryRemoved` |
 | error type | `controlplane.host.AssignmentNotFound` |
 | error type | `controlplane.host.AssignmentStateConflict` |
 | error type | `controlplane.host.GoalNotFound` |
@@ -111,6 +119,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | error type | `controlplane.host.PublicationIntentStateConflict` |
 | error type | `controlplane.host.RepositoryRegistrationNotFound` |
 | error type | `controlplane.host.RepositoryRegistrationStateConflict` |
+| error type | `controlplane.host.WorkspaceDirectoryNotFound` |
+| error type | `controlplane.host.WorkspaceDirectoryStateConflict` |
 | error type | `controlplane.host.WorkspaceNotFound` |
 | error type | `controlplane.host.WorkspaceStateConflict` |
 | view type | `controlplane.host.AssignmentList` |
@@ -121,6 +131,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | view query | `controlplane.host.PublicationIntentList` |
 | view type | `controlplane.host.RepositoryRegistrationList` |
 | view query | `controlplane.host.RepositoryRegistrationList` |
+| view type | `controlplane.host.WorkspaceDirectoryList` |
+| view query | `controlplane.host.WorkspaceDirectoryList` |
 | view type | `controlplane.host.WorkspaceList` |
 | view query | `controlplane.host.WorkspaceList` |
 | actor grants | `controlplane.host.Operator` |

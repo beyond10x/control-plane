@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral stores for the generated network entry points; no durability.
@@ -85,6 +85,22 @@ fn delete(&mut self, identity: &crate::primitives::Uuid) { crate::behaviour::Wor
 fn list(&self) -> Vec<crate::host::WorkspaceSnapshot> { crate::behaviour::WorkspaceStorage::list(&self.workspace_storage) }
 }
 
+/// Ephemeral storage of `controlplane.host.WorkspaceDirectory`, shared by clones.
+#[derive(Clone, Default)]
+pub struct MemoryWorkspaceDirectoryStorage(std::rc::Rc<std::cell::RefCell<Vec<crate::host::WorkspaceDirectorySnapshot>>>);
+impl crate::behaviour::WorkspaceDirectoryStorage for MemoryWorkspaceDirectoryStorage {
+fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::WorkspaceDirectorySnapshot> { let key = MemoryKey::Text((identity).0.clone()); self.0.borrow().iter().find(|row| MemoryKey::Text((&row.data.directory_id).0.clone()) == key).cloned() }
+fn put(&mut self, snapshot: crate::host::WorkspaceDirectorySnapshot) { self.delete(&snapshot.data.directory_id); let mut rows = self.0.borrow_mut(); rows.push(snapshot); rows.sort_by(|row, other| MemoryKey::Text((&row.data.directory_id).0.clone()).cmp(&MemoryKey::Text((&other.data.directory_id).0.clone()))); }
+fn delete(&mut self, identity: &crate::primitives::Uuid) { let key = MemoryKey::Text((identity).0.clone()); self.0.borrow_mut().retain(|row| MemoryKey::Text((&row.data.directory_id).0.clone()) != key); }
+fn list(&self) -> Vec<crate::host::WorkspaceDirectorySnapshot> { self.0.borrow().clone() }
+}
+impl crate::behaviour::WorkspaceDirectoryStorage for MemoryPorts {
+fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::WorkspaceDirectorySnapshot> { crate::behaviour::WorkspaceDirectoryStorage::get(&self.workspace_directory_storage, identity) }
+fn put(&mut self, snapshot: crate::host::WorkspaceDirectorySnapshot) { crate::behaviour::WorkspaceDirectoryStorage::put(&mut self.workspace_directory_storage, snapshot); }
+fn delete(&mut self, identity: &crate::primitives::Uuid) { crate::behaviour::WorkspaceDirectoryStorage::delete(&mut self.workspace_directory_storage, identity); }
+fn list(&self) -> Vec<crate::host::WorkspaceDirectorySnapshot> { crate::behaviour::WorkspaceDirectoryStorage::list(&self.workspace_directory_storage) }
+}
+
 /// Ports shared by generated components. Values disappear when the process exits.
 #[derive(Clone, Default)]
 pub struct MemoryPorts {
@@ -98,6 +114,8 @@ pub publication_intent_storage: MemoryPublicationIntentStorage,
 pub repository_registration_storage: MemoryRepositoryRegistrationStorage,
 /// Storage of `controlplane.host.Workspace`.
 pub workspace_storage: MemoryWorkspaceStorage,
+/// Storage of `controlplane.host.WorkspaceDirectory`.
+pub workspace_directory_storage: MemoryWorkspaceDirectoryStorage,
 }
 
 impl crate::behaviour::TryContext for MemoryPorts {

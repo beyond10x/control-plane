@@ -20,6 +20,10 @@ pub(crate) fn registration_key(command: &str, body: &Value) -> Option<String> {
             "repository:{}:{}",
             body["workspace_id"], body["common_dir"]
         )),
+        "AddWorkspaceDirectory" => Some(format!(
+            "directory:{}:{}",
+            body["workspace_id"], body["path"]
+        )),
         _ => None,
     }
 }

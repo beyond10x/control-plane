@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -110,6 +110,24 @@ pub trait WorkspaceStorage {
     fn list(&self) -> Vec<crate::host::WorkspaceSnapshot>;
 }
 
+/// Where `controlplane.host.WorkspaceDirectory` is stored — a port the implementor provides.
+///
+/// Keyed by the identity `directory_id`. Generated network entries supply an ephemeral implementation; durable storage remains a port.
+pub trait WorkspaceDirectoryStorage {
+    /// The instance with this identity, or `None` where none is stored.
+    fn get(&self, identity: &crate::primitives::Uuid) -> Option<crate::host::WorkspaceDirectorySnapshot>;
+
+    /// Stores this instance under its identity, replacing what was held.
+    fn put(&mut self, snapshot: crate::host::WorkspaceDirectorySnapshot);
+
+    /// Removes the instance with this identity.
+    fn delete(&mut self, identity: &crate::primitives::Uuid);
+
+    /// Every stored instance, in the order the store keeps them: the order a generated query
+    /// answers an unordered view in.
+    fn list(&self) -> Vec<crate::host::WorkspaceDirectorySnapshot>;
+}
+
 /// What the specification leaves to the implementor's context — a port the implementor provides.
 ///
 /// The caller's attributes, the values the model says the implementation assigns, and the answer
@@ -148,6 +166,28 @@ impl<P> Generated<P> {
     /// The generated behaviours, over `ports`.
     pub fn new(ports: P) -> Self {
         Self { ports }
+    }
+}
+
+/// `controlplane.host.AddWorkspaceDirectory`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::AddWorkspaceDirectoryBehavior for Generated<P>
+where
+    P: TryContext + WorkspaceDirectoryStorage,
+{
+    fn add_workspace_directory(&mut self, input: crate::host::AddWorkspaceDirectory) -> Result<crate::host::AddWorkspaceDirectoryOutcome, UnmetObligation> {
+        let _ = &input;
+        // `created`: the default.
+        let identity: crate::primitives::Uuid = self.ports.try_generate_uuid()?;
+        let data = crate::host::WorkspaceDirectoryData {
+            directory_id: identity.clone(),
+            workspace_id: input.workspace_id.clone(),
+            path: input.path.clone(),
+            repository_common_dirs: input.repository_common_dirs.clone(),
+            managed_common_dirs: input.managed_common_dirs.clone(),
+        };
+        let answer = crate::host::AddWorkspaceDirectoryOutcome::Created { workspace_directory_created: crate::host::WorkspaceDirectoryCreated { directory_id: identity.clone(), workspace_id: input.workspace_id.clone(), path: input.path.clone(), repository_common_dirs: input.repository_common_dirs.clone(), managed_common_dirs: input.managed_common_dirs.clone() } };
+        WorkspaceDirectoryStorage::put(&mut self.ports, crate::host::AnyWorkspaceDirectory::Registered(crate::host::WorkspaceDirectory::new(data)).snapshot());
+        return Ok(answer);
     }
 }
 
@@ -697,6 +737,30 @@ where
     }
 }
 
+/// `controlplane.host.RemoveWorkspaceDirectory`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::RemoveWorkspaceDirectoryBehavior for Generated<P>
+where
+    P: WorkspaceDirectoryStorage,
+{
+    fn remove_workspace_directory(&mut self, input: crate::host::RemoveWorkspaceDirectory) -> Result<crate::host::RemoveWorkspaceDirectoryOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = WorkspaceDirectoryStorage::get(&self.ports, &input.directory_id) else {
+            return Ok(crate::host::RemoveWorkspaceDirectoryOutcome::NotFound { error: crate::host::WorkspaceDirectoryNotFound });
+        };
+        let _ = &held;
+        let held_state = held.state;
+        let moved = match held.refine() {
+            crate::host::AnyWorkspaceDirectory::Registered(instance) => crate::host::AnyWorkspaceDirectory::Removed(instance.remove()),
+            _ => return Ok(crate::host::RemoveWorkspaceDirectoryOutcome::WrongState { error: crate::host::WorkspaceDirectoryStateConflict { state: held_state } }),
+        };
+        let next = moved.snapshot();
+        let answer = crate::host::RemoveWorkspaceDirectoryOutcome::Applied { workspace_directory_removed: crate::host::WorkspaceDirectoryRemoved { directory_id: input.directory_id.clone() } };
+        WorkspaceDirectoryStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.RepairAssignment`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::RepairAssignmentBehavior for Generated<P>
 where
@@ -945,6 +1009,27 @@ where
                 base_branch: held.data.base_branch,
                 test_command: held.data.test_command,
                 publish_command: held.data.publish_command,
+                state: held.state,
+            })
+            .collect())
+    }
+}
+
+/// `controlplane.host.WorkspaceDirectoryList`, generated: every row is one the specification fully determines from the stored `controlplane.host.WorkspaceDirectory`s.
+impl<P> crate::host::obligations::WorkspaceDirectoryListQuery for Generated<P>
+where
+    P: WorkspaceDirectoryStorage,
+{
+    fn workspace_directory_list(&self) -> Result<Vec<crate::host::WorkspaceDirectoryList>, UnmetObligation> {
+        let admitted = WorkspaceDirectoryStorage::list(&self.ports);
+        Ok(admitted
+            .into_iter()
+            .map(|held| crate::host::WorkspaceDirectoryList {
+                directory_id: held.data.directory_id,
+                workspace_id: held.data.workspace_id,
+                path: held.data.path,
+                repository_common_dirs: held.data.repository_common_dirs,
+                managed_common_dirs: held.data.managed_common_dirs,
                 state: held.state,
             })
             .collect())

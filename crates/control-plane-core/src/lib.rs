@@ -1,4 +1,5 @@
 //! Durable host for ESS-generated behavior. No external effect can precede a successful append.
+mod directories;
 mod discovery;
 mod guards;
 mod memory;
@@ -171,6 +172,25 @@ impl Store {
             caller.may(&format!("controlplane.host.{command}")),
             "actor is not granted this command"
         );
+        if command == "AddWorkspaceDirectory" {
+            return self
+                .add_workspace_directory(
+                    body["workspace_id"]
+                        .as_str()
+                        .context("workspace_id is required")?,
+                    Path::new(body["path"].as_str().context("path is required")?),
+                )
+                .await;
+        }
+        if command == "RemoveWorkspaceDirectory" {
+            return self
+                .remove_workspace_directory(
+                    body["directory_id"]
+                        .as_str()
+                        .context("directory_id is required")?,
+                )
+                .await;
+        }
         if let Some(existing) = self.prepare(command, &mut body)? {
             return Ok(existing);
         }
@@ -179,15 +199,23 @@ impl Store {
     }
 
     async fn apply(&mut self, command: &str, body: Value, actor: Actor) -> Result<Value> {
-        let (next, outcome) = invoke(&self.memory, command, &body, actor, None)?;
-        let decision = Decision {
-            command: command.to_owned(),
-            body,
-            actor: format!("{actor:?}"),
-            ids: next.ids.clone(),
-            outcome: outcome.clone(),
-        };
-        let data = serde_json::to_value(decision)?;
+        let mut next = self.memory.clone();
+        let mut decisions = Vec::new();
+        let outcome = stage(&mut next, &mut decisions, command, body, actor)?;
+        self.commit(next, decisions, actor).await?;
+        Ok(outcome)
+    }
+
+    async fn commit(&mut self, next: Memory, decisions: Vec<Decision>, actor: Actor) -> Result<()> {
+        ensure!(!decisions.is_empty(), "transaction has no decisions");
+        let data = decisions
+            .into_iter()
+            .map(serde_json::to_value)
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let events = data
+            .iter()
+            .map(|value| NewEvent::new("HostDecision", 1, value.clone()))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         let id = uuid::Uuid::new_v4().to_string();
         let meta = CommandMeta {
             idempotency_key: id.clone(),
@@ -208,17 +236,12 @@ impl Store {
         };
         let result = self
             .log
-            .append(
-                &self.stream,
-                expected,
-                &[NewEvent::new("HostDecision", 1, data)?],
-                &meta,
-            )
+            .append(&self.stream, expected, &events, &meta)
             .await
             .context("host decision was not committed; no dependent effect may run")?;
         self.version = result.last_version;
         self.memory = next;
-        Ok(outcome)
+        Ok(())
     }
 
     pub fn query(&self, view: &str) -> Result<Value> {
@@ -252,11 +275,36 @@ impl Store {
         let workspace_id = outcome["published"][0]["payload"]["workspace_id"]
             .as_str()
             .context("workspace creation has no identity")?;
-        for repo in found.repositories {
-            self.execute("RegisterRepository", json!({"workspace_id":workspace_id,"name":repo.name,"path":repo.path,"common_dir":repo.common_dir,"base_branch":repo.base_branch,"test_command":"task check","publish_command":""}), Actor::Operator).await?;
+        if !self
+            .memory
+            .directories
+            .values()
+            .any(|directory| directory.data.workspace_id.0 == workspace_id)
+        {
+            self.add_workspace_directory(workspace_id, &found.path)
+                .await?;
         }
         Ok(outcome)
     }
+}
+
+fn stage(
+    memory: &mut Memory,
+    decisions: &mut Vec<Decision>,
+    command: &str,
+    body: Value,
+    actor: Actor,
+) -> Result<Value> {
+    let (next, outcome) = invoke(memory, command, &body, actor, None)?;
+    decisions.push(Decision {
+        command: command.to_owned(),
+        body,
+        actor: format!("{actor:?}"),
+        ids: next.ids.clone(),
+        outcome: outcome.clone(),
+    });
+    *memory = next;
+    Ok(outcome)
 }
 
 fn invoke(

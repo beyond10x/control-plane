@@ -648,3 +648,265 @@ async fn blocked_repair_reacquires_worker_capacity() {
         .await;
     assert!(result.unwrap_err().to_string().contains("worker limit"));
 }
+
+#[tokio::test]
+async fn multiple_workspaces_keep_directory_membership_isolated() {
+    let temp = scratch();
+    let first = temp.path().join("first");
+    let second = temp.path().join("second");
+    let shared = temp.path().join("shared");
+    for path in [&first, &second, &shared] {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let one = identity(
+        &store.register_workspace(&first, "one").await.unwrap(),
+        "workspace_id",
+    );
+    let two = identity(
+        &store.register_workspace(&second, "two").await.unwrap(),
+        "workspace_id",
+    );
+    store.add_workspace_directory(&one, &shared).await.unwrap();
+    store.add_workspace_directory(&two, &shared).await.unwrap();
+    let dirs = store.query("WorkspaceDirectoryList").unwrap();
+    assert_eq!(dirs.as_array().unwrap().len(), 4);
+    for ws in [&one, &two] {
+        assert_eq!(
+            dirs.as_array()
+                .unwrap()
+                .iter()
+                .filter(|d| d["workspace_id"] == *ws)
+                .count(),
+            2
+        );
+    }
+}
+
+#[tokio::test]
+async fn non_git_directory_survives_restart_and_canonical_duplicates_are_idempotent() {
+    let temp = scratch();
+    let db = temp.path().join("state.sqlite");
+    let context = temp.path().join("context");
+    std::fs::create_dir_all(&context).unwrap();
+    let mut store = Store::open(&db).await.unwrap();
+    let ws = identity(
+        &store
+            .register_workspace(temp.path(), "workspace")
+            .await
+            .unwrap(),
+        "workspace_id",
+    );
+    let first = store.add_workspace_directory(&ws, &context).await.unwrap();
+    assert_eq!(
+        first,
+        store
+            .add_workspace_directory(&ws, &context.join("."))
+            .await
+            .unwrap()
+    );
+    let before = store.query("WorkspaceDirectoryList").unwrap();
+    drop(store);
+    let mut reopened = Store::open(&db).await.unwrap();
+    assert_eq!(before, reopened.query("WorkspaceDirectoryList").unwrap());
+    assert_eq!(
+        first,
+        reopened
+            .add_workspace_directory(&ws, &context)
+            .await
+            .unwrap()
+    );
+    assert!(
+        reopened
+            .query("RepositoryRegistrationList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn overlapping_directories_preserve_shared_repositories() {
+    let temp = scratch();
+    let root = temp.path().join("workspace");
+    std::fs::create_dir_all(&root).unwrap();
+    let container = temp.path().join("repositories");
+    let repo = container.join("repo");
+    repository(&repo);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = identity(
+        &store.register_workspace(&root, "workspace").await.unwrap(),
+        "workspace_id",
+    );
+    let parent = identity(
+        &store
+            .add_workspace_directory(&ws, &container)
+            .await
+            .unwrap(),
+        "directory_id",
+    );
+    let child = identity(
+        &store.add_workspace_directory(&ws, &repo).await.unwrap(),
+        "directory_id",
+    );
+    store.remove_workspace_directory(&parent).await.unwrap();
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Registered"
+    );
+    store.remove_workspace_directory(&child).await.unwrap();
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Disabled"
+    );
+}
+
+#[tokio::test]
+async fn removing_directory_preserves_manual_repository_registration() {
+    let temp = scratch();
+    let repo = temp.path().join("repo");
+    repository(&repo);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    register_repository(&mut store, &ws, &repo).await;
+    let dir = identity(
+        &store.add_workspace_directory(&ws, &repo).await.unwrap(),
+        "directory_id",
+    );
+    store.remove_workspace_directory(&dir).await.unwrap();
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Registered"
+    );
+}
+
+#[tokio::test]
+async fn active_assignment_prevents_directory_removal() {
+    let temp = scratch();
+    let repo = temp.path().join("repo");
+    repository(&repo);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let dir = identity(
+        &store.add_workspace_directory(&ws, &repo).await.unwrap(),
+        "directory_id",
+    );
+    let repo_id = store.query("RepositoryRegistrationList").unwrap()[0]["repository_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo_id, "story:retained").await;
+    claim(&mut store, &assignment).await.unwrap();
+    assert!(store.remove_workspace_directory(&dir).await.is_err());
+    assert_eq!(
+        store.query("WorkspaceDirectoryList").unwrap()[0]["state"],
+        "Registered"
+    );
+}
+
+#[tokio::test]
+async fn directory_and_discovered_repositories_commit_atomically() {
+    let temp = scratch();
+    let repo = temp.path().join("repo");
+    repository(&repo);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    store.version += 1;
+    assert!(store.add_workspace_directory(&ws, &repo).await.is_err());
+    assert!(
+        store
+            .query("WorkspaceDirectoryList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        store
+            .query("RepositoryRegistrationList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    store.version -= 1;
+    let directory = identity(
+        &store.add_workspace_directory(&ws, &repo).await.unwrap(),
+        "directory_id",
+    );
+    assert_eq!(
+        store
+            .query("WorkspaceDirectoryList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .query("RepositoryRegistrationList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    store.version += 1;
+    assert!(store.remove_workspace_directory(&directory).await.is_err());
+    assert_eq!(
+        store.query("WorkspaceDirectoryList").unwrap()[0]["state"],
+        "Registered"
+    );
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Registered"
+    );
+    drop(store);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    assert_eq!(
+        store.query("WorkspaceDirectoryList").unwrap()[0]["state"],
+        "Registered"
+    );
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Registered"
+    );
+    store.remove_workspace_directory(&directory).await.unwrap();
+    drop(store);
+    let store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    assert_eq!(
+        store.query("WorkspaceDirectoryList").unwrap()[0]["state"],
+        "Removed"
+    );
+    assert_eq!(
+        store.query("RepositoryRegistrationList").unwrap()[0]["state"],
+        "Disabled"
+    );
+}
+
+#[tokio::test]
+async fn legacy_workspaces_gain_primary_directory_once_without_losing_goals() {
+    let temp = scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    store.backfill_workspace_directories().await.unwrap();
+    store.backfill_workspace_directories().await.unwrap();
+    assert_eq!(
+        store
+            .query("WorkspaceDirectoryList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(store.query("GoalList").unwrap()[0]["goal_id"], goal);
+}

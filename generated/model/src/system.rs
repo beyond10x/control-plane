@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `controlplane` system, v1: its components assembled, its bindings wired, and its one transport.
@@ -71,6 +71,10 @@ pub enum SystemEvent {
     UpdateGoalApplied(crate::host::UpdateGoalApplied),
     /// `controlplane.host.WorkspaceCreated`.
     WorkspaceCreated(crate::host::WorkspaceCreated),
+    /// `controlplane.host.WorkspaceDirectoryCreated`.
+    WorkspaceDirectoryCreated(crate::host::WorkspaceDirectoryCreated),
+    /// `controlplane.host.WorkspaceDirectoryRemoved`.
+    WorkspaceDirectoryRemoved(crate::host::WorkspaceDirectoryRemoved),
 }
 
 impl SystemEvent {
@@ -103,6 +107,8 @@ impl SystemEvent {
             Self::StartGoalApplied(_) => "controlplane.host.StartGoalApplied",
             Self::UpdateGoalApplied(_) => "controlplane.host.UpdateGoalApplied",
             Self::WorkspaceCreated(_) => "controlplane.host.WorkspaceCreated",
+            Self::WorkspaceDirectoryCreated(_) => "controlplane.host.WorkspaceDirectoryCreated",
+            Self::WorkspaceDirectoryRemoved(_) => "controlplane.host.WorkspaceDirectoryRemoved",
         }
     }
 }
@@ -136,6 +142,8 @@ impl From<crate::ports::control_plane::PublishedEvent> for SystemEvent {
             crate::ports::control_plane::PublishedEvent::StartGoalApplied(event) => Self::StartGoalApplied(event),
             crate::ports::control_plane::PublishedEvent::UpdateGoalApplied(event) => Self::UpdateGoalApplied(event),
             crate::ports::control_plane::PublishedEvent::WorkspaceCreated(event) => Self::WorkspaceCreated(event),
+            crate::ports::control_plane::PublishedEvent::WorkspaceDirectoryCreated(event) => Self::WorkspaceDirectoryCreated(event),
+            crate::ports::control_plane::PublishedEvent::WorkspaceDirectoryRemoved(event) => Self::WorkspaceDirectoryRemoved(event),
         }
     }
 }
@@ -183,7 +191,7 @@ impl<ControlPlaneBehaviors> System<ControlPlaneBehaviors> {
 
 impl<ControlPlaneBehaviors> System<ControlPlaneBehaviors>
 where
-    ControlPlaneBehaviors: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    ControlPlaneBehaviors: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     /// Delivers until quiescent: collects every component's outbox onto the log. No binding
     /// reacts to anything this specification publishes, so collecting is the whole delivery.

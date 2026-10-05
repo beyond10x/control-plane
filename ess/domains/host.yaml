@@ -25,6 +25,11 @@ entities:
       - Registered
       to: Archived
   relations:
+  - name: directories
+    kind: owns
+    target: controlplane.host.WorkspaceDirectory
+    cardinality: many
+    via: workspace_id
   - name: repositories
     kind: owns
     target: controlplane.host.RepositoryRegistration
@@ -35,6 +40,27 @@ entities:
     target: controlplane.host.Goal
     cardinality: many
     via: workspace_id
+- name: controlplane.host.WorkspaceDirectory
+  identity:
+    name: directory_id
+    type: Uuid
+  fields:
+  - name: workspace_id
+    type: Uuid
+  - name: path
+    type: String
+  - name: repository_common_dirs
+    type: List<String>
+  - name: managed_common_dirs
+    type: List<String>
+  lifecycle:
+    initial: Registered
+    states: [Registered, Removed]
+    terminal: [Removed]
+    transitions:
+    - name: remove
+      from: [Registered]
+      to: Removed
 - name: controlplane.host.RepositoryRegistration
   identity:
     name: repository_id
@@ -291,6 +317,8 @@ entities:
 actors:
 - name: controlplane.host.Operator
   may:
+  - controlplane.host.AddWorkspaceDirectory
+  - controlplane.host.RemoveWorkspaceDirectory
   - controlplane.host.RegisterWorkspace
   - controlplane.host.ArchiveWorkspace
   - controlplane.host.RegisterRepository
@@ -329,6 +357,12 @@ actors:
   - controlplane.host.ConfirmPublication
   - controlplane.host.RecordPlanningProgress
 errors:
+- name: controlplane.host.WorkspaceDirectoryStateConflict
+  fields:
+  - name: state
+    type: controlplane.host.WorkspaceDirectory.State
+- name: controlplane.host.WorkspaceDirectoryNotFound
+  fields: []
 - name: controlplane.host.WorkspaceStateConflict
   summary: The command cannot act in the current state.
   fields:
@@ -368,6 +402,54 @@ errors:
   - name: state
     type: controlplane.host.PublicationIntent.State
 commands:
+- name: controlplane.host.AddWorkspaceDirectory
+  input:
+  - name: workspace_id
+    type: Uuid
+  - name: path
+    type: String
+  - name: repository_common_dirs
+    type: List<String>
+  - name: managed_common_dirs
+    type: List<String>
+  outcomes:
+  - name: created
+    creates: controlplane.host.WorkspaceDirectory
+    instance: directory_id
+    sets:
+      workspace_id: input.workspace_id
+      path: input.path
+      repository_common_dirs: input.repository_common_dirs
+      managed_common_dirs: input.managed_common_dirs
+    emits:
+    - controlplane.host.WorkspaceDirectoryCreated
+    payload:
+      controlplane.host.WorkspaceDirectoryCreated:
+        directory_id:
+          generated: true
+        workspace_id: input.workspace_id
+        path: input.path
+        repository_common_dirs: input.repository_common_dirs
+        managed_common_dirs: input.managed_common_dirs
+- name: controlplane.host.RemoveWorkspaceDirectory
+  input:
+  - name: directory_id
+    type: Uuid
+  outcomes:
+  - name: applied
+    moves: controlplane.host.WorkspaceDirectory.remove
+    instance: directory_id
+    emits:
+    - controlplane.host.WorkspaceDirectoryRemoved
+    payload:
+      controlplane.host.WorkspaceDirectoryRemoved:
+        directory_id: input.directory_id
+  - name: wrong-state
+    wrong_state: true
+    error: controlplane.host.WorkspaceDirectoryStateConflict
+  - name: not-found
+    unknown_instance: true
+    error: controlplane.host.WorkspaceDirectoryNotFound
 - name: controlplane.host.RegisterWorkspace
   input:
   - name: path
@@ -1143,6 +1225,22 @@ commands:
     unknown_instance: true
     error: controlplane.host.GoalNotFound
 events:
+- name: controlplane.host.WorkspaceDirectoryCreated
+  fields:
+  - name: directory_id
+    type: Uuid
+  - name: workspace_id
+    type: Uuid
+  - name: path
+    type: String
+  - name: repository_common_dirs
+    type: List<String>
+  - name: managed_common_dirs
+    type: List<String>
+- name: controlplane.host.WorkspaceDirectoryRemoved
+  fields:
+  - name: directory_id
+    type: Uuid
 - name: controlplane.host.WorkspaceCreated
   fields:
   - name: workspace_id
@@ -1400,6 +1498,22 @@ events:
   - name: planning_phase
     type: controlplane.host.PlanningPhase
 views:
+- name: controlplane.host.WorkspaceDirectoryList
+  fields:
+  - name: directory_id
+    type: Uuid
+  - name: workspace_id
+    type: Uuid
+  - name: path
+    type: String
+  - name: repository_common_dirs
+    type: List<String>
+  - name: managed_common_dirs
+    type: List<String>
+  - name: state
+    type: controlplane.host.WorkspaceDirectory.State
+  source: controlplane.host.WorkspaceDirectory
+  consistency: read_your_writes
 - name: controlplane.host.WorkspaceList
   source: controlplane.host.Workspace
   consistency: read_your_writes
