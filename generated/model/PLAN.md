@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-  contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+  model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+  contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-125 capabilities: **125 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+128 capabilities: **128 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -47,6 +47,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.ConfirmPublication` |
 | command contract | `controlplane.host.CreateGoal` |
 | command behaviour | `controlplane.host.CreateGoal` |
+| command contract | `controlplane.host.DeleteGoal` |
+| command behaviour | `controlplane.host.DeleteGoal` |
 | command contract | `controlplane.host.DisableRepositoryRegistration` |
 | command behaviour | `controlplane.host.DisableRepositoryRegistration` |
 | command contract | `controlplane.host.EnableRepositoryRegistration` |
@@ -95,6 +97,7 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.DisableRepositoryRegistrationApplied` |
 | event type | `controlplane.host.EnableRepositoryRegistrationApplied` |
 | event type | `controlplane.host.GoalCreated` |
+| event type | `controlplane.host.GoalDeleted` |
 | event type | `controlplane.host.MarkPublicationUncertainApplied` |
 | event type | `controlplane.host.MergeAssignmentApplied` |
 | event type | `controlplane.host.PauseGoalApplied` |

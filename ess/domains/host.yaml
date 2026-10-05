@@ -328,6 +328,7 @@ actors:
   - controlplane.host.StartGoal
   - controlplane.host.PauseGoal
   - controlplane.host.CancelGoal
+  - controlplane.host.DeleteGoal
   - controlplane.host.UpdateGoal
   - controlplane.host.ConfigureRepository
 - name: controlplane.host.Supervisor
@@ -717,6 +718,32 @@ commands:
         goal_id: input.goal_id
   - name: wrong-state
     wrong_state: true
+    error: controlplane.host.GoalStateConflict
+  - name: not-found
+    unknown_instance: true
+    error: controlplane.host.GoalNotFound
+- name: controlplane.host.DeleteGoal
+  input:
+  - name: goal_id
+    type: Uuid
+  outcomes:
+  - name: applied
+    deletes: controlplane.host.Goal
+    instance: goal_id
+    when_subject_state: Cancelled
+    emits:
+    - controlplane.host.GoalDeleted
+    payload:
+      controlplane.host.GoalDeleted:
+        goal_id: input.goal_id
+  - name: paused
+    when_subject_state: Paused
+    error: controlplane.host.GoalStateConflict
+  - name: running
+    when_subject_state: Running
+    error: controlplane.host.GoalStateConflict
+  - name: satisfied
+    when_subject_state: Satisfied
     error: controlplane.host.GoalStateConflict
   - name: not-found
     unknown_instance: true
@@ -1333,6 +1360,10 @@ events:
     type: Uuid
   - name: satisfaction_receipt
     type: String
+- name: controlplane.host.GoalDeleted
+  fields:
+  - name: goal_id
+    type: Uuid
 - name: controlplane.host.CancelGoalApplied
   fields:
   - name: goal_id

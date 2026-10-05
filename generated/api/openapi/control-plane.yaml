@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-# contract digest slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+# model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+# contract digest slice-sha256/2:9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-    contract_digest: slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+    source_digest: ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+    contract_digest: slice-sha256/2:9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
   x-ess-reached-by: network
 tags:
 - name: host
@@ -701,6 +701,87 @@ paths:
                 - refused
                 - actor
                 type: object
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
+  /host/commands/DeleteGoal:
+    post:
+      operationId: controlplane.host.DeleteGoal
+      summary: DeleteGoal
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Operator
+      requestBody:
+        description: The input `controlplane.host.DeleteGoal` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.DeleteGoal.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.DeleteGoal.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.DeleteGoal.not-found.Response'
+        '409':
+          description: 'Outcomes `paused`, `running` and `satisfied`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                discriminator:
+                  mapping:
+                    paused: '#/components/schemas/controlplane.host.DeleteGoal.paused.Response'
+                    running: '#/components/schemas/controlplane.host.DeleteGoal.running.Response'
+                    satisfied: '#/components/schemas/controlplane.host.DeleteGoal.satisfied.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.DeleteGoal.paused.Response'
+                - $ref: '#/components/schemas/controlplane.host.DeleteGoal.running.Response'
+                - $ref: '#/components/schemas/controlplane.host.DeleteGoal.satisfied.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -3136,6 +3217,137 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.DeleteGoal.Input:
+      title: DeleteGoal input
+      x-ess-name: controlplane.host.DeleteGoal
+      x-ess-kind: command-input
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - goal_id
+      additionalProperties: false
+    controlplane.host.DeleteGoal.applied.Response:
+      additionalProperties: false
+      description: Taken when the existing subject is in Cancelled. A `controlplane.host.Goal` no longer exists. The instance is the one `goal_id` names. Emits `GoalDeleted`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.GoalDeleted
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.GoalDeleted.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.DeleteGoal.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.GoalNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.DeleteGoal.paused.Response:
+      additionalProperties: false
+      description: Taken when the existing subject is in Paused.
+      properties:
+        error:
+          const: controlplane.host.GoalStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: paused
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.GoalStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.DeleteGoal.running.Response:
+      additionalProperties: false
+      description: Taken when the existing subject is in Running.
+      properties:
+        error:
+          const: controlplane.host.GoalStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: running
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.GoalStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.DeleteGoal.satisfied.Response:
+      additionalProperties: false
+      description: Taken when the existing subject is in Satisfied.
+      properties:
+        error:
+          const: controlplane.host.GoalStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: satisfied
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.GoalStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
     controlplane.host.DisableRepositoryRegistration.Input:
       title: DisableRepositoryRegistration input
       x-ess-name: controlplane.host.DisableRepositoryRegistration
@@ -3410,6 +3622,19 @@ components:
       - planning_reason
       - planning_receipt
       - planning_phase
+      additionalProperties: false
+    controlplane.host.GoalDeleted.Event:
+      title: GoalDeleted payload
+      x-ess-name: controlplane.host.GoalDeleted
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        goal_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      required:
+      - goal_id
       additionalProperties: false
     controlplane.host.GoalList.Response:
       additionalProperties: false

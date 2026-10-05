@@ -222,11 +222,8 @@ fn command(
 fn commit(host: &Host, path: &Path, message: &str) -> Result<String> {
     if !git(host, path, &["status", "--porcelain"])?.is_empty() {
         git(host, path, &["add", "--all"])?;
-        let (program, prefix) = host
-            .config
-            .commit_command
-            .split_first()
-            .context("commit command empty")?;
+        let command = host.config.commit_for(path, &host.runner)?;
+        let (program, prefix) = command.split_first().context("commit command empty")?;
         let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
         host.runner.run(path, program, &args, None)?;
     }
@@ -762,7 +759,7 @@ enum ImplementationAction {
     Run { program: String, args: Vec<String> },
     Finish { summary: String },
 }
-fn scoped(path: &str, scope: &[String]) -> Result<()> {
+fn scoped(path: &str, scope: &[String], allow_go: bool) -> Result<()> {
     let relative = Path::new(path);
     ensure!(
         !relative.starts_with(".engineering") && !relative.starts_with(".git"),
@@ -774,10 +771,25 @@ fn scoped(path: &str, scope: &[String]) -> Result<()> {
         "write is outside accepted AEP scope: {path}"
     );
     ensure!(
-        !matches!(
-            relative.extension().and_then(|e| e.to_str()),
-            Some("py" | "sh" | "bash" | "js" | "mjs" | "cjs" | "ts" | "tsx" | "jsx" | "rb" | "go")
-        ),
+        (allow_go
+            && relative
+                .extension()
+                .is_some_and(|extension| extension == "go"))
+            || !matches!(
+                relative.extension().and_then(|e| e.to_str()),
+                Some(
+                    "py" | "sh"
+                        | "bash"
+                        | "js"
+                        | "mjs"
+                        | "cjs"
+                        | "ts"
+                        | "tsx"
+                        | "jsx"
+                        | "rb"
+                        | "go"
+                )
+            ),
         "runnable source must be Rust"
     );
     Ok(())
@@ -800,6 +812,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
         path,
         run,
     } = *execution;
+    let allow_go = host.config.local_eval(path, &host.runner)?;
     let started = Instant::now();
     let budget = attempt_budget(goal)?;
     let mut transcript = vec![format!(
@@ -834,7 +847,12 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
             prompt.len() <= 1024 * 1024,
             "implementation context exceeded 1 MiB"
         );
-        let response=host.model.respond(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:"Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. All runnable source is Rust, CLIs use clap derive. Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt.".into(),prompt,schema:implementation_schema(),timeout:remaining})?;
+        let language = if allow_go {
+            "This isolated eval repository permits Go with the standard library and HTML/CSS frontend. Go commands are version or build/test/vet/list ./...."
+        } else {
+            "All runnable source is Rust, CLIs use clap derive."
+        };
+        let response=host.model.respond(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt."),prompt,schema:implementation_schema(),timeout:remaining})?;
         let action: ImplementationAction = serde_json::from_value(response)?;
         host.guard(assignment, goal, repo, false)?;
         match action {
@@ -853,7 +871,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 path: name,
                 contents,
             } => {
-                scoped(&name, scope)?;
+                scoped(&name, scope, allow_go)?;
                 ensure!(contents.len() <= 256 * 1024, "write exceeds budget");
                 let file = engine::confined(path, &name, true)?;
                 std::fs::create_dir_all(file.parent().context("write parent")?)?;
@@ -867,7 +885,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 )?;
             }
             ImplementationAction::Delete { path: name } => {
-                scoped(&name, scope)?;
+                scoped(&name, scope, allow_go)?;
                 std::fs::remove_file(engine::confined(path, &name, false)?)?;
                 transcript.push(format!("deleted {name}"));
                 host.progress(
@@ -878,7 +896,18 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
                 )?;
             }
             ImplementationAction::Run { program, args } => {
-                let args = inspection_arguments(path, &program, &args)?;
+                let args = if program == "go" && allow_go {
+                    ensure!(
+                        args == ["version"]
+                            || ["build", "test", "vet", "list"]
+                                .iter()
+                                .any(|verb| args == [*verb, "./..."]),
+                        "eval Go command must be version or build/test/vet/list ./..."
+                    );
+                    args
+                } else {
+                    inspection_arguments(path, &program, &args)?
+                };
                 let mut runner = host.runner.clone();
                 runner.timeout = runner.timeout.min(remaining);
                 host.progress(
@@ -898,12 +927,12 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
             ImplementationAction::Finish { summary } => {
                 ensure!(!summary.trim().is_empty(), "implementation summary missing");
                 for name in git(host, path, &["diff", "--name-only", "HEAD"])?.lines() {
-                    scoped(name, scope)?;
+                    scoped(name, scope, allow_go)?;
                 }
                 for name in
                     git(host, path, &["ls-files", "--others", "--exclude-standard"])?.lines()
                 {
-                    scoped(name, scope)?;
+                    scoped(name, scope, allow_go)?;
                 }
                 return Ok(());
             }

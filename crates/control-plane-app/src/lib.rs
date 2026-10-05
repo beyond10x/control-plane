@@ -132,6 +132,7 @@ const OPERATOR_COMMANDS: &[&str] = &[
     "StartGoal",
     "PauseGoal",
     "CancelGoal",
+    "DeleteGoal",
 ];
 
 /// Routes intentionally contain no supervisor command or request-selected actor.

@@ -682,6 +682,7 @@ dependencies = [
  "control-plane-core",
  "ess-conformance",
  "ess-primitives",
+ "reqwest",
  "serde_json",
  "tempfile",
  "tokio",

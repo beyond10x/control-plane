@@ -79,6 +79,50 @@ fn identity(outcome: &Value, field: &str) -> String {
 fn goal_body(workspace: &str) -> Value {
     json!({"workspace_id":workspace,"objective":"deliver change","acceptance":"tests and independent review","max_workers":3,"max_attempts":3,"max_minutes":60,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true})
 }
+
+#[tokio::test]
+async fn cancelled_goal_can_be_deleted_without_deleting_its_workspace() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("delete.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let workspace = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &workspace).await;
+    let refused = store
+        .execute("DeleteGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await;
+    assert!(refused.is_err() || refused.unwrap()["outcome"] != "applied");
+    store
+        .execute("CancelGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let deleted = store
+        .execute("DeleteGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    assert_eq!(deleted["outcome"], "applied");
+    assert!(
+        store
+            .query("GoalList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    drop(store);
+    let reopened = Store::open(db).await.unwrap();
+    assert!(
+        reopened
+            .query("GoalList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        reopened.query("WorkspaceList").unwrap()[0]["workspace_id"],
+        workspace
+    );
+}
 async fn workspace(store: &mut Store, path: &Path) -> String {
     identity(
         &store
@@ -398,7 +442,66 @@ async fn durable_contract_retains_generated_semantics_below_operational_admissio
 fn adversary_scratch() -> tempfile::TempDir {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/adversary-fixtures");
     std::fs::create_dir_all(&root).unwrap();
-    tempfile::tempdir_in(root).unwrap()
+    adversary_scratch_in(&root)
+}
+fn adversary_scratch_in(root: &Path) -> tempfile::TempDir {
+    let temp = tempfile::tempdir_in(root).unwrap();
+    // Stop Git discovery at this non-worktree fixture boundary. In PR CI the
+    // surrounding source checkout is detached and has no origin/HEAD ref.
+    let output = std::process::Command::new("git")
+        .args(["init", "--bare"])
+        .arg(temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    temp
+}
+
+#[test]
+fn adversary_fixture_is_independent_of_detached_parent_without_origin_head() {
+    let outer = adversary_scratch();
+    let parent = outer.path().join("detached-parent");
+    repository(&parent);
+    for args in [
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Fixture detached parent",
+        ],
+        vec!["switch", "--detach"],
+        vec!["branch", "-D", "main"],
+    ] {
+        let output = std::process::Command::new("git")
+            .current_dir(&parent)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let unisolated = tempfile::tempdir_in(&parent).unwrap();
+    let error = discover(unisolated.path()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("detached Git repository needs an unambiguous base branch")
+    );
+    let child = adversary_scratch_in(&parent);
+    let discovered =
+        discover(child.path()).expect("non-Git fixture inherited its detached parent repository");
+    assert!(discovered.repositories.is_empty());
 }
 
 #[tokio::test]

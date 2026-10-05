@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-contract digest slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+contract digest slice-sha256/2:9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 do not edit: regenerate with `ess generate`
 -->
 
@@ -716,6 +716,26 @@ It has one outcome.
 
 **`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Goal`, which starts in `Paused`. The new instance's identity is published as `goal_id` on `controlplane.host.GoalCreated`. It emits `controlplane.host.GoalCreated`. It sets `workspace_id` from `input.workspace_id`, `objective` from `input.objective`, `acceptance` from `input.acceptance`, `max_workers` from `input.max_workers`, `max_attempts` from `input.max_attempts`, `max_minutes` from `input.max_minutes`, `planner_model` from `input.planner_model`, `implementor_model` from `input.implementor_model`, `reviewer_model` from `input.reviewer_model`, `merge_authority` from `input.merge_authority`, `revision` from `"1"`, `satisfaction_receipt` from `""`, `planning_revision` from `"0"`, `planning_fingerprint` from `""`, `planning_repository` from `""`, `planning_worktree_id` from `""`, `planning_worktree_path` from `""`, `planning_reason` from `""`, `planning_receipt` from `""` and `planning_phase` from `"Idle"`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
+### `DeleteGoal`
+
+`controlplane.host.DeleteGoal`.
+
+It takes:
+
+- `goal_id` — `Uuid`
+
+It has five outcomes.
+
+**`applied`** — Taken when the existing subject is in Cancelled. It removes the `controlplane.host.Goal` its input names; no view shows it afterwards. The instance is the one named by the input field `goal_id`. It emits `controlplane.host.GoalDeleted`. A test establishes the declared subject state and constructs input selecting this branch in that state.
+
+**`paused`** — Taken when the existing subject is in Paused. No entity in this specification changes. It reports `controlplane.host.GoalStateConflict`, carrying `state`. It emits nothing. A test establishes the declared subject state and constructs input selecting this branch in that state.
+
+**`running`** — Taken when the existing subject is in Running. No entity in this specification changes. It reports `controlplane.host.GoalStateConflict`, carrying `state`. It emits nothing. A test establishes the declared subject state and constructs input selecting this branch in that state.
+
+**`satisfied`** — Taken when the existing subject is in Satisfied. No entity in this specification changes. It reports `controlplane.host.GoalStateConflict`, carrying `state`. It emits nothing. A test establishes the declared subject state and constructs input selecting this branch in that state.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.GoalNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
 ### `DisableRepositoryRegistration`
 
 `controlplane.host.DisableRepositoryRegistration`.
@@ -1213,6 +1233,18 @@ Emitted by `controlplane.host.CreateGoal` on its `created` outcome.
 
 Nothing in this system reacts to it.
 
+### `GoalDeleted`
+
+`controlplane.host.GoalDeleted`.
+
+It carries:
+
+- `goal_id` — `Uuid`
+
+Emitted by `controlplane.host.DeleteGoal` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
 ### `MarkPublicationUncertainApplied`
 
 `controlplane.host.MarkPublicationUncertainApplied`.
@@ -1507,6 +1539,8 @@ It carries nothing beyond its name, so a caller can tell what went wrong and not
 
 Reported by `controlplane.host.CancelGoal` on its `not-found` outcome.
 
+Reported by `controlplane.host.DeleteGoal` on its `not-found` outcome.
+
 Reported by `controlplane.host.PauseGoal` on its `not-found` outcome.
 
 Reported by `controlplane.host.RecordPlanningProgress` on its `not-found` outcome.
@@ -1526,6 +1560,8 @@ It carries:
 - `state` — `controlplane.host.Goal.State`
 
 Reported by `controlplane.host.CancelGoal` on its `wrong-state` outcome.
+
+Reported by `controlplane.host.DeleteGoal` on its `paused`, `running` and `satisfied` outcomes.
 
 Reported by `controlplane.host.PauseGoal` on its `wrong-state` outcome.
 
@@ -1615,7 +1651,7 @@ An actor is who may ask this context for something. Every grant below points at 
 
 `controlplane.host.Operator`.
 
-It may invoke [`AddWorkspaceDirectory`](#addworkspacedirectory), [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`ConfigureRepository`](#configurerepository), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RemoveWorkspaceDirectory`](#removeworkspacedirectory), [`StartGoal`](#startgoal) and [`UpdateGoal`](#updategoal).
+It may invoke [`AddWorkspaceDirectory`](#addworkspacedirectory), [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`ConfigureRepository`](#configurerepository), [`CreateGoal`](#creategoal), [`DeleteGoal`](#deletegoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RemoveWorkspaceDirectory`](#removeworkspacedirectory), [`StartGoal`](#startgoal) and [`UpdateGoal`](#updategoal).
 
 ### `Supervisor`
 
@@ -1626,4 +1662,4 @@ It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#bloc
 
 ---
 
-Generated from controlplane v1 · model digest `528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902` · contract digest `slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548` · contract digest `slice-sha256/2:9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2`. Do not edit this file; change the specification and regenerate it with `ess generate`.

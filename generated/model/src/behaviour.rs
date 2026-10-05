@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -434,6 +434,45 @@ where
         let answer = crate::host::CreateGoalOutcome::Created { goal_created: crate::host::GoalCreated { goal_id: identity.clone(), workspace_id: input.workspace_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone(), planning_revision: 0, planning_fingerprint: "".to_owned(), planning_repository: "".to_owned(), planning_worktree_id: "".to_owned(), planning_worktree_path: "".to_owned(), planning_reason: "".to_owned(), planning_receipt: "".to_owned(), planning_phase: crate::host::PlanningPhase::Idle } };
         GoalStorage::put(&mut self.ports, crate::host::AnyGoal::Paused(crate::host::Goal::new(data)).snapshot());
         return Ok(answer);
+    }
+}
+
+/// `controlplane.host.DeleteGoal`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::DeleteGoalBehavior for Generated<P>
+where
+    P: GoalStorage,
+{
+    fn delete_goal(&mut self, input: crate::host::DeleteGoal) -> Result<crate::host::DeleteGoalOutcome, UnmetObligation> {
+        let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+            return Ok(crate::host::DeleteGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+        };
+        let _ = &held;
+        // `applied`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Cancelled)), "controlplane.host.DeleteGoal")? {
+            let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+                return Ok(crate::host::DeleteGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+            };
+            let _ = &held;
+            let answer = crate::host::DeleteGoalOutcome::Applied { goal_deleted: crate::host::GoalDeleted { goal_id: input.goal_id.clone() } };
+            GoalStorage::delete(&mut self.ports, &input.goal_id);
+            return Ok(answer);
+        }
+        // `paused`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Paused)), "controlplane.host.DeleteGoal")? {
+            return Ok(crate::host::DeleteGoalOutcome::Paused { error: crate::host::GoalStateConflict { state: held.state } });
+        }
+        // `running`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Running)), "controlplane.host.DeleteGoal")? {
+            return Ok(crate::host::DeleteGoalOutcome::Running { error: crate::host::GoalStateConflict { state: held.state } });
+        }
+        // `satisfied`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Satisfied)), "controlplane.host.DeleteGoal")? {
+            return Ok(crate::host::DeleteGoalOutcome::Satisfied { error: crate::host::GoalStateConflict { state: held.state } });
+        }
+        // No declared branch answers this request.
+        Err(undeclared("controlplane.host.DeleteGoal"))
     }
 }
 
@@ -1053,4 +1092,15 @@ where
             })
             .collect())
     }
+}
+
+/// The typed refusal of a request the model declares no outcome for.
+fn undeclared(source: &'static str) -> UnmetObligation {
+    let capability = "command behaviour";
+    UnmetObligation { capability, source }
+}
+
+/// A guard's truth, where it has one: Unknown selects no branch, so the model declares no outcome.
+fn decided(truth: Option<bool>, command: &'static str) -> Result<bool, UnmetObligation> {
+    truth.ok_or_else(|| undeclared(command))
 }

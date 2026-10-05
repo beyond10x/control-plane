@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -1898,6 +1898,49 @@ pub enum CreateGoalOutcome {
     },
 }
 
+/// DeleteGoal — the input of `controlplane.host.DeleteGoal`.
+///
+/// Everything it can result in is [`DeleteGoalOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteGoal {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+}
+
+/// Everything `controlplane.host.DeleteGoal` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteGoalOutcome {
+    /// `applied` — when the existing subject is in Cancelled.
+    Applied {
+        /// The `controlplane.host.GoalDeleted` this outcome publishes.
+        goal_deleted: GoalDeleted,
+    },
+    /// `paused` — when the existing subject is in Paused.
+    Paused {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
+    },
+    /// `running` — when the existing subject is in Running.
+    Running {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
+    },
+    /// `satisfied` — when the existing subject is in Satisfied.
+    Satisfied {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.GoalNotFound`.
+        error: GoalNotFound,
+    },
+}
+
 /// DisableRepositoryRegistration — the input of `controlplane.host.DisableRepositoryRegistration`.
 ///
 /// Everything it can result in is [`DisableRepositoryRegistrationOutcome`].
@@ -2692,6 +2735,13 @@ pub struct GoalCreated {
     pub planning_phase: PlanningPhase,
 }
 
+/// GoalDeleted — the event `controlplane.host.GoalDeleted`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalDeleted {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+}
+
 /// MarkPublicationUncertainApplied — the event `controlplane.host.MarkPublicationUncertainApplied`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarkPublicationUncertainApplied {
@@ -3267,6 +3317,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
         fn create_goal(&mut self, input: super::CreateGoal) -> Result<super::CreateGoalOutcome, crate::obligation::UnmetObligation>;
+    }
+
+    /// The behaviour `controlplane.host.DeleteGoal` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait DeleteGoalBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.DeleteGoal`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn delete_goal(&mut self, input: super::DeleteGoal) -> Result<super::DeleteGoalOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `controlplane.host.DisableRepositoryRegistration` — generated.

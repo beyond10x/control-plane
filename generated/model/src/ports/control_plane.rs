@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! control-plane — the `control-plane` component of `controlplane` v1.
@@ -42,6 +42,8 @@ pub enum PublishedEvent {
     EnableRepositoryRegistrationApplied(crate::host::EnableRepositoryRegistrationApplied),
     /// `controlplane.host.GoalCreated`.
     GoalCreated(crate::host::GoalCreated),
+    /// `controlplane.host.GoalDeleted`.
+    GoalDeleted(crate::host::GoalDeleted),
     /// `controlplane.host.MarkPublicationUncertainApplied`.
     MarkPublicationUncertainApplied(crate::host::MarkPublicationUncertainApplied),
     /// `controlplane.host.MergeAssignmentApplied`.
@@ -106,7 +108,7 @@ impl<B> ControlPlane<B> {
 
 impl<B> ControlPlane<B>
 where
-    B: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
+    B: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DeleteGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     /// Accepts `controlplane.host.AddWorkspaceDirectory`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
@@ -269,6 +271,25 @@ where
             crate::host::CreateGoalOutcome::Created { goal_created, .. } => {
                 self.outbox.push(PublishedEvent::GoalCreated(goal_created.clone()));
             }
+        }
+        Ok(outcome)
+    }
+
+    /// Accepts `controlplane.host.DeleteGoal`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn delete_goal(&mut self, input: crate::host::DeleteGoal) -> Result<crate::host::DeleteGoalOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.delete_goal(input)?;
+        match &outcome {
+            crate::host::DeleteGoalOutcome::Applied { goal_deleted, .. } => {
+                self.outbox.push(PublishedEvent::GoalDeleted(goal_deleted.clone()));
+            }
+            crate::host::DeleteGoalOutcome::Paused { .. } => {}
+            crate::host::DeleteGoalOutcome::Running { .. } => {}
+            crate::host::DeleteGoalOutcome::Satisfied { .. } => {}
+            crate::host::DeleteGoalOutcome::NotFound { .. } => {}
         }
         Ok(outcome)
     }

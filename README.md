@@ -75,6 +75,19 @@ The service binds to loopback and checks browser origin, host and request tokens
 
 ## Development
 
+Isolated model evaluations use external local repositories:
+
+```console
+cargo run -p control-plane-xtask -- eval init --root "$HOME/control-plane-evals"
+control-plane serve --local-eval-root "$HOME/control-plane-evals"
+control-plane workspace add "$HOME/control-plane-evals/repos/go-auth-web"
+cargo run -p control-plane-xtask -- eval verify --case go-auth-web --repo /path/to/candidate
+```
+
+The cases are `go-cli`, `go-json-http` and `go-auth-web`; each seed contains its fixed `TASK.md`. Configure the repository's test command to run the built verifier outside the candidate tree. Use one worker, one attempt and a bounded time budget, and retain failures before retrying. The verifier requires Go tests and checks real CLI or HTTP behavior, including login, session rejection, logout revocation, frontend and README requirements. Blank seeds fail. Explicit `--local-eval-root` permits Go and local commits only when both the repository's Git common directory and its absolute local origin are beneath that root. Other repositories retain their normal policy.
+
+`control-plane goal delete <id>` removes a cancelled goal with no assignment history while retaining its workspace. Cancel it first with `control-plane goal cancel <id>`.
+
 ```console
 task check
 task generate
@@ -82,4 +95,4 @@ task generate
 
 `task check` validates ESS and AEP, checks Rust formatting and lints, runs tests, checks generated drift and exercises the real durable conformance target. `task generate` regenerates artifacts from the specification. Generated files are not edited directly. Repository changes use managed worktrees; see [AGENTS.md](AGENTS.md).
 
-Bootstrap status: the host, workspace directories, protocols, autonomous planner, reviewed implementation fleet and live operations dashboard are integrated. Full repository qualification and publication remain in the AEP plan.
+Bootstrap status: the workspace host and dashboard are running, but the external auth example failed during planning. The [runtime ownership audit](.engineering/planning/architecture-design/runtime-ownership.md) identifies execution behavior duplicated in control-plane, and the [boundary correction](.engineering/planning/story/runtime-boundary.md) records the required foundation integration. Passing scripted tests is not evidence of a delivered autonomous application.

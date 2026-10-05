@@ -19,6 +19,7 @@ components:
     - controlplane.host.PauseGoal
     - controlplane.host.SatisfyGoal
     - controlplane.host.CancelGoal
+    - controlplane.host.DeleteGoal
     - controlplane.host.QueueAssignment
     - controlplane.host.ClaimAssignment
     - controlplane.host.ReviewAssignment
@@ -49,6 +50,7 @@ components:
     - controlplane.host.PauseGoalApplied
     - controlplane.host.SatisfyGoalApplied
     - controlplane.host.CancelGoalApplied
+    - controlplane.host.GoalDeleted
     - controlplane.host.AssignmentCreated
     - controlplane.host.ClaimAssignmentApplied
     - controlplane.host.ReviewAssignmentApplied

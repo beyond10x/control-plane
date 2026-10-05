@@ -1,4 +1,5 @@
 mod codec;
+mod eval;
 mod foundation;
 mod generation;
 mod target;
@@ -15,6 +16,11 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Action {
+    /// Prepare external local repositories or verify an agent's real output.
+    Eval {
+        #[command(subcommand)]
+        action: eval::Action,
+    },
     /// Generate Rust, OpenAPI and the conformance suite from ESS.
     Generate,
     /// Fail when checked-in artifacts differ from fresh emitter output.
@@ -31,6 +37,7 @@ fn main() -> Result<()> {
         .parent()
         .unwrap();
     match Cli::parse().command {
+        Action::Eval { action } => eval::run(action),
         Action::Generate => generation::run(root, true),
         Action::GeneratedCheck => generation::run(root, false),
         Action::Conformance => target::conformance(root),

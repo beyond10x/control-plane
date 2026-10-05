@@ -28,6 +28,9 @@ pub enum Command {
         /// Private Gates policy for trusted planner commits; otherwise inherit B10X_GATES_POLICY.
         #[arg(long)]
         gates_policy: Option<PathBuf>,
+        /// Allow Go and local Git commits only for eval repositories and origins beneath this root.
+        #[arg(long)]
+        local_eval_root: Option<PathBuf>,
     },
     /// Add and inspect workspaces through the running service.
     Workspace {
@@ -135,6 +138,10 @@ pub enum GoalAction {
         goal_id: String,
     },
     Cancel {
+        goal_id: String,
+    },
+    /// Delete a cancelled goal with no assignment history.
+    Delete {
         goal_id: String,
     },
     List,
@@ -269,6 +276,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         listen,
         workspace,
         gates_policy,
+        local_eval_root,
     } = cli.command
     {
         ensure!(
@@ -281,7 +289,12 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         initialize_workspaces(&mut store, &std::env::current_dir()?, &workspace).await?;
         let store = Arc::new(Mutex::new(store));
         let app = AppState::new(store, address, Arc::new(Notify::new()));
-        let mut config = control_plane_runtime::RuntimeConfig::default();
+        let mut config = control_plane_runtime::RuntimeConfig {
+            local_eval_root: local_eval_root
+                .map(|root| root.canonicalize())
+                .transpose()?,
+            ..Default::default()
+        };
         if let Some(policy) = gates_policy {
             config.environment.push((
                 "B10X_GATES_POLICY".into(),
@@ -341,6 +354,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
             GoalAction::Start{goal_id}=>client.command("StartGoal",json!({"goal_id":goal_id})).await?,
             GoalAction::Pause{goal_id}=>client.command("PauseGoal",json!({"goal_id":goal_id})).await?,
             GoalAction::Cancel{goal_id}=>client.command("CancelGoal",json!({"goal_id":goal_id})).await?,
+            GoalAction::Delete{goal_id}=>client.command("DeleteGoal",json!({"goal_id":goal_id})).await?,
             GoalAction::List=>client.snapshot().await?["goals"].clone(),
         },
         Command::Repository{action}=>match action{

@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
-// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
+// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
+// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -352,6 +352,14 @@ pub fn encode_event_controlplane_host_goal_created(value: &crate::host::GoalCrea
     json::push_text(out, &value.planning_receipt);
     json::member(out, "planning_phase");
     encode_controlplane_host_planning_phase(&value.planning_phase, out);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.GoalDeleted` as JSON.
+pub fn encode_event_controlplane_host_goal_deleted(value: &crate::host::GoalDeleted, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
     out.push('}');
 }
 
@@ -1675,6 +1683,107 @@ pub fn encode_outcome_controlplane_host_create_goal(value: &crate::host::CreateG
             encode_event_controlplane_host_goal_created(goal_created, out);
             out.push('}');
             out.push(']');
+        }
+    }
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.DeleteGoal` as JSON.
+pub fn encode_command_controlplane_host_delete_goal(value: &crate::host::DeleteGoal, out: &mut String) {
+    out.push('{');
+    json::member(out, "goal_id");
+    json::push_text(out, &value.goal_id.0);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.DeleteGoal` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_delete_goal(value: &json::Value, at: &str) -> Result<crate::host::DeleteGoal, json::DecodeError> {
+    Ok(crate::host::DeleteGoal {
+        goal_id: {
+            let at0 = json::nested(at, "goal_id");
+            let member0 = json::member_at(value, at, "goal_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.DeleteGoal` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_delete_goal(value: &crate::host::DeleteGoalOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::DeleteGoalOutcome::Applied { goal_deleted } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.GoalDeleted");
+            json::member(out, "payload");
+            encode_event_controlplane_host_goal_deleted(goal_deleted, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::DeleteGoalOutcome::Paused { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "paused");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
+        crate::host::DeleteGoalOutcome::Running { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "running");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
+        crate::host::DeleteGoalOutcome::Satisfied { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "satisfied");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
+        crate::host::DeleteGoalOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_not_found(error, out);
+            out.push('}');
         }
     }
     out.push('}');
@@ -3189,6 +3298,7 @@ pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
         crate::system::SystemEvent::DisableRepositoryRegistrationApplied(event) => encode_event_controlplane_host_disable_repository_registration_applied(event, &mut out),
         crate::system::SystemEvent::EnableRepositoryRegistrationApplied(event) => encode_event_controlplane_host_enable_repository_registration_applied(event, &mut out),
         crate::system::SystemEvent::GoalCreated(event) => encode_event_controlplane_host_goal_created(event, &mut out),
+        crate::system::SystemEvent::GoalDeleted(event) => encode_event_controlplane_host_goal_deleted(event, &mut out),
         crate::system::SystemEvent::MarkPublicationUncertainApplied(event) => encode_event_controlplane_host_mark_publication_uncertain_applied(event, &mut out),
         crate::system::SystemEvent::MergeAssignmentApplied(event) => encode_event_controlplane_host_merge_assignment_applied(event, &mut out),
         crate::system::SystemEvent::PauseGoalApplied(event) => encode_event_controlplane_host_pause_goal_applied(event, &mut out),

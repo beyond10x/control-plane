@@ -62,12 +62,15 @@ struct State {
     plan_revision: String,
     failure: Option<String>,
     syntax_failures: usize,
+    review_attempts: usize,
+    rejected_revision: Option<i64>,
     memory: crate::context::ActionMemory,
 }
 
 enum OperationResult {
     Completed,
     SyntaxFeedback,
+    ReviewFeedback,
 }
 
 struct Planning<'a> {
@@ -143,6 +146,8 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
             plan_revision: input.namespace.clone(),
             failure: None,
             syntax_failures: 0,
+            review_attempts: 0,
+            rejected_revision: None,
             memory: crate::context::ActionMemory::default(),
         }),
     };
@@ -378,14 +383,10 @@ impl Planning<'_> {
             PlannerAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "read requests at most 32 files");
                 for name in paths {
-                    let file = context_file(path, &name, &self.input.goal)?;
-                    let metadata = std::fs::metadata(&file)?;
-                    ensure!(metadata.len() <= 256 * 1024, "file exceeds read budget");
-                    self.read_record(
-                        &format!("{action_key}:{name}"),
-                        &label,
-                        crate::context::page(&name, &std::fs::read_to_string(file)?, 1, 160)?,
-                    )?;
+                    let observation = self.read_observation(&name, 256 * 1024, |contents| {
+                        crate::context::page(&name, contents, 1, 160)
+                    })?;
+                    self.read_record(&format!("{action_key}:{name}"), &label, observation)?;
                 }
             }
             PlannerAction::ReadRange {
@@ -393,42 +394,20 @@ impl Planning<'_> {
                 start_line,
                 line_count,
             } => {
-                let file = context_file(path, &name, &self.input.goal)?;
-                ensure!(
-                    std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
-                    "file exceeds paged read budget"
-                );
-                self.read_record(
-                    &action_key,
-                    &label,
-                    crate::context::page(
-                        &name,
-                        &std::fs::read_to_string(file)?,
-                        start_line,
-                        line_count,
-                    )?,
-                )?;
+                let observation = self.read_observation(&name, 2 * 1024 * 1024, |contents| {
+                    crate::context::page(&name, contents, start_line, line_count)
+                })?;
+                self.read_record(&action_key, &label, observation)?;
             }
             PlannerAction::ReadBytes {
                 path: name,
                 start_byte,
                 byte_count,
             } => {
-                let file = context_file(path, &name, &self.input.goal)?;
-                ensure!(
-                    std::fs::metadata(&file)?.len() <= 2 * 1024 * 1024,
-                    "file exceeds paged read budget"
-                );
-                self.read_record(
-                    &action_key,
-                    &label,
-                    crate::context::bytes(
-                        &name,
-                        &std::fs::read_to_string(file)?,
-                        start_byte,
-                        byte_count,
-                    )?,
-                )?;
+                let observation = self.read_observation(&name, 2 * 1024 * 1024, |contents| {
+                    crate::context::bytes(&name, contents, start_byte, byte_count)
+                })?;
+                self.read_record(&action_key, &label, observation)?;
             }
             PlannerAction::WriteSpecification {
                 path: name,
@@ -455,6 +434,15 @@ impl Planning<'_> {
                     contents.len() <= 256 * 1024,
                     "specification write exceeds budget"
                 );
+                match std::fs::read(&file) {
+                    Ok(existing) if existing == contents.as_bytes() => {
+                        self.read_record(&format!("unchanged-write:{name}"), &label, format!("No change: {name} already contains exactly these bytes. Create the missing domain file, make a substantive correction, or finish; repeating this write is not progress."))?;
+                        return Ok(OperationResult::Completed);
+                    }
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                }
                 std::fs::create_dir_all(file.parent().context("specification has no parent")?)?;
                 std::fs::write(&file, contents)?;
                 self.changed()?;
@@ -490,6 +478,21 @@ impl Planning<'_> {
                 }
             }
             PlannerAction::Finish { stories, summary } => {
+                {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+                    ensure!(
+                        state.rejected_revision != Some(state.revision),
+                        "independent plan critique rejected this unchanged revision; revise the plan before requesting review"
+                    );
+                    ensure!(
+                        state.review_attempts < 2,
+                        "independent plan review budget exhausted"
+                    );
+                    state.review_attempts += 1;
+                }
                 let validation = validate_spec(path, runner)?;
                 let plan_validation =
                     runner.command(path, "aep", &["plan", "artifact", "validate"])?;
@@ -520,16 +523,33 @@ impl Planning<'_> {
                 let critic_context = format!("critic-{}", uuid::Uuid::new_v4());
                 let critique=self.respond(ModelRequest { role:"critic".into(),execution_context:critic_context.clone(),model:text(&self.input.goal,"reviewer_model")?.into(),instructions:"Independently review this proposed plan against the standing goal, repository observations and ESS. Reject duplicate backlog, missing named conformance scenarios, unsafe scope, unsupported dependencies or goal claims unsupported by evidence. You cannot execute tools or grant authority.".into(),prompt:format!("{}\nSelected stories: {}\nSummary: {summary}\nActual validations:\n{validation}\n{plan_validation}",self.prompt()?,serde_json::to_string(&reviewed)?),schema:critique_schema(),timeout:self.remaining()? })?;
                 ensure!(
-                    critique["approved"] == true,
-                    "independent plan critique rejected: {}",
-                    critique["reason"]
-                );
-                ensure!(
                     critique["reason"]
                         .as_str()
                         .is_some_and(|s| !s.trim().is_empty()),
                     "critic supplied no reasoning"
                 );
+                if critique["approved"] != true {
+                    let attempts = {
+                        let mut state = self
+                            .state
+                            .lock()
+                            .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+                        state.rejected_revision = Some(state.revision);
+                        state.evidence.clear();
+                        state.review_attempts
+                    };
+                    (self.input.progress)(
+                        "activity",
+                        &json!({"action":"plan.review_rejected","role":"critic","status":"failed","detail":critique["reason"],"context":critic_context}),
+                    )?;
+                    self.record(format!("Independent plan review rejected revision (attempt {attempts}/2): {}. Revise the scoped story/specification to address this feedback before requesting Finish again. An unchanged plan cannot be resubmitted. No assignment has been admitted.", critique["reason"]))?;
+                    ensure!(
+                        attempts < 2,
+                        "independent plan critique rejected after two reviews: {}",
+                        critique["reason"]
+                    );
+                    return Ok(OperationResult::ReviewFeedback);
+                }
                 (self.input.progress)(
                     "plan-approved",
                     &json!({"context":critic_context,"critique":critique}),
@@ -597,6 +617,36 @@ impl Planning<'_> {
         state.evidence.clear();
         state.memory.changed();
         Ok(())
+    }
+    fn read_observation(
+        &self,
+        name: &str,
+        limit: u64,
+        render: impl FnOnce(&str) -> Result<String>,
+    ) -> Result<String> {
+        // Confinement, registered roots and symlinks are checked before handling
+        // absence as ordinary tool feedback. Other I/O failures stay fatal.
+        let file = context_path(&self.input.path, name, &self.input.goal, true)?;
+        let read = || -> Result<String> {
+            ensure!(
+                std::fs::metadata(&file)?.len() <= limit,
+                "file exceeds read budget"
+            );
+            Ok(std::fs::read_to_string(&file)?)
+        };
+        match read() {
+            Ok(contents) => render(&contents),
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                Ok(format!(
+                    "File not found: {name}. No contents were read. If this is a required ESS source, create it with write_specification before reading or validating it."
+                ))
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -739,6 +789,9 @@ impl EffectPort for Planning<'_> {
                         OperationResult::Completed => "host operation completed",
                         OperationResult::SyntaxFeedback => {
                             "command syntax rejected; corrective feedback recorded"
+                        }
+                        OperationResult::ReviewFeedback => {
+                            "plan review rejected; revision feedback recorded"
                         }
                     }
                     .into(),
@@ -1016,6 +1069,9 @@ pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
     Ok(path)
 }
 pub fn context_file(root: &Path, name: &str, goal: &Value) -> Result<PathBuf> {
+    context_path(root, name, goal, false)
+}
+fn context_path(root: &Path, name: &str, goal: &Value, missing: bool) -> Result<PathBuf> {
     if let Some(reference) = name.strip_prefix("workspace:") {
         let (id, relative) = reference
             .split_once('/')
@@ -1026,14 +1082,21 @@ pub fn context_file(root: &Path, name: &str, goal: &Value) -> Result<PathBuf> {
             .iter()
             .find(|d| d["directory_id"] == id && d["state"] == "Registered")
             .context("workspace context directory is not registered")?;
-        confined(Path::new(text(directory, "path")?), relative, false)
+        confined(Path::new(text(directory, "path")?), relative, missing)
     } else {
-        confined(root, name, false)
+        confined(root, name, missing)
     }
 }
 fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
     let files = runner.command(root, "git", &["ls-files"])?;
     let mut context = String::new();
+    let spec = spec_root(root)?;
+    let relative = spec.strip_prefix(root)?.to_string_lossy();
+    let relative = if relative.is_empty() { "." } else { &relative };
+    context.push_str(&format!("\nAdmitted specification root: {relative}. write_specification paths are repository-relative, confined to this root. Planning markdown belongs in AEP, never in an invented specifications directory.\n"));
+    if !spec.join("system.yaml").exists() && !spec.join("ess-inputs.yaml").exists() {
+        context.push_str(&format!("No ESS exists. Bootstrap these two files before AEP mutations. Rename example nouns to the task's domain; retain the ESS keys and typed structure. Do not invent prose keys such as behaviors or security. Begin with the smallest domain; acceptance scenarios belong in the story body.\n{relative}/system.yaml:\nformat: ess/22\nsystem: example\nversion: v1\ndomains: [example.session]\n\n{relative}/domains/session.yaml:\ndomain: example.session\nentities:\n  - name: example.session.Session\n    identity:\n      name: session_id\n      type: Uuid\n    fields:\n      - name: username\n        type: String\n    lifecycle:\n      initial: Active\n      states: [Active, Revoked]\n      terminal: [Revoked]\n"));
+    }
     for name in ["AGENTS.md", "README.md", "TODO.md", "PLAN.md"] {
         if root.join(name).is_file() {
             let path = confined(root, name, false)?;

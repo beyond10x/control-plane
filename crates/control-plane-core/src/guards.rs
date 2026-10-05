@@ -83,6 +83,16 @@ impl Store {
     }
 
     pub(crate) fn guard(&self, command: &str, body: &Value) -> Result<()> {
+        if command == "DeleteGoal" {
+            let goal = text(body, "goal_id")?;
+            ensure!(
+                self.memory
+                    .assignments
+                    .values()
+                    .all(|assignment| assignment.data.goal_id.0 != goal),
+                "goal has assignment history; remove assignments before deleting the goal"
+            );
+        }
         if matches!(command, "RegisterRepository" | "CreateGoal") {
             let workspace = self
                 .memory

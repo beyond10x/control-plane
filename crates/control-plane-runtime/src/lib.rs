@@ -32,6 +32,8 @@ pub trait AgentModel: Send + Sync {
 
 #[derive(Clone)]
 pub struct RuntimeConfig {
+    /// Explicitly isolated local eval repositories; never enables local commits for other repositories.
+    pub local_eval_root: Option<PathBuf>,
     pub environment: Vec<(String, String)>,
     pub aep_protocols: String,
     pub commit_command: Vec<String>,
@@ -43,6 +45,7 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
+            local_eval_root: None,
             environment: Vec::new(),
             aep_protocols:
                 "git+https://github.com/beyond10x/aep#6d7a44d3607d2d9a6ffdf0a165993c546c43d0db"
@@ -55,6 +58,41 @@ impl Default for RuntimeConfig {
             process_timeout: std::time::Duration::from_secs(120),
             poll_interval: std::time::Duration::from_secs(15),
         }
+    }
+}
+
+impl RuntimeConfig {
+    pub fn local_eval(
+        &self,
+        path: &std::path::Path,
+        runner: &process::ProcessRunner,
+    ) -> Result<bool> {
+        let Some(root) = &self.local_eval_root else {
+            return Ok(false);
+        };
+        let root = root.canonicalize()?;
+        let common = runner.command(path, "git", &["rev-parse", "--git-common-dir"])?;
+        if !path.join(common.trim()).canonicalize()?.starts_with(&root) {
+            return Ok(false);
+        }
+        let origin = runner.command(path, "git", &["remote", "get-url", "origin"])?;
+        let origin = std::path::Path::new(origin.trim());
+        anyhow::ensure!(
+            origin.is_absolute() && origin.canonicalize()?.starts_with(&root),
+            "eval repository must use a local origin inside the eval root"
+        );
+        Ok(true)
+    }
+    pub fn commit_for(
+        &self,
+        path: &std::path::Path,
+        runner: &process::ProcessRunner,
+    ) -> Result<Vec<String>> {
+        Ok(if self.local_eval(path, runner)? {
+            vec!["git".into(), "commit".into(), "-m".into()]
+        } else {
+            self.commit_command.clone()
+        })
     }
 }
 
@@ -74,4 +112,53 @@ pub struct PlanSnapshot {
     pub path: PathBuf,
     pub commit: String,
     pub stories: Vec<String>,
+}
+
+#[cfg(test)]
+mod eval_policy_tests {
+    use super::*;
+    #[test]
+    fn go_and_local_commits_require_both_local_repository_and_local_origin() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let repo = root.path().join("repo");
+        let origin = root.path().join("origin.git");
+        std::fs::create_dir(&repo)?;
+        std::fs::create_dir(&origin)?;
+        let runner = process::ProcessRunner {
+            environment: vec![],
+            timeout: std::time::Duration::from_secs(5),
+            cancel: Default::default(),
+        };
+        runner.command(&repo, "git", &["init"])?;
+        runner.command(
+            &repo,
+            "git",
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        )?;
+        let config = RuntimeConfig {
+            local_eval_root: Some(root.path().into()),
+            ..Default::default()
+        };
+        assert!(config.local_eval(&repo, &runner)?);
+        assert_eq!(config.commit_for(&repo, &runner)?, ["git", "commit", "-m"]);
+        assert!(!RuntimeConfig::default().local_eval(&repo, &runner)?);
+        let elsewhere = tempfile::tempdir()?;
+        let outside = RuntimeConfig {
+            local_eval_root: Some(elsewhere.path().into()),
+            ..Default::default()
+        };
+        assert_eq!(outside.commit_for(&repo, &runner)?, outside.commit_command);
+        runner.command(
+            &repo,
+            "git",
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "https://example.invalid/repo",
+            ],
+        )?;
+        assert!(config.local_eval(&repo, &runner).is_err());
+        Ok(())
+    }
 }

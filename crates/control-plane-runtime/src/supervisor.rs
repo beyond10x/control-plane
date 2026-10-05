@@ -390,7 +390,7 @@ impl Supervisor {
         current_goal(&self.store, goal).await?;
         let p = path.clone();
         let r = runner.clone();
-        let command = self.config.commit_command.clone();
+        let command = self.config.commit_for(&p, &r)?;
         let commit = tokio::task::spawn_blocking(move || commit_plan(&p, &r, &command)).await??;
         let mut queued = 0;
         for story in output.stories {
