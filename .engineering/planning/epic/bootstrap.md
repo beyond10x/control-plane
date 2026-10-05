@@ -2,11 +2,14 @@
 format: aep.planning-md/3
 id: epic:bootstrap
 kind: epic
-status: draft
+status: active
 title: Standalone autonomous control-plane with local web console
 relations:
 - serves: vision:autonomous-engineering
-revision: 1
+revision: 3
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T20:35:57Z", actor: "human:timo", revision: 2}
+- {from: "proposed", to: "active", at: "2026-10-05T20:35:57Z", actor: "human:timo", revision: 3}
 ---
 ## Outcome
 Public beyond10x/control-plane hosts workspace registration, goal-driven planning, implementation across repositories, independent review and autonomous verified merge. The UI, service, specification, planning store and implementation are all in this repository. The operator explicitly approved the plan and clarified a new repository, not an implementation inside Loom. Use ess/22.

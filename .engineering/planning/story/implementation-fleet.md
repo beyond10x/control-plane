@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime
-revision: 2
+revision: 3
 ---
 ## Outcome
 Isolated implementation, independent review and verified merges, as part of the approved standalone control-plane plan.
@@ -27,3 +27,7 @@ Inferred: crates/control-plane-runtime. Shared root manifests, specifications, g
 
 ## Authorization
 Operator: Implement the plan. Product must live in the new public control-plane repository. No further wave confirmation is required within this approved scope.
+
+## Implementation contract
+
+Run at most the configured worker limit, default three, while holding one active repository common-directory slot globally across workspaces. Use managed worktrees and fresh run identities for implementations and independent reviews. Bind test and review evidence to the exact candidate, base and goal revision; edits invalidate prior evidence. Recheck standing merge authority immediately before effect invocation. Publication adapters receive explicit candidate, expected base, target and operation id. Persist a PublicationIntent before invocation; exit zero is not a merge receipt. Observe Git publication and save the receipt; after a crash or ambiguous result reconcile that exact intent before another attempt. Pause/cancel/revocation stop new dispatch. Enforce attempt/time budgets and expose concrete blocked reasons. Never release or deploy.

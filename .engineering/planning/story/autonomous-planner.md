@@ -12,7 +12,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime
-revision: 2
+revision: 3
 ---
 ## Outcome
 Goal-driven ESS-first AEP planner, as part of the approved standalone control-plane plan.
@@ -28,3 +28,7 @@ Inferred: crates/control-plane-runtime. Shared root manifests, specifications, g
 
 ## Authorization
 Operator: Implement the plan. Product must live in the new public control-plane repository. No further wave confirmation is required within this approved scope.
+
+## Implementation contract
+
+The planner wakes on a changed goal, repository inventory, newly completed assignment or blocker; an unchanged idle workspace makes no model call. Inspect each selected repository and its existing ESS/AEP artifacts before mutation. Adopt missing stores using their CLIs, specify new nouns before writing stories, validate ESS and AEP, and request independent critique. Use ready existing stories rather than duplicate a backlog. Planner work runs in a managed checkout. Store assignment references to authoritative AEP story ids, not a second task backlog. Current goal/configuration revision binds planning and execution. Completion requires passing goal acceptance and observed merge receipts for every delivered assignment; an empty queue alone cannot satisfy the goal.

@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-app
-revision: 2
+revision: 3
 ---
 ## Outcome
 Local browser console and CLI over shared application handlers, as part of the approved standalone control-plane plan.
@@ -27,3 +27,7 @@ Inferred: crates/control-plane-app. Shared root manifests, specifications, gener
 
 ## Authorization
 Operator: Implement the plan. Product must live in the new public control-plane repository. No further wave confirmation is required within this approved scope.
+
+## Implementation contract
+
+The Rust local service and clap CLI use the same Store handlers. Browser callers always act as Operator; no request field selects Supervisor. Bind to loopback, validate Host/Origin and require CSRF protection for mutations; escape user-controlled HTML. Expose workspace add/list/detail, repository settings, goal create/edit/start/pause/cancel, per-role model selection and worker/budget/merge-authority controls, and visible assignments/blockers/receipts. The service owns one database lock and starts the same runtime supervisor exposed by the CLI.

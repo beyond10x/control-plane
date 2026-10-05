@@ -10,7 +10,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-core
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T20:20:54Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T20:20:54Z", actor: "human:timo", revision: 4}
@@ -29,3 +29,7 @@ Inferred: crates/control-plane-core. Shared root manifests, specifications, gene
 
 ## Authorization
 Operator: Implement the plan. Product must live in the new public control-plane repository. No further wave confirmation is required within this approved scope.
+
+## Implementation contract
+
+Canonicalize paths in the operational Store, discover either the selected Git repository or immediate Git child repositories, and preserve one registration per canonical workspace path. A dedicated contract::ContractStore executes the same generated behavior and Eventlog SQLite persistence without filesystem admission: this is the exact ESS conformance boundary, never a browser-selected mode. Stage deep-cloned memory, append with compare-and-swap, then publish state; failed append leaves visible state unchanged. Keep a database lifetime lock to exclude a second service. Operational admission enforces one running goal per workspace and one active assignment per canonical common Git directory across workspaces, current goal revision, independent review and recorded publication reconciliation. Validate these policies with real adapter tests beside generated conformance.
