@@ -1,10 +1,73 @@
 //! Bounded, explicit observations for model input. Full files remain available through paging.
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
+use std::collections::VecDeque;
 
 const ENTRY_BYTES: usize = 16 * 1024;
 const CONTEXT_BYTES: usize = 96 * 1024;
 const PAGE_BYTES: usize = 12 * 1024;
+
+#[derive(Default)]
+pub struct ActionMemory {
+    steps: usize,
+    journal: VecDeque<String>,
+    observations: VecDeque<(String, String, usize)>,
+}
+
+impl ActionMemory {
+    pub fn attempted(&mut self, label: &str) {
+        self.steps += 1;
+        self.note(&format!("attempted {label}"));
+    }
+
+    pub fn note(&mut self, message: &str) {
+        self.journal
+            .push_back(format!("Step {}: {}", self.steps, excerpt(message, 2048)));
+        while self.journal.len() > 12 {
+            self.journal.pop_front();
+        }
+    }
+
+    pub fn observed(&mut self, key: String, digest: String) -> usize {
+        let previous = self
+            .observations
+            .iter()
+            .position(|(prior, _, _)| prior == &key)
+            .and_then(|index| self.observations.remove(index));
+        let count = match previous {
+            Some((_, previous_digest, count)) if previous_digest == digest => count + 1,
+            _ => 1,
+        };
+        self.observations.push_back((key, digest, count));
+        while self.observations.len() > 64 {
+            self.observations.pop_front();
+        }
+        count
+    }
+
+    pub fn changed(&mut self) {
+        self.observations.clear();
+        self.note("repository mutation completed; prior unchanged-read counts reset");
+    }
+
+    pub fn prompt(&self) -> String {
+        format!(
+            "Recent attempted actions ({} total steps; bounded history):\n{}",
+            self.steps,
+            self.journal.iter().cloned().collect::<Vec<_>>().join("\n")
+        )
+    }
+}
+
+pub fn action_label(action: &Value) -> String {
+    let mut label = action.clone();
+    if let Some(fields) = label.as_object_mut() {
+        for key in ["body", "contents", "summary"] {
+            fields.remove(key);
+        }
+    }
+    excerpt(&label.to_string(), 2048)
+}
 
 pub fn bytes(name: &str, content: &str, start: usize, count: usize) -> Result<String> {
     ensure!(
@@ -149,6 +212,40 @@ pub fn page(name: &str, content: &str, start: usize, count: usize) -> Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_memory_survives_observation_eviction_and_resets_after_mutation() {
+        let mut memory = ActionMemory::default();
+        let mut transcript = vec!["seed1".into(), "seed2".into(), "seed3".into()];
+        memory.attempted("read first");
+        assert_eq!(memory.observed("first".into(), "unchanged".into()), 1);
+        push(&mut transcript, "first observed body".into());
+        for index in 0..20 {
+            memory.attempted(&format!("read page {index}"));
+            memory.observed(format!("page{index}"), format!("result{index}"));
+            push(
+                &mut transcript,
+                format!("Page {index}: {}", "x".repeat(16000)),
+            );
+        }
+        assert!(
+            !transcript
+                .iter()
+                .any(|entry| entry == "first observed body")
+        );
+        assert_eq!(memory.observed("first".into(), "unchanged".into()), 2);
+        assert!(memory.prompt().contains("21 total steps"));
+        assert!(memory.prompt().len() < 26000);
+        assert!(transcript.iter().map(String::len).sum::<usize>() <= CONTEXT_BYTES);
+        assert_eq!(memory.observed("first".into(), "changed".into()), 1);
+        memory.changed();
+        assert_eq!(memory.observed("first".into(), "changed".into()), 1);
+        for index in 0..100 {
+            memory.observed(format!("key{index}"), "result".into());
+        }
+        assert_eq!(memory.observations.len(), 64);
+        assert!(memory.journal.len() <= 12);
+    }
 
     #[test]
     fn long_line_continuation_preserves_every_utf8_byte_with_bounded_pages() {
