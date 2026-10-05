@@ -81,6 +81,7 @@ async fn home_body(state: &AppState) -> Result<String> {
     let mut body = String::from(
         "<h1>Workspaces</h1><p>Choose a repository or a directory of repositories, set a goal, and follow its progress.</p><div class=\"grid\">",
     );
+    body.push_str(&runtime_notice(&view));
     for ws in rows(&view, "workspaces")? {
         write!(
             body,
@@ -117,6 +118,7 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         escape(field(ws, "name")),
         escape(field(ws, "path"))
     );
+    body.push_str(&runtime_notice(&view));
     body.push_str("<h2>Directories</h2><p>Directories provide workspace context, including folders without Git. Repositories in each directory and its immediate children appear below.</p>");
     for directory in rows(&view, "directories")?.iter().filter(|directory| {
         field(directory, "workspace_id") == id && field(directory, "state") == "Registered"
@@ -192,7 +194,18 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
             .filter(|a| field(a, "goal_id") == goal_id)
             .collect();
         if assignments.is_empty() {
-            body.push_str("<p class=\"muted\">No assignments yet.</p>");
+            let reason = match field(goal, "state") {
+                "Paused" => "This goal is paused. Start it when you want the planner to work.",
+                "Cancelled" => "This goal is cancelled; no further work will start.",
+                "Running" if field(goal, "planning_phase") == "Idle" => {
+                    "Waiting for the planner to begin. Refresh this page to see progress."
+                }
+                "Running" => {
+                    "No assignments are queued. The planning status above shows progress or the reason work cannot continue."
+                }
+                _ => "No assignments were recorded for this goal.",
+            };
+            write!(body, "<p class=\"muted\">{reason}</p>")?;
         }
         for assignment in assignments {
             write!(
@@ -280,6 +293,10 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         input("Repository directory", "path", "")
     )?;
     Ok(body)
+}
+
+fn runtime_notice(view: &Value) -> String {
+    view["runtime_error"].as_str().map(|error|format!("<section class=\"error\" role=\"alert\"><h2>Autonomous processing needs attention</h2><p>{}</p></section>",escape(error))).unwrap_or_default()
 }
 fn goal_fields(goal: &Value) -> String {
     let mut body = format!(
