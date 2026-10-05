@@ -393,3 +393,169 @@ async fn durable_contract_retains_generated_semantics_below_operational_admissio
     let reopened = contract::ContractStore::open(&db).await.unwrap();
     assert_eq!(before, reopened.query("WorkspaceList").unwrap());
 }
+
+// Adversarial operational-admission tests: use the real Store, generated commands and SQLite.
+fn adversary_scratch() -> tempfile::TempDir {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/adversary-fixtures");
+    std::fs::create_dir_all(&root).unwrap();
+    tempfile::tempdir_in(root).unwrap()
+}
+
+#[tokio::test]
+async fn archived_workspace_cannot_restart_its_paused_goal() {
+    let temp = adversary_scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    let archived = store
+        .execute(
+            "ArchiveWorkspace",
+            json!({"workspace_id":ws}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    assert_eq!(archived["outcome"], "applied");
+    let result = store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await;
+    assert_eq!(
+        store.query("GoalList").unwrap()[0]["state"],
+        "Paused",
+        "archived workspace restarted its goal: {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn configured_target_change_invalidates_prepared_publication() {
+    let temp = adversary_scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo, "story:target-change").await;
+    claim(&mut store, &assignment).await.unwrap();
+    store
+        .execute(
+            "ReviewAssignment",
+            json!({"assignment_id":assignment,"candidate":"candidate","test_revision":"candidate"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    store.execute("ReadyAssignment", json!({"assignment_id":assignment,"reviewer_run":"separate-reviewer","review_revision":"candidate"}), Actor::Supervisor).await.unwrap();
+    store.execute("PreparePublication", json!({"assignment_id":assignment,"candidate":"candidate","target":"main","expected_base":"base"}), Actor::Supervisor).await.unwrap();
+    let changed = store.execute("ConfigureRepository", json!({"repository_id":repo,"base_branch":"release","test_command":"cargo test","publish_command":"configured-helper"}), Actor::Operator).await.unwrap();
+    assert_eq!(changed["outcome"], "applied");
+    let result = store
+        .execute(
+            "MergeAssignment",
+            json!({"assignment_id":assignment}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert_eq!(
+        store.query("AssignmentList").unwrap()[0]["state"],
+        "ReadyToMerge",
+        "publication admitted against obsolete target: {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn blocked_assignment_does_not_consume_worker_for_another_repository() {
+    let temp = adversary_scratch();
+    let first_path = temp.path().join("one");
+    let second_path = temp.path().join("two");
+    repository(&first_path);
+    repository(&second_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let first_repo = register_repository(&mut store, &ws, &first_path).await;
+    let second_repo = register_repository(&mut store, &ws, &second_path).await;
+    let mut body = goal_body(&ws);
+    body["max_workers"] = json!(1);
+    let goal = identity(
+        &store
+            .execute("CreateGoal", body, Actor::Operator)
+            .await
+            .unwrap(),
+        "goal_id",
+    );
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let first = assignment(&mut store, &goal, &first_repo, "story:blocked").await;
+    claim(&mut store, &first).await.unwrap();
+    store
+        .execute(
+            "BlockAssignment",
+            json!({"assignment_id":first,"reason":"needs external input"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let second = assignment(&mut store, &goal, &second_repo, "story:independent").await;
+    let result = claim(&mut store, &second).await;
+    assert!(
+        result.is_ok(),
+        "blocked repository retained an idle worker slot: {result:?}"
+    );
+    let rows = store.query("AssignmentList").unwrap();
+    let row = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["assignment_id"] == second)
+        .unwrap();
+    assert_eq!(row["state"], "Implementing");
+}
+
+#[test]
+fn detached_head_remains_a_discoverable_repository() {
+    let temp = adversary_scratch();
+    let repo = temp.path().join("repo");
+    repository(&repo);
+    for args in [
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fixture",
+        ],
+        vec!["checkout", "--detach"],
+    ] {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let nested = repo.join("src");
+    std::fs::create_dir_all(&nested).unwrap();
+    let found = discover(&nested).unwrap();
+    assert_eq!(
+        found.repositories.len(),
+        1,
+        "detached Git checkout was silently treated as a nongit directory"
+    );
+    assert_eq!(found.path, repo);
+}
