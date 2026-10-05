@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-// contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -47,6 +47,23 @@ pub enum GoalState {
     Running,
     /// `Satisfied`.
     Satisfied,
+}
+
+/// PlanningPhase — `controlplane.host.PlanningPhase`: one of a closed set of names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanningPhase {
+    /// `Idle`.
+    Idle,
+    /// `Provisioning`.
+    Provisioning,
+    /// `Planning`.
+    Planning,
+    /// `Validated`.
+    Validated,
+    /// `Queued`.
+    Queued,
+    /// `Blocked`.
+    Blocked,
 }
 
 /// The states of `controlplane.host.PublicationIntent`, as runtime values.
@@ -578,6 +595,22 @@ pub struct GoalData {
     pub revision: i64,
     /// `satisfaction_receipt` — `String`.
     pub satisfaction_receipt: String,
+    /// `planning_revision` — `Integer`.
+    pub planning_revision: i64,
+    /// `planning_fingerprint` — `String`.
+    pub planning_fingerprint: String,
+    /// `planning_repository` — `String`.
+    pub planning_repository: String,
+    /// `planning_worktree_id` — `String`.
+    pub planning_worktree_id: String,
+    /// `planning_worktree_path` — `String`.
+    pub planning_worktree_path: String,
+    /// `planning_reason` — `String`.
+    pub planning_reason: String,
+    /// `planning_receipt` — `String`.
+    pub planning_receipt: String,
+    /// `planning_phase` — `controlplane.host.PlanningPhase`.
+    pub planning_phase: PlanningPhase,
 }
 
 /// The states of `controlplane.host.Goal`, at the type level.
@@ -1968,6 +2001,50 @@ pub enum ReconcileAssignmentOutcome {
     },
 }
 
+/// RecordPlanningProgress — the input of `controlplane.host.RecordPlanningProgress`.
+///
+/// Everything it can result in is [`RecordPlanningProgressOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordPlanningProgress {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+    /// `planning_revision` — `Integer`.
+    pub planning_revision: i64,
+    /// `planning_fingerprint` — `String`.
+    pub planning_fingerprint: String,
+    /// `planning_repository` — `String`.
+    pub planning_repository: String,
+    /// `planning_worktree_id` — `String`.
+    pub planning_worktree_id: String,
+    /// `planning_worktree_path` — `String`.
+    pub planning_worktree_path: String,
+    /// `planning_reason` — `String`.
+    pub planning_reason: String,
+    /// `planning_receipt` — `String`.
+    pub planning_receipt: String,
+    /// `planning_phase` — `controlplane.host.PlanningPhase`.
+    pub planning_phase: PlanningPhase,
+}
+
+/// Everything `controlplane.host.RecordPlanningProgress` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordPlanningProgressOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.PlanningProgressRecorded` this outcome publishes.
+        planning_progress_recorded: PlanningProgressRecorded,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.GoalNotFound`.
+        error: GoalNotFound,
+    },
+}
+
 /// RegisterRepository — the input of `controlplane.host.RegisterRepository`.
 ///
 /// Everything it can result in is [`RegisterRepositoryOutcome`].
@@ -2358,6 +2435,22 @@ pub struct GoalCreated {
     pub reviewer_model: String,
     /// `merge_authority` — `Boolean`.
     pub merge_authority: bool,
+    /// `planning_revision` — `Integer`.
+    pub planning_revision: i64,
+    /// `planning_fingerprint` — `String`.
+    pub planning_fingerprint: String,
+    /// `planning_repository` — `String`.
+    pub planning_repository: String,
+    /// `planning_worktree_id` — `String`.
+    pub planning_worktree_id: String,
+    /// `planning_worktree_path` — `String`.
+    pub planning_worktree_path: String,
+    /// `planning_reason` — `String`.
+    pub planning_reason: String,
+    /// `planning_receipt` — `String`.
+    pub planning_receipt: String,
+    /// `planning_phase` — `controlplane.host.PlanningPhase`.
+    pub planning_phase: PlanningPhase,
 }
 
 /// MarkPublicationUncertainApplied — the event `controlplane.host.MarkPublicationUncertainApplied`.
@@ -2379,6 +2472,29 @@ pub struct MergeAssignmentApplied {
 pub struct PauseGoalApplied {
     /// `goal_id` — `Uuid`.
     pub goal_id: crate::primitives::Uuid,
+}
+
+/// PlanningProgressRecorded — the event `controlplane.host.PlanningProgressRecorded`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanningProgressRecorded {
+    /// `goal_id` — `Uuid`.
+    pub goal_id: crate::primitives::Uuid,
+    /// `planning_revision` — `Integer`.
+    pub planning_revision: i64,
+    /// `planning_fingerprint` — `String`.
+    pub planning_fingerprint: String,
+    /// `planning_repository` — `String`.
+    pub planning_repository: String,
+    /// `planning_worktree_id` — `String`.
+    pub planning_worktree_id: String,
+    /// `planning_worktree_path` — `String`.
+    pub planning_worktree_path: String,
+    /// `planning_reason` — `String`.
+    pub planning_reason: String,
+    /// `planning_receipt` — `String`.
+    pub planning_receipt: String,
+    /// `planning_phase` — `controlplane.host.PlanningPhase`.
+    pub planning_phase: PlanningPhase,
 }
 
 /// PublicationIntentCreated — the event `controlplane.host.PublicationIntentCreated`.
@@ -2660,6 +2776,22 @@ pub struct GoalList {
     pub satisfaction_receipt: String,
     /// `state` — `controlplane.host.Goal.State`.
     pub state: GoalState,
+    /// `planning_revision` — `Integer`.
+    pub planning_revision: i64,
+    /// `planning_fingerprint` — `String`.
+    pub planning_fingerprint: String,
+    /// `planning_repository` — `String`.
+    pub planning_repository: String,
+    /// `planning_worktree_id` — `String`.
+    pub planning_worktree_id: String,
+    /// `planning_worktree_path` — `String`.
+    pub planning_worktree_path: String,
+    /// `planning_reason` — `String`.
+    pub planning_reason: String,
+    /// `planning_receipt` — `String`.
+    pub planning_receipt: String,
+    /// `planning_phase` — `controlplane.host.PlanningPhase`.
+    pub planning_phase: PlanningPhase,
 }
 
 /// PublicationIntentList — one row of the view `controlplane.host.PublicationIntentList`.
@@ -2930,6 +3062,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
         fn reconcile_assignment(&mut self, input: super::ReconcileAssignment) -> Result<super::ReconcileAssignmentOutcome, crate::obligation::UnmetObligation>;
+    }
+
+    /// The behaviour `controlplane.host.RecordPlanningProgress` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait RecordPlanningProgressBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.RecordPlanningProgress`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn record_planning_progress(&mut self, input: super::RecordPlanningProgress) -> Result<super::RecordPlanningProgressOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `controlplane.host.RegisterRepository` — generated.

@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a
-  contract digest d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d
+  model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
+  contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-109 capabilities: **109 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+113 capabilities: **113 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -16,6 +16,7 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | --- | --- |
 | domain type | `controlplane.host.Assignment.State` |
 | domain type | `controlplane.host.Goal.State` |
+| domain type | `controlplane.host.PlanningPhase` |
 | domain type | `controlplane.host.PublicationIntent.State` |
 | domain type | `controlplane.host.RepositoryRegistration.State` |
 | domain type | `controlplane.host.Workspace.State` |
@@ -60,6 +61,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.ReadyAssignment` |
 | command contract | `controlplane.host.ReconcileAssignment` |
 | command behaviour | `controlplane.host.ReconcileAssignment` |
+| command contract | `controlplane.host.RecordPlanningProgress` |
+| command behaviour | `controlplane.host.RecordPlanningProgress` |
 | command contract | `controlplane.host.RegisterRepository` |
 | command behaviour | `controlplane.host.RegisterRepository` |
 | command contract | `controlplane.host.RegisterWorkspace` |
@@ -89,6 +92,7 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.MarkPublicationUncertainApplied` |
 | event type | `controlplane.host.MergeAssignmentApplied` |
 | event type | `controlplane.host.PauseGoalApplied` |
+| event type | `controlplane.host.PlanningProgressRecorded` |
 | event type | `controlplane.host.PublicationIntentCreated` |
 | event type | `controlplane.host.ReadyAssignmentApplied` |
 | event type | `controlplane.host.ReconcileAssignmentApplied` |
