@@ -154,6 +154,9 @@ impl Supervisor {
         }
         Ok(report)
     }
+    pub async fn fleet_tick(&self) -> Result<TickReport> {
+        anyhow::bail!("fleet execution is not implemented")
+    }
     async fn retire_superseded_queue(&self, goal: &Value) -> Result<()> {
         let mut store = self.store.lock().await;
         check_goal(&store, goal)?;
