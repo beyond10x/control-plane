@@ -119,6 +119,11 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         escape(field(ws, "path"))
     );
     body.push_str(&runtime_notice(&view));
+    write!(
+        body,
+        "<p><a href=\"/workspaces/{}\">Refresh status</a> <span class=\"muted\">Reload to see the latest planning and assignment progress.</span></p>",
+        escape(id)
+    )?;
     body.push_str("<h2>Directories</h2><p>Directories provide workspace context, including folders without Git. Repositories in each directory and its immediate children appear below.</p>");
     for directory in rows(&view, "directories")?.iter().filter(|directory| {
         field(directory, "workspace_id") == id && field(directory, "state") == "Registered"
