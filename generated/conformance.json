@@ -3,8 +3,8 @@
     "suite_version": "ess-conformance/34",
     "system": "controlplane",
     "specification_version": "v1",
-    "spec_digest": "d382e7221feaaeae2ee81da029bee063f4482ad792d2b7f41e2e83a11208f95a",
-    "contract_digest": "d8b318c85dd2e169b94103c0cb82bebcc1899f54dd227f3f836fc70691c34a9d",
+    "spec_digest": "3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b",
+    "contract_digest": "27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55",
     "scenario_initial_state": "empty"
   },
   "scenarios": {
@@ -129,6 +129,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -320,6 +324,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -477,6 +485,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -616,6 +628,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -730,6 +746,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -1151,6 +1171,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -1316,6 +1340,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -1753,6 +1781,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -1929,6 +1961,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -2358,6 +2394,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -2534,6 +2574,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -2959,6 +3003,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -3135,6 +3183,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -3568,6 +3620,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -3744,6 +3800,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -4177,6 +4237,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -4353,6 +4417,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -4778,6 +4846,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -4954,6 +5026,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -5375,6 +5451,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -5540,6 +5620,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -5973,6 +6057,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -6149,6 +6237,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -6574,6 +6666,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -6750,6 +6846,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -7171,6 +7271,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -7347,6 +7451,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -7776,6 +7884,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -7952,6 +8064,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -8377,6 +8493,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -8553,6 +8673,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -8982,6 +9106,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -9158,6 +9286,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -9587,6 +9719,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -9763,6 +9899,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -10208,6 +10348,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -10373,6 +10517,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -10810,6 +10958,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -10986,6 +11138,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -11419,6 +11575,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -11595,6 +11755,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -12036,6 +12200,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -12212,6 +12380,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -12649,6 +12821,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -12825,6 +13001,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -13266,6 +13446,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -13442,6 +13626,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -13893,6 +14081,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -14069,6 +14261,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -14516,6 +14712,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -14703,6 +14903,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -15162,6 +15366,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -15349,6 +15557,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -15800,6 +16012,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -15987,6 +16203,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -16434,6 +16654,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -16621,6 +16845,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -17076,6 +17304,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -17263,6 +17495,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -17714,6 +17950,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -17890,6 +18130,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -18345,6 +18589,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -18532,6 +18780,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -18987,6 +19239,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -19174,6 +19430,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -19677,6 +19937,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -19886,6 +20150,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -20401,6 +20669,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -20599,6 +20871,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -21102,6 +21378,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -21300,6 +21580,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -21811,6 +22095,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -22009,6 +22297,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -22520,6 +22812,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -22729,6 +23025,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -23240,6 +23540,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -23438,6 +23742,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -23845,6 +24153,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -24010,6 +24322,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -24413,6 +24729,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -24578,6 +24898,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -24989,6 +25313,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -25154,6 +25482,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -25561,6 +25893,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -25726,6 +26062,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -26137,6 +26477,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -26302,6 +26646,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -26713,6 +27061,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -26878,6 +27230,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -27375,6 +27731,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -27562,6 +27922,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -28051,6 +28415,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -28249,6 +28617,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -28742,6 +29114,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -28929,6 +29305,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -29418,6 +29798,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -29616,6 +30000,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -30109,6 +30497,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -30307,6 +30699,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -30800,6 +31196,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -30987,6 +31387,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -31458,6 +31862,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -31634,6 +32042,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -32097,6 +32509,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -32284,6 +32700,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -32743,6 +33163,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -32930,6 +33354,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -33393,6 +33821,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -33580,6 +34012,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -34047,6 +34483,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -34223,6 +34663,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -34541,6 +34985,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -36199,6 +36647,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -36498,6 +36950,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -38034,6 +38490,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -38372,6 +38832,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -38600,6 +39064,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -39017,6 +39485,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -39285,6 +39757,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -39672,6 +40148,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -39929,6 +40409,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -40318,6 +40802,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -40560,6 +41048,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -40900,6 +41392,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -41563,6 +42059,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -41912,6 +42412,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -42521,6 +43025,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -42881,6 +43389,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -43112,6 +43624,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -43359,6 +43875,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -43480,6 +43997,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -43797,6 +44318,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -44028,6 +44553,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -44171,6 +44700,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -44285,6 +44818,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -44524,6 +45061,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -44645,6 +45183,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -44950,6 +45492,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -45181,6 +45727,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -45320,6 +45870,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -45434,6 +45988,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -45670,6 +46228,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -45753,6 +46315,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -45959,6 +46553,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -46042,6 +46640,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -46164,6 +46794,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -46306,6 +46940,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -46420,6 +47058,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -46671,6 +47313,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -46792,6 +47435,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -47133,6 +47780,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -47364,6 +48015,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -47515,6 +48170,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -47629,6 +48288,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -47972,6 +48635,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -48137,6 +48801,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -48554,6 +49222,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -48825,6 +49497,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -48968,6 +49644,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -49082,6 +49762,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -49256,6 +49940,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -49366,6 +50051,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -49630,6 +50319,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -49818,6 +50511,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -49969,6 +50666,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -50083,6 +50784,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -50363,6 +51068,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -50495,6 +51201,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -50849,6 +51559,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -51051,6 +51765,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -51190,6 +51908,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -51304,6 +52026,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -51477,6 +52203,38 @@
               "kind": "literal",
               "value": "planner_model"
             },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Idle"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": ""
+            },
             "reviewer_model": {
               "kind": "literal",
               "value": "reviewer_model"
@@ -51520,6 +52278,45 @@
               "kind": "string"
             },
             "planner_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_fingerprint": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_phase": {
+              "holds": "enum",
+              "variants": [
+                "Idle",
+                "Provisioning",
+                "Planning",
+                "Validated",
+                "Queued",
+                "Blocked"
+              ]
+            },
+            "planning_reason": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_receipt": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_repository": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_revision": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "planning_worktree_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_worktree_path": {
               "holds": "primitive",
               "kind": "string"
             },
@@ -51588,6 +52385,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -51675,6 +52476,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -51818,6 +52651,38 @@
               "kind": "literal",
               "value": "planner_model"
             },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Idle"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": ""
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": ""
+            },
             "reviewer_model": {
               "kind": "literal",
               "value": "reviewer_model"
@@ -51861,6 +52726,45 @@
               "kind": "string"
             },
             "planner_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_fingerprint": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_phase": {
+              "holds": "enum",
+              "variants": [
+                "Idle",
+                "Provisioning",
+                "Planning",
+                "Validated",
+                "Queued",
+                "Blocked"
+              ]
+            },
+            "planning_reason": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_receipt": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_repository": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_revision": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "planning_worktree_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_worktree_path": {
               "holds": "primitive",
               "kind": "string"
             },
@@ -51936,6 +52840,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -52023,6 +52931,38 @@
                 "kind": "literal",
                 "value": "planner_model"
               },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
+              },
               "reviewer_model": {
                 "kind": "literal",
                 "value": "reviewer_model"
@@ -52048,6 +52988,10 @@
         }
       ],
       "source": [
+        {
+          "kind": "type",
+          "name": "controlplane.host.PlanningPhase"
+        },
         {
           "kind": "entity",
           "name": "controlplane.host.Goal"
@@ -52133,6 +53077,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -52358,6 +53306,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -52618,6 +53570,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -52806,6 +53762,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -52945,6 +53905,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -53059,6 +54023,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -53301,6 +54269,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -53576,6 +54548,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -53775,6 +54751,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -53914,6 +54894,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -54028,6 +55012,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -54261,6 +55249,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -54271,6 +55291,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -54357,6 +55388,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -54588,6 +55623,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -54598,6 +55665,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -54684,6 +55762,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -54841,6 +55923,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -55082,6 +56168,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -55092,6 +56210,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -55178,6 +56307,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -55409,6 +56542,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -55419,6 +56584,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -55505,6 +56681,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -55673,6 +56853,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -55914,6 +57098,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -55924,6 +57140,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -56014,6 +57241,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -56182,6 +57413,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -56423,6 +57658,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -56433,6 +57700,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -56519,6 +57797,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -56750,6 +58032,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -56760,6 +58074,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -56846,6 +58171,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -57014,6 +58343,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -57237,6 +58570,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -57247,6 +58612,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -57333,6 +58709,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -57546,6 +58926,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -57556,6 +58968,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -57642,6 +59065,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -57799,6 +59226,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -58022,6 +59453,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -58032,6 +59495,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -58122,6 +59596,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -58279,6 +59757,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -58520,6 +60002,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -58530,6 +60044,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -58616,6 +60141,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -58847,6 +60376,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -58857,6 +60418,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -58943,6 +60515,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -59100,6 +60676,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -59363,6 +60943,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -59373,6 +60985,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -59459,6 +61082,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -59638,6 +61265,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -59901,6 +61532,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -59911,6 +61574,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -59997,6 +61671,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -60176,6 +61854,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -60439,6 +62121,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -60449,6 +62163,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -60539,6 +62264,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -60707,6 +62436,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -60970,6 +62703,38 @@
               {
                 "name": "state",
                 "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
               }
             ],
             "declarations": {
@@ -60980,6 +62745,17 @@
                   "Paused",
                   "Running",
                   "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
                 ]
               }
             }
@@ -61066,6 +62842,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -61234,6 +63014,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -61478,6 +63262,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -61561,6 +63349,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -61773,6 +63593,38 @@
                 "kind": "literal",
                 "value": "planner_model-1"
               },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
+              },
               "reviewer_model": {
                 "kind": "literal",
                 "value": "reviewer_model-1"
@@ -61978,6 +63830,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -62061,6 +63917,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -62273,6 +64161,38 @@
                 "kind": "literal",
                 "value": "planner_model-1"
               },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
+              },
               "reviewer_model": {
                 "kind": "literal",
                 "value": "reviewer_model-1"
@@ -62405,6 +64325,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -62663,6 +64587,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -62746,6 +64674,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -62970,6 +64930,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -63053,6 +65017,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -63186,6 +65182,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -63460,6 +65460,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -63539,6 +65543,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -63672,6 +65708,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -63916,6 +65956,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -63995,6 +66039,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -64205,6 +66281,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -64284,6 +66364,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -64406,6 +66518,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -64686,6 +66802,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -64818,6 +66935,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -65160,6 +67281,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -65362,6 +67487,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -65501,6 +67630,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -65615,6 +67748,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -65936,6 +68073,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -66090,6 +68228,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -66477,6 +68619,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -66737,6 +68883,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -66872,6 +69022,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -66986,6 +69140,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -67240,6 +69398,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -67323,6 +69485,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -67547,6 +69741,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -67630,6 +69828,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -67763,6 +69993,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -67905,6 +70139,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -68019,6 +70257,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -68270,6 +70512,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -68391,6 +70634,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -68740,6 +70987,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.ReadyAssignmentApplied"
         },
         {
@@ -68925,6 +71176,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -69338,6 +71593,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -69514,6 +71773,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -69931,6 +72194,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -70118,6 +72385,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -70527,6 +72798,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -70703,6 +72978,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -71058,6 +73337,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -71571,6 +73854,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -71906,6 +74193,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -72105,6 +74396,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -72323,6 +74618,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -72433,6 +74729,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -72797,6 +75097,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -73015,6 +75319,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -73322,6 +75630,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -73465,6 +75774,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -73854,6 +76167,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -74099,6 +76416,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -74246,6 +76567,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -74360,6 +76685,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -74625,6 +76954,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -74757,6 +77087,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -75100,6 +77434,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -75338,6 +77676,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -75477,6 +77819,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -75594,6 +77940,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -75635,6 +77985,1219 @@
         {
           "kind": "error",
           "name": "controlplane.host.AssignmentNotFound"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ]
+    },
+    "controlplane.host.RecordPlanningProgress/grant/denied": {
+      "purpose": "`controlplane.host.RecordPlanningProgress` sent as `controlplane.host.Operator`, which the specification does not grant it, is refused before it runs",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.RegisterWorkspace",
+          "actor": "controlplane.host.Operator",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "workspace",
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.CreateGoal",
+          "actor": "controlplane.host.Operator",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "kind": "instance",
+              "instance": "workspace"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "goal",
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.RecordPlanningProgress",
+          "actor": "controlplane.host.Operator",
+          "input": {
+            "goal_id": {
+              "kind": "instance",
+              "instance": "goal"
+            },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": "planning_fingerprint"
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Provisioning"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": "planning_reason"
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": "planning_receipt"
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": "planning_repository"
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": "planning_worktree_id"
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": "planning_worktree_path"
+            }
+          }
+        },
+        {
+          "step": "expect_not_granted",
+          "actor": "controlplane.host.Operator",
+          "unpublished": [
+            "controlplane.host.ArchiveWorkspaceApplied",
+            "controlplane.host.AssignmentCreated",
+            "controlplane.host.BlockAssignmentApplied",
+            "controlplane.host.CancelAssignmentApplied",
+            "controlplane.host.CancelGoalApplied",
+            "controlplane.host.ClaimAssignmentApplied",
+            "controlplane.host.CompleteAssignmentApplied",
+            "controlplane.host.ConfigureRepositoryApplied",
+            "controlplane.host.ConfirmPublicationApplied",
+            "controlplane.host.DisableRepositoryRegistrationApplied",
+            "controlplane.host.EnableRepositoryRegistrationApplied",
+            "controlplane.host.GoalCreated",
+            "controlplane.host.MarkPublicationUncertainApplied",
+            "controlplane.host.MergeAssignmentApplied",
+            "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
+            "controlplane.host.PublicationIntentCreated",
+            "controlplane.host.ReadyAssignmentApplied",
+            "controlplane.host.ReconcileAssignmentApplied",
+            "controlplane.host.RepairAssignmentApplied",
+            "controlplane.host.RepositoryRegistrationCreated",
+            "controlplane.host.ReviewAssignmentApplied",
+            "controlplane.host.SatisfyGoalApplied",
+            "controlplane.host.StartGoalApplied",
+            "controlplane.host.UpdateGoalApplied",
+            "controlplane.host.WorkspaceCreated"
+          ]
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "controlplane.host.PlanningPhase"
+        },
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Goal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RecordPlanningProgress"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RecordPlanningProgress",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ]
+    },
+    "controlplane.host.RecordPlanningProgress/outcome/applied": {
+      "purpose": "`controlplane.host.RecordPlanningProgress` answers `applied` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.RegisterWorkspace",
+          "actor": "controlplane.host.Operator",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "workspace",
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.CreateGoal",
+          "actor": "controlplane.host.Operator",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "kind": "instance",
+              "instance": "workspace"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "goal",
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.RecordPlanningProgress",
+          "actor": "controlplane.host.Supervisor",
+          "input": {
+            "goal_id": {
+              "kind": "instance",
+              "instance": "goal"
+            },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": "planning_fingerprint"
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Provisioning"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": "planning_reason"
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": "planning_receipt"
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": "planning_repository"
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": "planning_worktree_id"
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": "planning_worktree_path"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.RecordPlanningProgress",
+            "outcome": "applied"
+          }
+        },
+        {
+          "step": "expect_event_values",
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "payload": {
+            "goal_id": {
+              "kind": "instance",
+              "instance": "goal"
+            },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": "planning_fingerprint"
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Provisioning"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": "planning_reason"
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": "planning_receipt"
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": "planning_repository"
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": "planning_worktree_id"
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": "planning_worktree_path"
+            }
+          },
+          "shape": {
+            "goal_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "planning_fingerprint": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_phase": {
+              "holds": "enum",
+              "variants": [
+                "Idle",
+                "Provisioning",
+                "Planning",
+                "Validated",
+                "Queued",
+                "Blocked"
+              ]
+            },
+            "planning_reason": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_receipt": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_repository": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_revision": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "planning_worktree_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planning_worktree_path": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.GoalCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "acceptance": {
+                "kind": "literal",
+                "value": "acceptance"
+              },
+              "goal_id": {
+                "kind": "instance",
+                "instance": "goal"
+              },
+              "implementor_model": {
+                "kind": "literal",
+                "value": "implementor_model"
+              },
+              "max_attempts": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "max_minutes": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "max_workers": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "merge_authority": {
+                "kind": "literal",
+                "value": true
+              },
+              "objective": {
+                "kind": "literal",
+                "value": "objective"
+              },
+              "planner_model": {
+                "kind": "literal",
+                "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": "planning_fingerprint"
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Provisioning"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": "planning_reason"
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": "planning_receipt"
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": "planning_repository"
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": "planning_worktree_id"
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": "planning_worktree_path"
+              },
+              "reviewer_model": {
+                "kind": "literal",
+                "value": "reviewer_model"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "satisfaction_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              },
+              "workspace_id": {
+                "kind": "instance",
+                "instance": "workspace"
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "controlplane.host.PlanningPhase"
+        },
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Goal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RecordPlanningProgress"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RecordPlanningProgress",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ]
+    },
+    "controlplane.host.RecordPlanningProgress/outcome/not-found": {
+      "purpose": "`controlplane.host.RecordPlanningProgress` for an identity no record carries takes `not-found` and reports `controlplane.host.GoalNotFound`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "controlplane.host.RecordPlanningProgress",
+          "actor": "controlplane.host.Supervisor",
+          "input": {
+            "goal_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-ad62363f73b0"
+            },
+            "planning_fingerprint": {
+              "kind": "literal",
+              "value": "planning_fingerprint"
+            },
+            "planning_phase": {
+              "kind": "literal",
+              "value": "Idle"
+            },
+            "planning_reason": {
+              "kind": "literal",
+              "value": "planning_reason"
+            },
+            "planning_receipt": {
+              "kind": "literal",
+              "value": "planning_receipt"
+            },
+            "planning_repository": {
+              "kind": "literal",
+              "value": "planning_repository"
+            },
+            "planning_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "planning_worktree_id": {
+              "kind": "literal",
+              "value": "planning_worktree_id"
+            },
+            "planning_worktree_path": {
+              "kind": "literal",
+              "value": "planning_worktree_path"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "controlplane.host.RecordPlanningProgress",
+            "outcome": "not-found"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "controlplane.host.GoalNotFound"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.GoalCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.WorkspaceCreated"
+        }
+      ],
+      "source": [
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Goal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RecordPlanningProgress"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RecordPlanningProgress",
+            "outcome": "not-found"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "error",
+          "name": "controlplane.host.GoalNotFound"
         },
         {
           "kind": "actor",
@@ -75843,6 +79406,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -76138,6 +79705,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -76311,6 +79882,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -76369,7 +79944,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.RegisterWorkspace",
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "input": {
             "name": {
               "kind": "literal",
@@ -76469,6 +80044,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -76615,6 +80194,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -76659,7 +80242,7 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Supervisor"
+          "name": "controlplane.host.Operator"
         }
       ]
     },
@@ -76669,7 +80252,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.RegisterWorkspace",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "name": {
               "kind": "literal",
@@ -76698,7 +80281,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.CreateGoal",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "acceptance": {
               "kind": "literal",
@@ -76881,6 +80464,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -77016,6 +80600,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -77074,7 +80662,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.RegisterWorkspace",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "name": {
               "kind": "literal",
@@ -77103,7 +80691,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.CreateGoal",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "acceptance": {
               "kind": "literal",
@@ -77368,6 +80956,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -77606,6 +81198,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -77647,10 +81243,6 @@
         {
           "kind": "view",
           "name": "controlplane.host.AssignmentList"
-        },
-        {
-          "kind": "actor",
-          "name": "controlplane.host.Operator"
         },
         {
           "kind": "actor",
@@ -77750,6 +81342,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -77867,6 +81463,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -78165,6 +81765,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -78458,6 +82062,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -78612,6 +82220,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -78900,6 +82512,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -79175,6 +82791,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -79329,6 +82949,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -79558,6 +83182,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -79818,6 +83446,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -80003,6 +83635,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -80249,6 +83885,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -80524,6 +84164,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -80720,6 +84364,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -81001,6 +84649,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -81136,6 +84785,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -81194,7 +84847,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.RegisterWorkspace",
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "input": {
             "name": {
               "kind": "literal",
@@ -81223,7 +84876,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.CreateGoal",
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "input": {
             "acceptance": {
               "kind": "literal",
@@ -81496,6 +85149,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -81730,6 +85387,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -81771,6 +85432,10 @@
         {
           "kind": "view",
           "name": "controlplane.host.AssignmentList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
         },
         {
           "kind": "actor",
@@ -81870,6 +85535,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -81987,6 +85656,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -82183,6 +85856,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -82304,6 +85978,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -82578,6 +86256,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -82657,6 +86339,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -82790,6 +86504,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -82936,6 +86654,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -83050,6 +86772,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -83290,6 +87016,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -83369,6 +87099,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -83579,6 +87341,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -83658,6 +87424,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -83780,6 +87578,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -83922,6 +87724,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -84039,6 +87845,10 @@
         },
         {
           "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
           "name": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -84093,7 +87903,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.RegisterWorkspace",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "name": {
               "kind": "literal",
@@ -84122,7 +87932,7 @@
         {
           "step": "execute_command",
           "command": "controlplane.host.CreateGoal",
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "input": {
             "acceptance": {
               "kind": "literal",
@@ -84246,6 +88056,7 @@
             "controlplane.host.MarkPublicationUncertainApplied",
             "controlplane.host.MergeAssignmentApplied",
             "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
             "controlplane.host.PublicationIntentCreated",
             "controlplane.host.ReadyAssignmentApplied",
             "controlplane.host.ReconcileAssignmentApplied",
@@ -84356,6 +88167,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -84708,6 +88523,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -84787,6 +88606,38 @@
               "planner_model": {
                 "kind": "literal",
                 "value": "planner_model-1"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
               },
               "reviewer_model": {
                 "kind": "literal",
@@ -84909,6 +88760,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -85087,6 +88942,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -85201,6 +89060,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -85430,6 +89293,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -85654,6 +89521,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -85797,6 +89668,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
@@ -85977,6 +89852,10 @@
         {
           "step": "expect_no_event",
           "event": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "step": "expect_no_event",
@@ -86168,6 +90047,10 @@
         },
         {
           "step": "expect_no_event",
+          "event": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "step": "expect_no_event",
           "event": "controlplane.host.PublicationIntentCreated"
         },
         {
@@ -86322,6 +90205,10 @@
         {
           "kind": "event",
           "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
         },
         {
           "kind": "event",
