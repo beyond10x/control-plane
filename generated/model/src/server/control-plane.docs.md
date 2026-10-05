@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-contract digest slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+contract digest slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 do not edit: regenerate with `ess generate`
 -->
 
@@ -305,7 +305,7 @@ It holds:
 - `path` — `String`
 - `name` — `String`
 
-It owns any number of [`RepositoryRegistration`](#repositoryregistration), as `repositories`, carried by `RepositoryRegistration.workspace_id`. It owns any number of [`Goal`](#goal), as `goals`, carried by `Goal.workspace_id`.
+It owns any number of [`WorkspaceDirectory`](#workspacedirectory), as `directories`, carried by `WorkspaceDirectory.workspace_id`. It owns any number of [`RepositoryRegistration`](#repositoryregistration), as `repositories`, carried by `RepositoryRegistration.workspace_id`. It owns any number of [`Goal`](#goal), as `goals`, carried by `Goal.workspace_id`.
 
 No invariant is declared, so nothing here constrains an instance at rest.
 
@@ -331,6 +331,46 @@ Illegal transitions are illegal by absence: no rule forbids them, there is simpl
 - `Archived` may not become `Registered`
 
 One view projects it: [`WorkspaceList`](#workspacelist).
+
+### `WorkspaceDirectory`
+
+`controlplane.host.WorkspaceDirectory`.
+
+An instance is identified by `directory_id`, a `Uuid`. The name is part of the model and not a convention: a view projects the identity under that name, so a projection inventing its own would disagree with the view.
+
+It holds:
+
+- `workspace_id` — `Uuid`
+- `path` — `String`
+- `repository_common_dirs` — `List<String>`
+- `managed_common_dirs` — `List<String>`
+
+Its `workspace_id` is what [`Workspace`](#workspace) owns it by, as `directories`.
+
+No invariant is declared, so nothing here constrains an instance at rest.
+
+Its state is a `controlplane.host.WorkspaceDirectory.State`, one of `Registered` and `Removed`. That enum is synthesised from the lifecycle rather than declared beside it, so the states a view's filter compares and the states drawn below cannot disagree.
+
+An instance is created in `Registered`. `Removed` is terminal, so an instance may rest there forever. That is declared rather than inferred from having no way out: an entity that cannot leave a state is either finished or stuck, and only its author knows which.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Registered
+    Registered --> Removed: remove (RemoveWorkspaceDirectory)
+    Removed --> [*]
+```
+
+Each move is taken by a declared command outcome, and a move nothing takes is refused as `missing_causation` rather than left as a state change nobody can trigger:
+
+- `remove` — taken by `controlplane.host.RemoveWorkspaceDirectory` on its `applied` outcome
+
+An instance is brought into existence by `controlplane.host.AddWorkspaceDirectory` on its `created` outcome.
+
+Illegal transitions are illegal by absence: no rule forbids them, there is simply no arrow, because a rule would be a second place for the same truth to live. A diagram cannot show an absence, so the pairs it does not connect are listed here, derived from the same transitions — anything named below is a move this specification does not permit.
+
+- `Removed` may not become `Registered`
+
+One view projects it: [`WorkspaceDirectoryList`](#workspacedirectorylist).
 
 ## Views
 
@@ -459,6 +499,29 @@ It declares no order, so the rows come back in whatever order the implementation
 
 A generated scenario asserts it once, immediately after the command: a view promising this and not keeping the promise has to fail the suite rather than be retried until it passes.
 
+### `WorkspaceDirectoryList`
+
+`controlplane.host.WorkspaceDirectoryList`.
+
+It reads [`WorkspaceDirectory`](#workspacedirectory).
+
+It contains every instance of that entity: no filter narrows it, which is a decision somebody made and not a line somebody omitted.
+
+It exposes:
+
+- `directory_id` — `Uuid`
+- `workspace_id` — `Uuid`
+- `path` — `String`
+- `repository_common_dirs` — `List<String>`
+- `managed_common_dirs` — `List<String>`
+- `state` — `controlplane.host.WorkspaceDirectory.State`
+
+It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
+
+**Read-your-writes**: it is current the moment the command that changed it returns. A caller that has just created an invoice and cannot see it in here has been told a lie about what it did.
+
+A generated scenario asserts it once, immediately after the command: a view promising this and not keeping the promise has to fail the suite rather than be retried until it passes.
+
 ### `WorkspaceList`
 
 `controlplane.host.WorkspaceList`.
@@ -481,6 +544,21 @@ It declares no order, so the rows come back in whatever order the implementation
 A generated scenario asserts it once, immediately after the command: a view promising this and not keeping the promise has to fail the suite rather than be retried until it passes.
 
 ## Commands
+
+### `AddWorkspaceDirectory`
+
+`controlplane.host.AddWorkspaceDirectory`.
+
+It takes:
+
+- `workspace_id` — `Uuid`
+- `path` — `String`
+- `repository_common_dirs` — `List<String>`
+- `managed_common_dirs` — `List<String>`
+
+It has one outcome.
+
+**`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.WorkspaceDirectory`, which starts in `Registered`. The new instance's identity is published as `directory_id` on `controlplane.host.WorkspaceDirectoryCreated`. It emits `controlplane.host.WorkspaceDirectoryCreated`. It sets `workspace_id` from `input.workspace_id`, `path` from `input.path`, `repository_common_dirs` from `input.repository_common_dirs` and `managed_common_dirs` from `input.managed_common_dirs`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 ### `ArchiveWorkspace`
 
@@ -842,6 +920,22 @@ It takes:
 It has one outcome.
 
 **`created`** — The default branch, taken when no other outcome's condition matched. It creates a `controlplane.host.Workspace`, which starts in `Registered`. The new instance's identity is published as `workspace_id` on `controlplane.host.WorkspaceCreated`. It emits `controlplane.host.WorkspaceCreated`. It sets `path` from `input.path` and `name` from `input.name`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+### `RemoveWorkspaceDirectory`
+
+`controlplane.host.RemoveWorkspaceDirectory`.
+
+It takes:
+
+- `directory_id` — `Uuid`
+
+It has three outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.WorkspaceDirectory` from `Registered` to `Removed`, along the declared move `remove`. The instance is the one named by the input field `directory_id`. It emits `controlplane.host.WorkspaceDirectoryRemoved`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.WorkspaceDirectory` in `Removed`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.WorkspaceDirectoryStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.WorkspaceDirectoryNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
 ### `RepairAssignment`
 
@@ -1325,6 +1419,34 @@ Emitted by `controlplane.host.RegisterWorkspace` on its `created` outcome.
 
 Nothing in this system reacts to it.
 
+### `WorkspaceDirectoryCreated`
+
+`controlplane.host.WorkspaceDirectoryCreated`.
+
+It carries:
+
+- `directory_id` — `Uuid`
+- `workspace_id` — `Uuid`
+- `path` — `String`
+- `repository_common_dirs` — `List<String>`
+- `managed_common_dirs` — `List<String>`
+
+Emitted by `controlplane.host.AddWorkspaceDirectory` on its `created` outcome.
+
+Nothing in this system reacts to it.
+
+### `WorkspaceDirectoryRemoved`
+
+`controlplane.host.WorkspaceDirectoryRemoved`.
+
+It carries:
+
+- `directory_id` — `Uuid`
+
+Emitted by `controlplane.host.RemoveWorkspaceDirectory` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
 ## Errors
 
 ### `AssignmentNotFound`
@@ -1453,6 +1575,20 @@ Reported by `controlplane.host.DisableRepositoryRegistration` on its `wrong-stat
 
 Reported by `controlplane.host.EnableRepositoryRegistration` on its `wrong-state` outcome.
 
+### `WorkspaceDirectoryNotFound`
+
+It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
+
+Reported by `controlplane.host.RemoveWorkspaceDirectory` on its `not-found` outcome.
+
+### `WorkspaceDirectoryStateConflict`
+
+It carries:
+
+- `state` — `controlplane.host.WorkspaceDirectory.State`
+
+Reported by `controlplane.host.RemoveWorkspaceDirectory` on its `wrong-state` outcome.
+
 ### `WorkspaceNotFound`
 
 The requested identity is not held.
@@ -1479,7 +1615,7 @@ An actor is who may ask this context for something. Every grant below points at 
 
 `controlplane.host.Operator`.
 
-It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`ConfigureRepository`](#configurerepository), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`StartGoal`](#startgoal) and [`UpdateGoal`](#updategoal).
+It may invoke [`AddWorkspaceDirectory`](#addworkspacedirectory), [`ArchiveWorkspace`](#archiveworkspace), [`CancelGoal`](#cancelgoal), [`ConfigureRepository`](#configurerepository), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`PauseGoal`](#pausegoal), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RemoveWorkspaceDirectory`](#removeworkspacedirectory), [`StartGoal`](#startgoal) and [`UpdateGoal`](#updategoal).
 
 ### `Supervisor`
 
@@ -1490,4 +1626,4 @@ It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#bloc
 
 ---
 
-Generated from controlplane v1 · model digest `3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b` · contract digest `slice-sha256/2:27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902` · contract digest `slice-sha256/2:cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83`. Do not edit this file; change the specification and regenerate it with `ess generate`.

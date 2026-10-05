@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -102,6 +102,18 @@ pub enum WorkspaceState {
     Archived,
     /// `Registered`.
     Registered,
+}
+
+/// The states of `controlplane.host.WorkspaceDirectory`, as runtime values.
+///
+/// Synthesised from the lifecycle, so the two cannot disagree. Which *moves* are legal is not
+/// carried here — it is carried by `WorkspaceDirectory<S>`, where an undeclared move does not compile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceDirectoryState {
+    /// `Registered`.
+    Registered,
+    /// `Removed`.
+    Removed,
 }
 
 /// What Assignment — `controlplane.host.Assignment` — holds, apart from where it is in its lifecycle.
@@ -1374,6 +1386,200 @@ impl AnyWorkspace {
     }
 }
 
+/// What WorkspaceDirectory — `controlplane.host.WorkspaceDirectory` — holds, apart from where it is in its lifecycle.
+///
+/// The identity and every declared field. The state is deliberately not one: inside the domain it
+/// is carried by the type parameter of [`WorkspaceDirectory<S>`], and at a boundary by [`WorkspaceDirectorySnapshot::state`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryData {
+    /// The identity: `directory_id` — `Uuid`.
+    pub directory_id: crate::primitives::Uuid,
+    /// `workspace_id` — `Uuid`.
+    ///
+    /// Carries `directories`: `controlplane.host.Workspace` owns many `controlplane.host.WorkspaceDirectory`.
+    pub workspace_id: crate::primitives::Uuid,
+    /// `path` — `String`.
+    pub path: String,
+    /// `repository_common_dirs` — `List<String>`.
+    pub repository_common_dirs: Vec<String>,
+    /// `managed_common_dirs` — `List<String>`.
+    pub managed_common_dirs: Vec<String>,
+}
+
+/// The states of `controlplane.host.WorkspaceDirectory`, at the type level.
+///
+/// One marker type per declared state, sealed: a state the lifecycle does not declare cannot
+/// implement [`Marker`](workspace_directory_state::Marker), so [`WorkspaceDirectory<S>`](WorkspaceDirectory) can only ever rest in a real state.
+pub mod workspace_directory_state {
+    /// Closes [`Marker`] over the declared states.
+    mod sealed {
+        /// Implemented only by the marker types beside this module.
+        pub trait Sealed {}
+        impl Sealed for super::Registered {}
+        impl Sealed for super::Removed {}
+    }
+
+    /// A declared state of `WorkspaceDirectory`, as a type.
+    pub trait Marker: sealed::Sealed {
+        /// The same state, as the runtime value.
+        const STATE: super::WorkspaceDirectoryState;
+    }
+
+    /// `Registered`. Where a new instance starts.
+    pub struct Registered;
+
+    impl Marker for Registered {
+        const STATE: super::WorkspaceDirectoryState = super::WorkspaceDirectoryState::Registered;
+    }
+
+    /// `Removed`. Terminal: an instance may rest here forever.
+    pub struct Removed;
+
+    impl Marker for Removed {
+        const STATE: super::WorkspaceDirectoryState = super::WorkspaceDirectoryState::Removed;
+    }
+}
+
+/// WorkspaceDirectory — `controlplane.host.WorkspaceDirectory` — with its lifecycle state carried by the type.
+///
+/// The one constructor rests in `Registered`, and the only way to change `S` is a method generated from
+/// a declared transition. A move the specification does not declare is therefore not an error
+/// case: it does not compile. Where the state is data — wire, storage — use [`WorkspaceDirectorySnapshot`]
+/// and [`WorkspaceDirectorySnapshot::refine`].
+pub struct WorkspaceDirectory<S: workspace_directory_state::Marker> {
+    data: WorkspaceDirectoryData,
+    state: core::marker::PhantomData<S>,
+}
+
+impl<S: workspace_directory_state::Marker> WorkspaceDirectory<S> {
+    /// The state this instance rests in, as the runtime value.
+    pub fn state(&self) -> WorkspaceDirectoryState {
+        S::STATE
+    }
+
+    /// What it holds.
+    pub fn data(&self) -> &WorkspaceDirectoryData {
+        &self.data
+    }
+
+    /// Hands the data back, giving up the typed state.
+    pub fn into_data(self) -> WorkspaceDirectoryData {
+        self.data
+    }
+}
+
+impl WorkspaceDirectory<workspace_directory_state::Registered> {
+    /// A new instance, resting in `Registered` — the only state the lifecycle starts one in.
+    pub fn new(data: WorkspaceDirectoryData) -> Self {
+        Self {
+            data,
+            state: core::marker::PhantomData,
+        }
+    }
+}
+
+impl WorkspaceDirectory<workspace_directory_state::Registered> {
+    /// `remove` — `Registered` → `Removed`. Taken by the `applied` outcome of `controlplane.host.RemoveWorkspaceDirectory`.
+    pub fn remove(self) -> WorkspaceDirectory<workspace_directory_state::Removed> {
+        WorkspaceDirectory {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+}
+
+/// `controlplane.host.WorkspaceDirectory` as it crosses a boundary: the state as a value beside the data.
+///
+/// Wire and storage know states only at runtime; [`WorkspaceDirectorySnapshot::refine`] is the one door back
+/// into the typed lifecycle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectorySnapshot {
+    /// Where the instance is in its lifecycle.
+    pub state: WorkspaceDirectoryState,
+    /// What it holds.
+    pub data: WorkspaceDirectoryData,
+}
+
+/// An `WorkspaceDirectory` in whichever declared state it was found.
+pub enum AnyWorkspaceDirectory {
+    /// Resting in `Registered`.
+    Registered(WorkspaceDirectory<workspace_directory_state::Registered>),
+    /// Resting in `Removed`.
+    Removed(WorkspaceDirectory<workspace_directory_state::Removed>),
+}
+
+impl WorkspaceDirectorySnapshot {
+    /// Refines the runtime state into the typed one.
+    ///
+    /// Total: every declared state has an arm, and an undeclared state cannot reach here because
+    /// `WorkspaceDirectoryState` cannot spell one.
+    pub fn refine(self) -> AnyWorkspaceDirectory {
+        match self.state {
+            WorkspaceDirectoryState::Registered => AnyWorkspaceDirectory::Registered(WorkspaceDirectory {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+            WorkspaceDirectoryState::Removed => AnyWorkspaceDirectory::Removed(WorkspaceDirectory {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+        }
+    }
+}
+
+impl AnyWorkspaceDirectory {
+    /// The state, as the runtime value.
+    pub fn state(&self) -> WorkspaceDirectoryState {
+        match self {
+            Self::Registered(_) => WorkspaceDirectoryState::Registered,
+            Self::Removed(_) => WorkspaceDirectoryState::Removed,
+        }
+    }
+
+    /// Back to the boundary shape.
+    pub fn snapshot(self) -> WorkspaceDirectorySnapshot {
+        match self {
+            Self::Registered(instance) => WorkspaceDirectorySnapshot {
+                state: WorkspaceDirectoryState::Registered,
+                data: instance.into_data(),
+            },
+            Self::Removed(instance) => WorkspaceDirectorySnapshot {
+                state: WorkspaceDirectoryState::Removed,
+                data: instance.into_data(),
+            },
+        }
+    }
+}
+
+/// AddWorkspaceDirectory — the input of `controlplane.host.AddWorkspaceDirectory`.
+///
+/// Everything it can result in is [`AddWorkspaceDirectoryOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddWorkspaceDirectory {
+    /// `workspace_id` — `Uuid`.
+    pub workspace_id: crate::primitives::Uuid,
+    /// `path` — `String`.
+    pub path: String,
+    /// `repository_common_dirs` — `List<String>`.
+    pub repository_common_dirs: Vec<String>,
+    /// `managed_common_dirs` — `List<String>`.
+    pub managed_common_dirs: Vec<String>,
+}
+
+/// Everything `controlplane.host.AddWorkspaceDirectory` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AddWorkspaceDirectoryOutcome {
+    /// `created` — otherwise.
+    Created {
+        /// The `controlplane.host.WorkspaceDirectoryCreated` this outcome publishes.
+        workspace_directory_created: WorkspaceDirectoryCreated,
+    },
+}
+
 /// ArchiveWorkspace — the input of `controlplane.host.ArchiveWorkspace`.
 ///
 /// Everything it can result in is [`ArchiveWorkspaceOutcome`].
@@ -2105,6 +2311,39 @@ pub enum RegisterWorkspaceOutcome {
     },
 }
 
+/// RemoveWorkspaceDirectory — the input of `controlplane.host.RemoveWorkspaceDirectory`.
+///
+/// Everything it can result in is [`RemoveWorkspaceDirectoryOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoveWorkspaceDirectory {
+    /// `directory_id` — `Uuid`.
+    pub directory_id: crate::primitives::Uuid,
+}
+
+/// Everything `controlplane.host.RemoveWorkspaceDirectory` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoveWorkspaceDirectoryOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.WorkspaceDirectoryRemoved` this outcome publishes.
+        workspace_directory_removed: WorkspaceDirectoryRemoved,
+    },
+    /// `wrong-state` — from a state no declared move starts in.
+    WrongState {
+        /// Why it was refused: `controlplane.host.WorkspaceDirectoryStateConflict`.
+        error: WorkspaceDirectoryStateConflict,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.WorkspaceDirectoryNotFound`.
+        error: WorkspaceDirectoryNotFound,
+    },
+}
+
 /// RepairAssignment — the input of `controlplane.host.RepairAssignment`.
 ///
 /// Everything it can result in is [`RepairAssignmentOutcome`].
@@ -2627,6 +2866,28 @@ pub struct WorkspaceCreated {
     pub name: String,
 }
 
+/// WorkspaceDirectoryCreated — the event `controlplane.host.WorkspaceDirectoryCreated`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryCreated {
+    /// `directory_id` — `Uuid`.
+    pub directory_id: crate::primitives::Uuid,
+    /// `workspace_id` — `Uuid`.
+    pub workspace_id: crate::primitives::Uuid,
+    /// `path` — `String`.
+    pub path: String,
+    /// `repository_common_dirs` — `List<String>`.
+    pub repository_common_dirs: Vec<String>,
+    /// `managed_common_dirs` — `List<String>`.
+    pub managed_common_dirs: Vec<String>,
+}
+
+/// WorkspaceDirectoryRemoved — the event `controlplane.host.WorkspaceDirectoryRemoved`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryRemoved {
+    /// `directory_id` — `Uuid`.
+    pub directory_id: crate::primitives::Uuid,
+}
+
 /// The declared error `controlplane.host.AssignmentNotFound`.
 ///
 /// The requested identity is not held.
@@ -2681,6 +2942,17 @@ pub struct RepositoryRegistrationNotFound;
 pub struct RepositoryRegistrationStateConflict {
     /// `state` — `controlplane.host.RepositoryRegistration.State`.
     pub state: RepositoryRegistrationState,
+}
+
+/// The declared error `controlplane.host.WorkspaceDirectoryNotFound`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryNotFound;
+
+/// The declared error `controlplane.host.WorkspaceDirectoryStateConflict`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryStateConflict {
+    /// `state` — `controlplane.host.WorkspaceDirectory.State`.
+    pub state: WorkspaceDirectoryState,
 }
 
 /// The declared error `controlplane.host.WorkspaceNotFound`.
@@ -2844,6 +3116,27 @@ pub struct RepositoryRegistrationList {
     pub state: RepositoryRegistrationState,
 }
 
+/// WorkspaceDirectoryList — one row of the view `controlplane.host.WorkspaceDirectoryList`.
+///
+/// Projects `controlplane.host.WorkspaceDirectory` at `read_your_writes` consistency.
+/// The specification fully determines every row, so its query is generated over the storage port —
+/// see the plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceDirectoryList {
+    /// `directory_id` — `Uuid`.
+    pub directory_id: crate::primitives::Uuid,
+    /// `workspace_id` — `Uuid`.
+    pub workspace_id: crate::primitives::Uuid,
+    /// `path` — `String`.
+    pub path: String,
+    /// `repository_common_dirs` — `List<String>`.
+    pub repository_common_dirs: Vec<String>,
+    /// `managed_common_dirs` — `List<String>`.
+    pub managed_common_dirs: Vec<String>,
+    /// `state` — `controlplane.host.WorkspaceDirectory.State`.
+    pub state: WorkspaceDirectoryState,
+}
+
 /// WorkspaceList — one row of the view `controlplane.host.WorkspaceList`.
 ///
 /// Projects `controlplane.host.Workspace` at `read_your_writes` consistency.
@@ -2866,6 +3159,17 @@ pub struct WorkspaceList {
 /// One trait per obligation in the synthesis plan, each carrying the plan's own contract, and one
 /// per generated behaviour, which [`Generated`](crate::behaviour::Generated) implements.
 pub mod obligations {
+    /// The behaviour `controlplane.host.AddWorkspaceDirectory` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait AddWorkspaceDirectoryBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.AddWorkspaceDirectory`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn add_workspace_directory(&mut self, input: super::AddWorkspaceDirectory) -> Result<super::AddWorkspaceDirectoryOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The behaviour `controlplane.host.ArchiveWorkspace` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -3097,6 +3401,17 @@ pub mod obligations {
         fn register_workspace(&mut self, input: super::RegisterWorkspace) -> Result<super::RegisterWorkspaceOutcome, crate::obligation::UnmetObligation>;
     }
 
+    /// The behaviour `controlplane.host.RemoveWorkspaceDirectory` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait RemoveWorkspaceDirectoryBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.RemoveWorkspaceDirectory`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn remove_workspace_directory(&mut self, input: super::RemoveWorkspaceDirectory) -> Result<super::RemoveWorkspaceDirectoryOutcome, crate::obligation::UnmetObligation>;
+    }
+
     /// The behaviour `controlplane.host.RepairAssignment` — generated.
     ///
     /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
@@ -3194,6 +3509,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
         fn repository_registration_list(&self) -> Result<Vec<super::RepositoryRegistrationList>, crate::obligation::UnmetObligation>;
+    }
+
+    /// The query `controlplane.host.WorkspaceDirectoryList` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage port. Implement it yourself to replace that query.
+    pub trait WorkspaceDirectoryListQuery {
+        /// Serves `controlplane.host.WorkspaceDirectoryList` rows at the view's declared consistency.
+        ///
+        /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
+        fn workspace_directory_list(&self) -> Result<Vec<super::WorkspaceDirectoryList>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `controlplane.host.WorkspaceList` — generated.

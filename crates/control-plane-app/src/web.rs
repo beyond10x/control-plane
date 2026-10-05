@@ -117,6 +117,31 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         escape(field(ws, "name")),
         escape(field(ws, "path"))
     );
+    body.push_str("<h2>Directories</h2><p>Directories provide workspace context, including folders without Git. Repositories in each directory and its immediate children appear below.</p>");
+    for directory in rows(&view, "directories")?.iter().filter(|directory| {
+        field(directory, "workspace_id") == id && field(directory, "state") == "Registered"
+    }) {
+        write!(
+            body,
+            "<article><p><code>{}</code></p>{}</article>",
+            escape(field(directory, "path")),
+            control(
+                state,
+                &format!(
+                    "/workspaces/{id}/directories/{}/remove",
+                    field(directory, "directory_id")
+                ),
+                "Remove directory"
+            )
+        )?;
+    }
+    write!(
+        body,
+        "<form method=\"post\" action=\"/workspaces/{}/directories\">{}{}<button>Add directory</button></form>",
+        escape(id),
+        token(state),
+        input("Directory path", "path", "")
+    )?;
     body.push_str("<h2>Goals</h2>");
     for goal in rows(&view, "goals")?
         .iter()
@@ -424,4 +449,40 @@ pub async fn add_repository(
     Form(form): Form<HashMap<String, String>>,
 ) -> Response {
     answer(async{verify_form(&state,&form)?;let found=control_plane_core::discover(std::path::Path::new(required(&form,"path")?))?;ensure!(found.repositories.len()==1,"select one Git repository");let repo=&found.repositories[0];state.command("RegisterRepository",json!({"workspace_id":id,"name":repo.name,"path":repo.path,"common_dir":repo.common_dir,"base_branch":repo.base_branch,"test_command":"task check","publish_command":""})).await?;Ok(format!("/workspaces/{id}"))}.await)
+}
+
+pub async fn add_directory(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response {
+    answer(
+        async {
+            verify_form(&state, &form)?;
+            state
+                .add_directory(
+                    &id,
+                    DirectoryInput {
+                        path: required(&form, "path")?.into(),
+                    },
+                )
+                .await?;
+            Ok(format!("/workspaces/{id}"))
+        }
+        .await,
+    )
+}
+pub async fn remove_directory(
+    State(state): State<AppState>,
+    Path((id, directory)): Path<(String, String)>,
+    Form(form): Form<HashMap<String, String>>,
+) -> Response {
+    answer(
+        async {
+            verify_form(&state, &form)?;
+            state.remove_directory(&id, &directory).await?;
+            Ok(format!("/workspaces/{id}"))
+        }
+        .await,
+    )
 }

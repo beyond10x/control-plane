@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! control-plane — the `control-plane` component of `controlplane` v1.
@@ -70,6 +70,10 @@ pub enum PublishedEvent {
     UpdateGoalApplied(crate::host::UpdateGoalApplied),
     /// `controlplane.host.WorkspaceCreated`.
     WorkspaceCreated(crate::host::WorkspaceCreated),
+    /// `controlplane.host.WorkspaceDirectoryCreated`.
+    WorkspaceDirectoryCreated(crate::host::WorkspaceDirectoryCreated),
+    /// `controlplane.host.WorkspaceDirectoryRemoved`.
+    WorkspaceDirectoryRemoved(crate::host::WorkspaceDirectoryRemoved),
 }
 
 /// control-plane — the port over the component's obligations.
@@ -102,8 +106,23 @@ impl<B> ControlPlane<B> {
 
 impl<B> ControlPlane<B>
 where
-    B: crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceListQuery,
+    B: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
 {
+    /// Accepts `controlplane.host.AddWorkspaceDirectory`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn add_workspace_directory(&mut self, input: crate::host::AddWorkspaceDirectory) -> Result<crate::host::AddWorkspaceDirectoryOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.add_workspace_directory(input)?;
+        match &outcome {
+            crate::host::AddWorkspaceDirectoryOutcome::Created { workspace_directory_created, .. } => {
+                self.outbox.push(PublishedEvent::WorkspaceDirectoryCreated(workspace_directory_created.clone()));
+            }
+        }
+        Ok(outcome)
+    }
+
     /// Accepts `controlplane.host.ArchiveWorkspace`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
@@ -449,6 +468,23 @@ where
         Ok(outcome)
     }
 
+    /// Accepts `controlplane.host.RemoveWorkspaceDirectory`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn remove_workspace_directory(&mut self, input: crate::host::RemoveWorkspaceDirectory) -> Result<crate::host::RemoveWorkspaceDirectoryOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.remove_workspace_directory(input)?;
+        match &outcome {
+            crate::host::RemoveWorkspaceDirectoryOutcome::Applied { workspace_directory_removed, .. } => {
+                self.outbox.push(PublishedEvent::WorkspaceDirectoryRemoved(workspace_directory_removed.clone()));
+            }
+            crate::host::RemoveWorkspaceDirectoryOutcome::WrongState { .. } => {}
+            crate::host::RemoveWorkspaceDirectoryOutcome::NotFound { .. } => {}
+        }
+        Ok(outcome)
+    }
+
     /// Accepts `controlplane.host.RepairAssignment`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
@@ -551,6 +587,11 @@ where
     /// Serves `controlplane.host.RepositoryRegistrationList` at `read_your_writes` consistency, from the owed projection.
     pub fn repository_registration_list(&self) -> Result<Vec<crate::host::RepositoryRegistrationList>, crate::obligation::UnmetObligation> {
         self.behaviors.repository_registration_list()
+    }
+
+    /// Serves `controlplane.host.WorkspaceDirectoryList` at `read_your_writes` consistency, from the owed projection.
+    pub fn workspace_directory_list(&self) -> Result<Vec<crate::host::WorkspaceDirectoryList>, crate::obligation::UnmetObligation> {
+        self.behaviors.workspace_directory_list()
     }
 
     /// Serves `controlplane.host.WorkspaceList` at `read_your_writes` consistency, from the owed projection.

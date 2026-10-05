@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 3d7e5edad026a769d94fad7e6af37d426a599672c637ccd2389868c2ed11448b
-// contract digest 27517aec229e5e98ea64875d55bb11b465af6d3dcfa1804f979163860350db55
+// model digest 528a7c48088b8ebb67277ee677106218efacfce1938bb9582406ba6a479b6902
+// contract digest cb2cdc58d77ebfe102a784bb691765368fb444d938e6de9301d0443f5039af83
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -159,6 +159,27 @@ pub fn decode_controlplane_host_workspace_state(value: &json::Value, at: &str) -
         "Archived" => crate::host::WorkspaceState::Archived,
         "Registered" => crate::host::WorkspaceState::Registered,
         other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Archived`, `Registered`".to_owned(), found: format!("`{other}`") }),
+    })
+}
+
+/// Writes `controlplane.host.WorkspaceDirectory.State` as JSON.
+pub fn encode_controlplane_host_workspace_directory_state(value: &crate::host::WorkspaceDirectoryState, out: &mut String) {
+    match value {
+        crate::host::WorkspaceDirectoryState::Registered => json::push_text(out, "Registered"),
+        crate::host::WorkspaceDirectoryState::Removed => json::push_text(out, "Removed"),
+    }
+}
+
+/// Reads `controlplane.host.WorkspaceDirectory.State` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_controlplane_host_workspace_directory_state(value: &json::Value, at: &str) -> Result<crate::host::WorkspaceDirectoryState, json::DecodeError> {
+    Ok(match json::text_at(value, at, "one of `Registered`, `Removed`")? {
+        "Registered" => crate::host::WorkspaceDirectoryState::Registered,
+        "Removed" => crate::host::WorkspaceDirectoryState::Removed,
+        other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Registered`, `Removed`".to_owned(), found: format!("`{other}`") }),
     })
 }
 
@@ -522,6 +543,44 @@ pub fn encode_event_controlplane_host_workspace_created(value: &crate::host::Wor
     out.push('}');
 }
 
+/// Writes the event `controlplane.host.WorkspaceDirectoryCreated` as JSON.
+pub fn encode_event_controlplane_host_workspace_directory_created(value: &crate::host::WorkspaceDirectoryCreated, out: &mut String) {
+    out.push('{');
+    json::member(out, "directory_id");
+    json::push_text(out, &value.directory_id.0);
+    json::member(out, "workspace_id");
+    json::push_text(out, &value.workspace_id.0);
+    json::member(out, "path");
+    json::push_text(out, &value.path);
+    json::member(out, "repository_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.repository_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    json::member(out, "managed_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.managed_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.WorkspaceDirectoryRemoved` as JSON.
+pub fn encode_event_controlplane_host_workspace_directory_removed(value: &crate::host::WorkspaceDirectoryRemoved, out: &mut String) {
+    out.push('{');
+    json::member(out, "directory_id");
+    json::push_text(out, &value.directory_id.0);
+    out.push('}');
+}
+
 /// Writes the declared error `controlplane.host.AssignmentNotFound` as JSON.
 pub fn encode_error_controlplane_host_assignment_not_found(_value: &crate::host::AssignmentNotFound, out: &mut String) {
     out.push('{');
@@ -575,6 +634,20 @@ pub fn encode_error_controlplane_host_repository_registration_state_conflict(val
     out.push('{');
     json::member(out, "state");
     encode_controlplane_host_repository_registration_state(&value.state, out);
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.WorkspaceDirectoryNotFound` as JSON.
+pub fn encode_error_controlplane_host_workspace_directory_not_found(_value: &crate::host::WorkspaceDirectoryNotFound, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.WorkspaceDirectoryStateConflict` as JSON.
+pub fn encode_error_controlplane_host_workspace_directory_state_conflict(value: &crate::host::WorkspaceDirectoryStateConflict, out: &mut String) {
+    out.push('{');
+    json::member(out, "state");
+    encode_controlplane_host_workspace_directory_state(&value.state, out);
     out.push('}');
 }
 
@@ -726,6 +799,38 @@ pub fn encode_view_controlplane_host_repository_registration_list(value: &crate:
     out.push('}');
 }
 
+/// Writes one row of the view `controlplane.host.WorkspaceDirectoryList` as JSON.
+pub fn encode_view_controlplane_host_workspace_directory_list(value: &crate::host::WorkspaceDirectoryList, out: &mut String) {
+    out.push('{');
+    json::member(out, "directory_id");
+    json::push_text(out, &value.directory_id.0);
+    json::member(out, "workspace_id");
+    json::push_text(out, &value.workspace_id.0);
+    json::member(out, "path");
+    json::push_text(out, &value.path);
+    json::member(out, "repository_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.repository_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    json::member(out, "managed_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.managed_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    json::member(out, "state");
+    encode_controlplane_host_workspace_directory_state(&value.state, out);
+    out.push('}');
+}
+
 /// Writes one row of the view `controlplane.host.WorkspaceList` as JSON.
 pub fn encode_view_controlplane_host_workspace_list(value: &crate::host::WorkspaceList, out: &mut String) {
     out.push('{');
@@ -737,6 +842,100 @@ pub fn encode_view_controlplane_host_workspace_list(value: &crate::host::Workspa
     json::push_text(out, &value.name);
     json::member(out, "state");
     encode_controlplane_host_workspace_state(&value.state, out);
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.AddWorkspaceDirectory` as JSON.
+pub fn encode_command_controlplane_host_add_workspace_directory(value: &crate::host::AddWorkspaceDirectory, out: &mut String) {
+    out.push('{');
+    json::member(out, "workspace_id");
+    json::push_text(out, &value.workspace_id.0);
+    json::member(out, "path");
+    json::push_text(out, &value.path);
+    json::member(out, "repository_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.repository_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    json::member(out, "managed_common_dirs");
+    out.push('[');
+    for (index0, item0) in value.managed_common_dirs.iter().enumerate() {
+        if index0 > 0 {
+            out.push(',');
+        }
+        json::push_text(out, &*item0);
+    }
+    out.push(']');
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.AddWorkspaceDirectory` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_add_workspace_directory(value: &json::Value, at: &str) -> Result<crate::host::AddWorkspaceDirectory, json::DecodeError> {
+    Ok(crate::host::AddWorkspaceDirectory {
+        workspace_id: {
+            let at0 = json::nested(at, "workspace_id");
+            let member0 = json::member_at(value, at, "workspace_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        path: {
+            let at1 = json::nested(at, "path");
+            let member1 = json::member_at(value, at, "path")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+        repository_common_dirs: {
+            let at2 = json::nested(at, "repository_common_dirs");
+            let member2 = json::member_at(value, at, "repository_common_dirs")?;
+            {
+                let mut items2 = Vec::new();
+                for (index2, element2) in json::items_at(member2, &at2, "an array")?.iter().enumerate() {
+                    let nested2 = json::nested(&at2, &index2.to_string());
+                    items2.push(json::text_at(element2, &nested2, "a string")?.to_owned());
+                }
+                items2
+            }
+        },
+        managed_common_dirs: {
+            let at3 = json::nested(at, "managed_common_dirs");
+            let member3 = json::member_at(value, at, "managed_common_dirs")?;
+            {
+                let mut items3 = Vec::new();
+                for (index3, element3) in json::items_at(member3, &at3, "an array")?.iter().enumerate() {
+                    let nested3 = json::nested(&at3, &index3.to_string());
+                    items3.push(json::text_at(element3, &nested3, "a string")?.to_owned());
+                }
+                items3
+            }
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.AddWorkspaceDirectory` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_add_workspace_directory(value: &crate::host::AddWorkspaceDirectoryOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::AddWorkspaceDirectoryOutcome::Created { workspace_directory_created } => {
+            json::member(out, "outcome");
+            json::push_text(out, "created");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.WorkspaceDirectoryCreated");
+            json::member(out, "payload");
+            encode_event_controlplane_host_workspace_directory_created(workspace_directory_created, out);
+            out.push('}');
+            out.push(']');
+        }
+    }
     out.push('}');
 }
 
@@ -2448,6 +2647,79 @@ pub fn encode_outcome_controlplane_host_register_workspace(value: &crate::host::
     out.push('}');
 }
 
+/// Writes the input of `controlplane.host.RemoveWorkspaceDirectory` as JSON.
+pub fn encode_command_controlplane_host_remove_workspace_directory(value: &crate::host::RemoveWorkspaceDirectory, out: &mut String) {
+    out.push('{');
+    json::member(out, "directory_id");
+    json::push_text(out, &value.directory_id.0);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.RemoveWorkspaceDirectory` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_remove_workspace_directory(value: &json::Value, at: &str) -> Result<crate::host::RemoveWorkspaceDirectory, json::DecodeError> {
+    Ok(crate::host::RemoveWorkspaceDirectory {
+        directory_id: {
+            let at0 = json::nested(at, "directory_id");
+            let member0 = json::member_at(value, at, "directory_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.RemoveWorkspaceDirectory` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_remove_workspace_directory(value: &crate::host::RemoveWorkspaceDirectoryOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::RemoveWorkspaceDirectoryOutcome::Applied { workspace_directory_removed } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.WorkspaceDirectoryRemoved");
+            json::member(out, "payload");
+            encode_event_controlplane_host_workspace_directory_removed(workspace_directory_removed, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::RemoveWorkspaceDirectoryOutcome::WrongState { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "wrong-state");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.WorkspaceDirectoryStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_workspace_directory_state_conflict(error, out);
+            out.push('}');
+        }
+        crate::host::RemoveWorkspaceDirectoryOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.WorkspaceDirectoryNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_workspace_directory_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
 /// Writes the input of `controlplane.host.RepairAssignment` as JSON.
 pub fn encode_command_controlplane_host_repair_assignment(value: &crate::host::RepairAssignment, out: &mut String) {
     out.push('{');
@@ -2931,6 +3203,8 @@ pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
         crate::system::SystemEvent::StartGoalApplied(event) => encode_event_controlplane_host_start_goal_applied(event, &mut out),
         crate::system::SystemEvent::UpdateGoalApplied(event) => encode_event_controlplane_host_update_goal_applied(event, &mut out),
         crate::system::SystemEvent::WorkspaceCreated(event) => encode_event_controlplane_host_workspace_created(event, &mut out),
+        crate::system::SystemEvent::WorkspaceDirectoryCreated(event) => encode_event_controlplane_host_workspace_directory_created(event, &mut out),
+        crate::system::SystemEvent::WorkspaceDirectoryRemoved(event) => encode_event_controlplane_host_workspace_directory_removed(event, &mut out),
     }
     out.push('}');
     out

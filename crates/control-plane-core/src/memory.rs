@@ -14,6 +14,7 @@ pub(crate) struct Memory {
     pub publications: BTreeMap<String, PublicationIntentSnapshot>,
     pub repositories: BTreeMap<String, RepositoryRegistrationSnapshot>,
     pub workspaces: BTreeMap<String, WorkspaceSnapshot>,
+    pub directories: BTreeMap<String, WorkspaceDirectorySnapshot>,
     pub ids: Vec<String>,
     pub replay: bool,
     pub cursor: usize,
@@ -65,6 +66,12 @@ storage!(
     assignment_id
 );
 storage!(GoalStorage, GoalSnapshot, goals, goal_id);
+storage!(
+    WorkspaceDirectoryStorage,
+    WorkspaceDirectorySnapshot,
+    directories,
+    directory_id
+);
 storage!(
     PublicationIntentStorage,
     PublicationIntentSnapshot,
