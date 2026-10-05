@@ -289,6 +289,30 @@ async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
 }
 
 #[tokio::test]
+async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["story","show","operator-console"],"body":null}),
+        json!({"action":"aep","args":["show","story:deliver"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Corrected noun-first CLI syntax."}),
+        json!({"approved":true,"reason":"Existing story remains authoritative."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(model.0.lock().unwrap().is_empty());
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    assert!(receipt.contains("AEP syntax feedback"));
+    assert!(receipt.contains("operator-console"));
+}
+
+#[tokio::test]
 async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
     struct Recovering(Mutex<usize>);
     impl AgentModel for Recovering {

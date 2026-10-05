@@ -836,10 +836,29 @@ fn validate_aep_args(args: &[String]) -> Result<bool> {
             "use --from followed by stdin marker"
         );
     }
-    ensure!(
-        admitted_verb(&args[0]),
-        "model cannot perform this AEP operation"
-    );
+    if !admitted_verb(&args[0]) {
+        ensure!(
+            !matches!(
+                args[0].as_str(),
+                "move"
+                    | "set"
+                    | "evidence"
+                    | "findings"
+                    | "review-value"
+                    | "review"
+                    | "approve"
+                    | "approval"
+                    | "publish"
+                    | "merge"
+                    | "delete"
+                    | "remove"
+            ),
+            "model cannot perform this AEP operation"
+        );
+        // Unknown/noun-first grammar is never invoked or reinterpreted. Return
+        // bounded corrective feedback so the model can choose an admitted verb.
+        return Err(AepSyntax("unknown artifact verb or argument order; use [show, story:<id>] to inspect a story, or --help for admitted CLI syntax").into());
+    }
     if args[0] == "new" {
         if args.len() == 1 {
             return Err(AepSyntax("new requires an admitted artifact kind").into());
