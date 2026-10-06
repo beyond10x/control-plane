@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:publication-exit
 kind: story
-status: draft
+status: active
 title: A publication the remote never received can be closed and retried
 relations:
 - decomposes: epic:unattended-operation
@@ -26,7 +26,10 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 6
+revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -46,8 +49,8 @@ When the publisher has exited and the observed target does not contain the candi
 - `failed_observation_keeps_intent_open`: an observation error leaves the intent Uncertain and the assignment Blocked.
 - `published_candidate_still_reconciles`: the existing uncertain-then-observed path still reaches Merged.
 - `unchanged_unresolved_publication_appends_once`: ten fleet ticks over the same unresolved intent append at most one progress decision.
-- `close_command_validates`: `ess specify validate --path ess --strict-requires` passes with the not-published state and the close command declared in ess/domains/host.yaml.
-- `close_command_scenarios_pass`: the scenarios `ess verify conform synthesize` emits for the close command pass against the durable conformance target.
+- The specification validates with the not-published state and the close command declared in ess/domains/host.yaml (`ess specify validate --path ess --strict-requires`, a `task check` step).
+- The scenarios `ess verify conform synthesize` emits for the close command pass against the durable conformance target (`cargo run --locked -p control-plane-xtask -- conformance`, a `task check` step; the scenario count rises above 171).
 - The change ids `ess verify diff` reports for this change are listed in the acknowledgement file of story:spec-history-gate.
 
 ## Scope

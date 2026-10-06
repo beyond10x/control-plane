@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-status-and-attention
 kind: story
-status: draft
+status: active
 title: Status header and attention strip
 relations:
 - decomposes: epic:console-clarity
@@ -15,7 +15,10 @@ scope:
   path: frontend/dist
 - confidence: inferred
   path: frontend/src
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
