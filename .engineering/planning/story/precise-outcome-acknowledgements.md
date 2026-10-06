@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:precise-outcome-acknowledgements
 kind: story
-status: draft
+status: active
 title: Added-outcome acknowledgements bind the reviewed condition and answer
 relations:
 - decomposes: epic:unattended-operation
@@ -11,7 +11,14 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask/src/spec_history.rs
-revision: 2
+- confidence: inferred
+  path: crates/control-plane-xtask/tests
+- confidence: inferred
+  path: ess/spec-acknowledgements.json
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 5, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 6, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -27,4 +34,4 @@ review-result:adversary-terminal-goal-edits-pass-1, finding on ess/spec-acknowle
 
 ## Scope
 
-Inferred: crates/control-plane-xtask/src/spec_history.rs, crates/control-plane-xtask/tests/; possibly an issue on beyond10x/ess if the diff should carry the outcome's condition and answer.
+Inferred: crates/control-plane-xtask/src/spec_history.rs, crates/control-plane-xtask/tests/, and ess/spec-acknowledgements.json (its three existing entries must carry the reviewed condition and answer in the new form). Every story that changes the specification also writes that file (story:publication-exit, story:spec-owned-admission), so none of them shares a wave with this one. Possibly an issue on beyond10x/ess if the diff should carry the outcome's condition and answer.

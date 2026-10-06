@@ -24,8 +24,10 @@ scope:
 - confidence: cited
   path: ess/domains/host.yaml
 - confidence: inferred
+  path: ess/spec-acknowledgements.json
+- confidence: inferred
   path: generated
-revision: 4
+revision: 5
 ---
 ## Outcome
 

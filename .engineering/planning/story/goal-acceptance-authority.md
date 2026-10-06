@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:goal-acceptance-authority
 kind: story
-status: draft
+status: active
 title: Goal acceptance satisfies only the revision it checked
 relations:
 - decomposes: epic:unattended-operation
@@ -10,10 +10,17 @@ relations:
 - informed_by: review-result:adversary-terminal-goal-edits-pass-1
 scope:
 - confidence: inferred
+  path: crates/control-plane-core/src/guards.rs
+- confidence: inferred
+  path: crates/control-plane-core/src/tests.rs
+- confidence: inferred
   path: crates/control-plane-runtime/src/fleet.rs
 - confidence: inferred
   path: crates/control-plane-runtime/tests/fleet.rs
-revision: 3
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 6, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 7, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -30,4 +37,4 @@ review-result:adversary-terminal-goal-edits-pass-1, finding at crates/control-pl
 
 ## Scope
 
-Inferred: crates/control-plane-runtime/src/fleet.rs (goal acceptance), crates/control-plane-runtime/tests/fleet.rs; if SatisfyGoal gains a revision input, ess/domains/host.yaml, generated/ and ess/spec-acknowledgements.json.
+Inferred: the fix is a host admission check, not a specification change. The SatisfyGoal guard in crates/control-plane-core/src/guards.rs (lines 187-199 at e238d48) runs inside `Store::execute`, so it compares the receipt's `goal_revision` with the goal's stored revision in the same step that applies the command; a mismatch is refused and the goal stays Running. crates/control-plane-runtime/src/fleet.rs (goal acceptance, 2060-2130) keeps its pre-check and handles the refusal; crates/control-plane-core/src/tests.rs and crates/control-plane-runtime/tests/fleet.rs carry the tests. No ess/, generated/ or ess/spec-acknowledgements.json change, so this story stays disjoint from story:precise-outcome-acknowledgements, which rewrites the acknowledgement file. Declaring the rule in ESS belongs to story:spec-owned-admission, which lists every host-only rule with its reason.
