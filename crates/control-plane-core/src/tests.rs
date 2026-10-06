@@ -1435,3 +1435,75 @@ async fn adversary_journal_keeps_the_newest_64_once_each_across_restart() {
     drop(store);
     assert_eq!(shown(&Store::open(&database).await.unwrap()), live);
 }
+
+#[tokio::test]
+async fn adversary_rejected_acceptance_is_recorded_once_and_survives_restart() {
+    // The fleet records a rejected goal review on the receipt it reads from GoalList
+    // (fleet.rs:114-123, reason capped with bounded_text at 8 KiB); later progress copies that
+    // receipt. The acceptance record must not be repeated by those decisions, and the latch
+    // input (Store::activity_history's acceptance) must survive a restart. No earlier case
+    // measures a decision recorded after an acceptance record.
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let goal = adversary_goal(&mut store, temp.path()).await;
+    store
+        .record_activity(
+            &goal,
+            json!({"id":"before","action":"goal.review","role":"goal_reviewer","status":"running","detail":"reviewing"}),
+        )
+        .await
+        .unwrap();
+    let reason = format!(
+        "Goal acceptance blocked: final goal review rejected: {}",
+        json!({"approved":false,"reason":"Obligation is not demonstrated.\n".repeat(400)})
+    );
+    let acceptance = json!({"fingerprint":"fp","status":"failed","reason":bounded_text(&reason, 8 * 1024),"at":"2026-10-06T10:00:00Z","goal_revision":1});
+    let current = store.query("GoalList").unwrap()[0].clone();
+    let mut receipt: Value =
+        serde_json::from_str(current["planning_receipt"].as_str().unwrap()).unwrap();
+    receipt["acceptance"] = acceptance.clone();
+    let mut body = current.as_object().unwrap().clone();
+    body.retain(|key, _| key.starts_with("planning_") || key == "goal_id");
+    body.insert("planning_receipt".into(), json!(receipt.to_string()));
+    let before = store.appended_event_bytes();
+    store
+        .execute(
+            "RecordPlanningProgress",
+            Value::Object(body),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let recorded = store.appended_event_bytes() - before;
+    assert!(recorded > 2 * 8 * 1024, "{recorded}");
+    let mut later = Vec::new();
+    for index in 0..3 {
+        let before = store.appended_event_bytes();
+        store
+            .record_activity(
+                &goal,
+                json!({"id":format!("after-{index}"),"assignment_id":"a","goal_revision":1,"action":"blocked","role":"goal_reviewer","status":"failed","detail":{"reason":reason}}),
+            )
+            .await
+            .unwrap();
+        later.push(store.appended_event_bytes() - before);
+    }
+    assert!(
+        later.iter().all(|bytes| *bytes < 4096),
+        "decisions after the acceptance record: {later:?}"
+    );
+    let row = store.query("GoalList").unwrap()[0].clone();
+    let stored: Value = serde_json::from_str(row["planning_receipt"].as_str().unwrap()).unwrap();
+    assert!(stored.get("acceptance").is_none(), "{stored}");
+    assert_eq!(
+        store.activity_history(&goal).unwrap()["acceptance"],
+        acceptance
+    );
+    drop(store);
+    let reopened = Store::open(&database).await.unwrap();
+    assert_eq!(
+        reopened.activity_history(&goal).unwrap()["acceptance"],
+        acceptance
+    );
+}

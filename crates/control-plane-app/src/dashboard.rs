@@ -28,7 +28,9 @@ pub async fn evidence(State(state): State<AppState>, Path(id): Path<String>) -> 
                     .any(|a| a["assignment_id"] == p["assignment_id"])
             })
             .collect();
-        let history = state.store.lock().await.activity_history(&id)?;
+        // The snapshot attached the history under the same store lock as the goal's receipt,
+        // so both describe one committed state.
+        let history = &goal["activity_history"];
         Ok(json!({"goal":goal,"history":history,"assignments":assignments,"publications":publications}))
     }
     .await;

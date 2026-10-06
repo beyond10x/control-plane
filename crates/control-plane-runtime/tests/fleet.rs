@@ -620,6 +620,96 @@ async fn adversary_rejected_goal_acceptance_keeps_the_reviewers_whole_reason() {
     );
 }
 
+/// A goal reviewer that rejects with 120 unmet obligations, about 8.5 KiB, and notes the event
+/// data the store had recorded when it was asked.
+struct ThoroughGoalRejection {
+    inner: Scripted,
+    store: SharedStore,
+    asked: Mutex<Option<(u64, u64)>>,
+}
+impl AgentModel for ThoroughGoalRejection {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        if request.role == "goal_reviewer" {
+            let mark = tokio::runtime::Handle::current().block_on(async {
+                let store = self.store.lock().await;
+                let version = *store.subscribe().borrow();
+                (store.appended_event_bytes(), version)
+            });
+            *self.asked.lock().unwrap() = Some(mark);
+            let mut reason = String::new();
+            for index in 1..=120 {
+                reason.push_str(&format!(
+                    "Obligation {index:03} is not demonstrated by the observed checks or diff.\n"
+                ));
+            }
+            return Ok(json!({"approved":false,"reason":reason}));
+        }
+        self.inner.respond(request)
+    }
+}
+
+#[tokio::test]
+async fn adversary_rejected_acceptance_record_decision_stays_under_16_kib() {
+    // story:bounded-progress-records outcome: at most 16 KiB of event data per progress
+    // decision. A rejected goal review is recorded with RecordPlanningProgress
+    // (fleet.rs:114-123) and keeps up to 8 KiB of the reason (ACCEPTANCE_REASON_BYTES). Each
+    // decision stores the receipt in its body and again in its outcome.
+    //
+    // After the reviewer answers, the fleet records two decisions: the acceptance record and
+    // the blocked activity. The blocked activity is measured by recording its twin (same
+    // assignment, action, role and detail) through the same progress path afterwards.
+    let fixture = fixture(1).await;
+    let model = Arc::new(ThoroughGoalRejection {
+        inner: Scripted::new(),
+        store: fixture.store.clone(),
+        asked: Mutex::new(None),
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    let result = supervisor.fleet_tick().await.unwrap();
+    let reason = result
+        .blockers
+        .iter()
+        .find(|reason| reason.contains("final goal review rejected"))
+        .cloned()
+        .unwrap_or_else(|| panic!("{result:?}"));
+    let (asked_bytes, asked_version) = model.asked.lock().unwrap().expect("goal review ran");
+    let (bytes, version, assignment) = {
+        let store = fixture.store.lock().await;
+        let version = *store.subscribe().borrow();
+        let assignment = store.query("AssignmentList").unwrap()[0].clone();
+        (store.appended_event_bytes(), version, assignment)
+    };
+    assert_eq!(
+        version - asked_version,
+        2,
+        "after the goal review: the acceptance record and the blocked activity"
+    );
+    let before = fixture.store.lock().await.appended_event_bytes();
+    supervisor
+        .record_progress(
+            &assignment,
+            "blocked",
+            "goal_reviewer",
+            json!({"reason":reason}),
+        )
+        .await
+        .unwrap();
+    let blocked = fixture.store.lock().await.appended_event_bytes() - before;
+    let acceptance = bytes - asked_bytes - blocked;
+    assert!(
+        acceptance <= 16 * 1024,
+        "the rejected acceptance record is one decision of {acceptance} bytes of event data \
+         (reviewer reason {} bytes; blocked activity {blocked} bytes)",
+        reason.len()
+    );
+}
+
 const PUBLISH_CREDENTIAL: &str = "CONTROL_PLANE_PUBLISH_PROBE";
 
 /// Deliver one assignment while the test and publish commands record their environments

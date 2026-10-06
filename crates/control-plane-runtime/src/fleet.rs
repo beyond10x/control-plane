@@ -27,9 +27,10 @@ use std::{
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
-/// Bytes kept of a goal review's reason. The acceptance record is recorded once per review;
+/// Bytes kept of a goal review's reason. The acceptance record is recorded once per review,
+/// in the decision's body and again in its outcome, which together stay within 16 KiB;
 /// later progress leaves it to the goal's journal.
-const ACCEPTANCE_REASON_BYTES: usize = 8 * 1024;
+const ACCEPTANCE_REASON_BYTES: usize = 5 * 1024;
 
 #[derive(Clone)]
 struct Host {

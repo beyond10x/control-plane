@@ -1642,3 +1642,132 @@ async fn planner_progress_does_not_repeat_the_transcript() {
         "the validated plan keeps its observations"
     );
 }
+
+#[tokio::test]
+async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
+    // story:bounded-progress-records, as narrowed by the coordinator (correction round 2, P1):
+    // the 16 KiB bound is for per-event progress decisions. The validated plan is planning
+    // evidence recorded once per planning attempt (supervisor.rs:435, the engine's output
+    // receipt with its transcript and action history, in the decision's body and again in its
+    // outcome); it is at most 128 KiB here and no later decision repeats it.
+    //
+    // The planner reads nine 12 KiB pages, the 96 KiB working set its transcript keeps. An
+    // observer samples (committed version, appended event data, planning phase) every
+    // millisecond; two samples one version apart give the exact size of the decision between
+    // them. The validated-plan decision runs between two processes (`aep plan artifact
+    // validate` before it, the plan commit after it), so it is sampled on both sides.
+    struct Reader {
+        marks: Mutex<usize>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut marks = self.marks.lock().unwrap();
+            *marks += 1;
+            Ok(match (request.role.as_str(), *marks) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 9 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=9 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(450)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        marks: Mutex::new(0),
+    });
+    async fn sample(store: &tokio::sync::Mutex<Store>) -> (u64, u64, Value) {
+        let store = store.lock().await;
+        let version = *store.subscribe().borrow();
+        let phase = store.query("GoalList").unwrap()[0]["planning_phase"].clone();
+        (version, store.appended_event_bytes(), phase)
+    }
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observer = tokio::spawn({
+        let store = store.clone();
+        let stop = stop.clone();
+        async move {
+            let mut samples = Vec::new();
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                samples.push(sample(&store).await);
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+            samples
+        }
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut samples = observer.await.unwrap();
+    samples.push(sample(&store).await);
+    samples.dedup_by_key(|(version, _, _)| *version);
+    assert_eq!(report.queued, 1, "{report:?}");
+    let validated = samples
+        .windows(2)
+        .find(|pair| pair[0].2 != "Validated" && pair[1].2 == "Validated")
+        .expect("the validated plan was recorded");
+    assert_eq!(
+        validated[1].0 - validated[0].0,
+        1,
+        "the validated-plan decision was not sampled on both sides: {validated:?}"
+    );
+    let size = validated[1].1 - validated[0].1;
+    assert!(
+        size <= 128 * 1024,
+        "the validated-plan decision (version {}) is {size} bytes of event data",
+        validated[1].0
+    );
+    // Every decision after it in this run stays within the per-event bound. Two samples more
+    // than one version apart bound each decision between them by their average.
+    let start = samples
+        .iter()
+        .position(|sample| sample.0 == validated[1].0)
+        .unwrap();
+    let after = samples[start..]
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0, pair[1].1 - pair[0].1))
+        .collect::<Vec<_>>();
+    assert!(!after.is_empty(), "no decision was recorded after the plan");
+    assert!(
+        after
+            .iter()
+            .all(|(decisions, bytes)| *bytes <= 16 * 1024 * decisions),
+        "decisions after the validated plan, as (decisions, bytes): {after:?}"
+    );
+    // The transcript stays in the plan's own record: the goal's last recorded receipt does not
+    // carry it, and its history shows the evidence once.
+    let goal = store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["planning_phase"], "Queued");
+    let receipt = goal["planning_receipt"].as_str().unwrap();
+    assert!(
+        !receipt.contains("observed repository detail"),
+        "the last recorded receipt repeats the transcript ({} bytes)",
+        receipt.len()
+    );
+    assert!(evidence(&store).await.contains("# Note 9"));
+}
