@@ -26,7 +26,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
@@ -47,7 +47,7 @@ When the publisher has exited and the observed target does not contain the candi
 
 - `unpublished_intent_closes_and_frees_repository`: after the probe sequence, the new close command applies; then CancelAssignment applies and a second workspace's ClaimAssignment on the same repository applies.
 - `failed_observation_keeps_intent_open`: an observation error leaves the intent Uncertain and the assignment Blocked.
-- `published_candidate_still_reconciles`: the existing uncertain-then-observed path still reaches Merged.
+- `published_candidate_still_reconciles`: the existing path from an Uncertain intent to an observed merge still reaches Merged.
 - `unchanged_unresolved_publication_appends_once`: ten fleet ticks over the same unresolved intent append at most one progress decision.
 - The specification validates with the not-published state and the close command declared in ess/domains/host.yaml (`ess specify validate --path ess --strict-requires`, a `task check` step).
 - The scenarios `ess verify conform synthesize` emits for the close command pass against the durable conformance target (`cargo run --locked -p control-plane-xtask -- conformance`, a `task check` step; the scenario count rises above 171).
