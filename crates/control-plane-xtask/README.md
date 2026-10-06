@@ -100,7 +100,7 @@ one entry:
 
 ```json
 {
-  "format": "control-plane-spec-acknowledgements/1",
+  "format": "control-plane-spec-acknowledgements/2",
   "baseline": "<full commit id>",
   "acknowledged": [
     {
@@ -119,6 +119,25 @@ one entry:
       "reason": "stored Blocked repairs are migrated by <change>"
     }
   ]
+}
+```
+
+ESS prints an added outcome's `change` with the outcome's name only. An `outcome-added` entry
+therefore also records `outcome`: the outcome exactly as `ess specify compile --path ess --format
+json` prints it under the command's `outcomes`. The check compiles `ess/` and admits the change
+only while the outcome compiles to that same object. A later outcome with the same name but a
+different condition or answer (error, subject, events, payload or field updates) is refused. The
+refusal names the entry and lists each differing field as reviewed and as the model has it now.
+The ready entry carries the outcome as it compiles now. No other entry may carry `outcome`. For
+`UpdateGoal`'s `satisfied` refusal:
+
+```json
+"outcome": {
+  "name": "satisfied",
+  "condition": { "kind": "subject_state", "state": "Satisfied", "predicate": null },
+  "test_strategy": "construct_input_in_state",
+  "emits": [],
+  "error": "controlplane.host.GoalStateConflict"
 }
 ```
 

@@ -103,7 +103,7 @@ fn acknowledge(root: &Path, baseline: &str, ids: &[&str]) -> Result<()> {
         })
         .collect();
     let document = serde_json::json!({
-        "format": "control-plane-spec-acknowledgements/1",
+        "format": "control-plane-spec-acknowledgements/2",
         "baseline": baseline,
         "acknowledged": acknowledged,
     });

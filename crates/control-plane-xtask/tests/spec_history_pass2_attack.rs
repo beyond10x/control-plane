@@ -78,10 +78,16 @@ fn repository() -> Result<(tempfile::TempDir, String)> {
 fn acknowledge(root: &Path, baseline: &str, reviewed: &[(&str, Value, String)]) -> Result<()> {
     let acknowledged: Vec<_> = reviewed
         .iter()
-        .map(|(id, change, reviewed)| json!({"id": id, "change": change, "baseline": reviewed, "reason": "reviewed in the pass-2 attack test"}))
+        .map(|(id, change, reviewed)| {
+            let mut entry = json!({"id": id, "change": change, "baseline": reviewed, "reason": "reviewed in the pass-2 attack test"});
+            if change["changed"]["kind"] == "outcome-added" {
+                entry["outcome"] = wrong_state();
+            }
+            entry
+        })
         .collect();
     let document = json!({
-        "format": "control-plane-spec-acknowledgements/1",
+        "format": "control-plane-spec-acknowledgements/2",
         "baseline": baseline,
         "acknowledged": acknowledged,
     });
@@ -115,6 +121,14 @@ fn commit(root: &Path, message: &str) -> Result<String> {
 fn change(kind: &str) -> Value {
     json!({"category": "command", "subject": "controlplane.host.DisableRepositoryRegistration",
         "changed": {"kind": kind, "outcome": "wrong-state"}})
+}
+
+/// The `wrong-state` refusal as `ess specify compile` prints it: an `outcome-added`
+/// acknowledgement records the outcome it reviewed.
+fn wrong_state() -> Value {
+    json!({"name": "wrong-state", "condition": {"kind": "wrong_state"}, "complete_refusal": true,
+        "test_strategy": "arrange_state", "emits": [],
+        "error": "controlplane.host.RepositoryRegistrationStateConflict"})
 }
 
 /// The acceptance: "on a branch that removes `Blocked` from `Assignment.repair.from`, `task check`
