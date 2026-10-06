@@ -471,11 +471,155 @@ async fn finished_goal_refuses_edit(finish: (&str, Value, Actor), refusal: &str)
 
 #[tokio::test]
 async fn satisfied_goal_refuses_edit() {
-    let satisfy = json!({"satisfaction_receipt":"acceptance-verified"});
+    let receipt = json!({"kind":"goal_acceptance","goal_revision":1}).to_string();
+    let satisfy = json!({"satisfaction_receipt":receipt});
     let goal =
         finished_goal_refuses_edit(("SatisfyGoal", satisfy, Actor::Supervisor), "satisfied").await;
     assert_eq!(goal["state"], "Satisfied");
-    assert_eq!(goal["satisfaction_receipt"], "acceptance-verified");
+    assert_eq!(goal["satisfaction_receipt"], receipt);
+}
+
+/// A goal accepted at the revision it was checked at: an operator edit before acceptance moved
+/// it to revision 2, acceptance read revision 2, and the receipt it sends names revision 2.
+#[tokio::test]
+async fn unchanged_goal_is_satisfied_after_acceptance() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let mut edit = goal_body(&ws);
+    edit.as_object_mut().unwrap().remove("workspace_id");
+    edit["goal_id"] = json!(goal);
+    edit["objective"] = json!("deliver the edited change");
+    store
+        .execute("UpdateGoal", edit, Actor::Operator)
+        .await
+        .unwrap();
+    let checked = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(checked["state"], "Running");
+    assert_eq!(checked["revision"], 2);
+    let receipt = json!({"kind":"goal_acceptance","goal_revision":checked["revision"]}).to_string();
+    let satisfied = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(satisfied["outcome"], "applied", "{satisfied}");
+    let after = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(after["state"], "Satisfied");
+    assert_eq!(after["revision"], 2);
+    let named: Value =
+        serde_json::from_str(after["satisfaction_receipt"].as_str().unwrap()).unwrap();
+    assert_eq!(named["goal_revision"], 2);
+    drop(store);
+    let reopened = Store::open(&db).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap()[0], after);
+}
+
+/// SatisfyGoal is admitted only for the revision its receipt names. Goal acceptance reads the
+/// goal at revision 1, an operator edit moves it to 2, and the receipt for revision 1 is
+/// refused, as is any receipt that names no revision. Nothing is recorded: the goal stays
+/// Running at revision 2 without a receipt. A goal that cannot be satisfied keeps its declared
+/// `wrong-state` refusal, whatever the receipt holds.
+#[tokio::test]
+async fn satisfaction_receipt_must_name_the_current_goal_revision() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let checked = store.query("GoalList").unwrap()[0]["revision"].clone();
+    assert_eq!(checked, 1);
+    let stale = json!({"kind":"goal_acceptance","goal_revision":checked}).to_string();
+    let mut edit = goal_body(&ws);
+    edit.as_object_mut().unwrap().remove("workspace_id");
+    edit["goal_id"] = json!(goal);
+    edit["acceptance"] = json!("tests, independent review and documentation");
+    store
+        .execute("UpdateGoal", edit, Actor::Operator)
+        .await
+        .unwrap();
+    let edited = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(edited["revision"], 2);
+    let version = store.version;
+    for (receipt, message) in [
+        (
+            stale,
+            "goal satisfaction receipt names goal revision 1 but the goal is at revision 2",
+        ),
+        (
+            json!({"kind":"goal_acceptance","goal_revision":"2"}).to_string(),
+            "goal satisfaction receipt names goal revision \"2\" but the goal is at revision 2",
+        ),
+        (
+            json!({"kind":"goal_acceptance"}).to_string(),
+            "goal satisfaction receipt names no goal_revision; the goal is at revision 2",
+        ),
+        (
+            "acceptance-verified".to_owned(),
+            "goal satisfaction receipt is not a JSON object naming its goal_revision; the goal is at revision 2",
+        ),
+        (
+            "2".to_owned(),
+            "goal satisfaction receipt is not a JSON object naming its goal_revision; the goal is at revision 2",
+        ),
+    ] {
+        let error = store
+            .execute(
+                "SatisfyGoal",
+                json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+                Actor::Supervisor,
+            )
+            .await
+            .expect_err(&receipt);
+        assert_eq!(format!("{error:#}"), message, "{receipt}");
+        assert_eq!(store.version, version, "{receipt}");
+        assert_eq!(store.query("GoalList").unwrap()[0], edited, "{receipt}");
+    }
+    assert_eq!(edited["state"], "Running");
+    assert_eq!(edited["satisfaction_receipt"], "");
+    drop(store);
+    let mut store = Store::open(&db).await.unwrap();
+    assert_eq!(store.query("GoalList").unwrap()[0], edited);
+
+    let current = json!({"kind":"goal_acceptance","goal_revision":2}).to_string();
+    let satisfied = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":current}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(satisfied["outcome"], "applied", "{satisfied}");
+    let paused = self::goal(&mut store, &ws).await;
+    for (id, refusal) in [(&goal, "satisfied goal"), (&paused, "paused goal")] {
+        let answer = store
+            .execute(
+                "SatisfyGoal",
+                json!({"goal_id":id,"satisfaction_receipt":"acceptance-verified"}),
+                Actor::Supervisor,
+            )
+            .await
+            .unwrap_or_else(|error| panic!("{refusal}: {error:#}"));
+        assert_eq!(answer["outcome"], "wrong-state", "{refusal}: {answer}");
+        assert_eq!(
+            answer["error"], "controlplane.host.GoalStateConflict",
+            "{refusal}"
+        );
+    }
 }
 
 #[tokio::test]

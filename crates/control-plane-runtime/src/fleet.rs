@@ -104,18 +104,23 @@ impl Host {
                 .context("view not an array")
         })
     }
+    /// Record the goal's acceptance at the revision `goal` names. Returns `false`, recording
+    /// nothing, when the goal has since been edited: the edited revision owns its progress and
+    /// is planned again, so the caller leaves that goal for this tick.
     fn acceptance_progress(
         &self,
         goal: &Value,
         fingerprint: &str,
         status: &str,
         reason: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.handle.block_on(async {
             let mut store = self.store.lock().await;
             let goals = store.query("GoalList")?;
             let current = goals.as_array().context("goals view")?.iter().find(|g|g["goal_id"]==goal["goal_id"]).context("goal missing")?;
-            ensure!(current["revision"]==goal["revision"], "goal changed during acceptance");
+            if current["revision"] != goal["revision"] {
+                return Ok(false);
+            }
             let mut receipt: Value = serde_json::from_str(current["planning_receipt"].as_str().unwrap_or("{}"))?;
             receipt["acceptance"] = json!({"fingerprint":fingerprint,"status":status,"reason":control_plane_core::bounded_text(reason, ACCEPTANCE_REASON_BYTES),"at":now(),"goal_revision":goal["revision"]});
             let mut body = current.as_object().context("goal object")?.clone();
@@ -123,8 +128,12 @@ impl Host {
             body.insert("planning_receipt".into(),json!(receipt.to_string()));
             let outcome=store.execute("RecordPlanningProgress",Value::Object(body),Actor::Supervisor).await?;
             ensure!(outcome["outcome"]=="applied","acceptance progress refused: {outcome}");
-            Ok(())
+            Ok(true)
         })
+    }
+    fn members(&self, goal: &Value) -> Result<Members> {
+        self.handle
+            .block_on(async { members(&*self.store.lock().await, goal) })
     }
     /// The goal's newest acceptance record, which its progress journal keeps.
     fn acceptance(&self, goal: &Value) -> Result<Value> {
@@ -221,6 +230,54 @@ impl Host {
         }
         Ok(())
     }
+}
+/// A goal acceptance stop that latches (`failed`): a verdict on the goal (the goal reviewer
+/// rejected it, a check ran and failed, a target moved) or a goal review turn that ran and
+/// failed. The latch holds until an input changes, so a model that keeps failing is not paid
+/// for on every tick. A stop at the attempt deadline also latches; any other stop, such as a
+/// failed host observation (`git`, the managed worktree, its lease, a process or provider that
+/// cannot be reached), is an interruption and acceptance runs again.
+#[derive(Debug)]
+struct Latch(String);
+impl std::fmt::Display for Latch {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+impl std::error::Error for Latch {}
+fn latch(reason: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::Error::new(Latch(format!("{reason:#}")))
+}
+/// A check or a model turn that ran and failed latches. One cut short by cancellation (the
+/// deadline, a lost lease, a service stop) or one whose process could not be started or read
+/// does not: the error arm of `satisfy_goals` classifies those.
+fn latch_unless_interrupted(host: &Host, error: anyhow::Error) -> anyhow::Error {
+    if host.runner.cancel.is_cancelled() || error.downcast_ref::<std::io::Error>().is_some() {
+        error
+    } else {
+        latch(error)
+    }
+}
+/// A goal workspace's registered repositories and directories: the store facts goal acceptance
+/// observed and must still find when it records satisfaction.
+type Members = (Vec<Value>, Vec<Value>);
+fn members(store: &control_plane_core::Store, goal: &Value) -> Result<Members> {
+    let registered = |view: &str| -> Result<Vec<Value>> {
+        Ok(store
+            .query(view)?
+            .as_array()
+            .context("view not an array")?
+            .iter()
+            .filter(|row| {
+                row["workspace_id"] == goal["workspace_id"] && row["state"] == "Registered"
+            })
+            .cloned()
+            .collect())
+    };
+    Ok((
+        registered("RepositoryRegistrationList")?,
+        registered("WorkspaceDirectoryList")?,
+    ))
 }
 /// Record one runtime progress event of an assignment on its goal's planning receipt.
 /// The decision carries this activity alone; the host journal keeps the goal's history and
@@ -1972,6 +2029,10 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
             .filter(|d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered")
             .collect::<Vec<_>>();
         goal["directories"] = json!(directories);
+        let expected: Members = (
+            repos.iter().map(|repo| (*repo).clone()).collect(),
+            directories.clone(),
+        );
         let prior = host.acceptance(&goal)?;
         if acceptance_is_unchanged(&goal, &prior, &repositories, &assignments, &host.runner) {
             continue;
@@ -1981,16 +2042,18 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
         if prior["fingerprint"] == fingerprint && prior["status"] == "failed" {
             continue;
         }
-        host.acceptance_progress(
+        if !host.acceptance_progress(
             &goal,
             &fingerprint,
             "running",
             "Checking observed merged targets",
-        )?;
+        )? {
+            continue;
+        }
+        let mut worker = host.clone();
+        worker.runner.cancel = host.runner.cancel.child_token();
         let result = (|| -> Result<()> {
             let budget = attempt_budget(&goal)?;
-            let mut worker = host.clone();
-            worker.runner.cancel = host.runner.cancel.child_token();
             worker.deadline = Some(
                 Instant::now()
                     .checked_add(budget)
@@ -2024,12 +2087,14 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                     .iter()
                     .filter(|a| a["repository_id"] == repo["repository_id"])
                 {
-                    ensure!(
-                        !text(a, "merge_receipt")?.is_empty()
-                            && git(host, path, &["merge-base", text(a, "candidate")?, &head])?
-                                == text(a, "candidate")?,
-                        "merged assignment no longer appears on the observed target"
-                    );
+                    if text(a, "merge_receipt")?.is_empty()
+                        || git(host, path, &["merge-base", text(a, "candidate")?, &head])?
+                            != text(a, "candidate")?
+                    {
+                        return Err(latch(
+                            "merged assignment no longer appears on the observed target",
+                        ));
+                    }
                 }
                 let id = format!("cp-accept-{}", uuid::Uuid::new_v4());
                 let checkout = tree(host, repo, &id, &head)?;
@@ -2043,11 +2108,11 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                         text(repo, "test_command")?,
                         &BTreeMap::new(),
                         false,
-                    )?;
-                    ensure!(
-                        git(host, &checkout, &["status", "--porcelain"])?.is_empty(),
-                        "goal acceptance checks modified observed target"
-                    );
+                    )
+                    .map_err(|error| latch_unless_interrupted(host, error))?;
+                    if !git(host, &checkout, &["status", "--porcelain"])?.is_empty() {
+                        return Err(latch("goal acceptance checks modified observed target"));
+                    }
                     let diff = git(
                         host,
                         &checkout,
@@ -2068,14 +2133,14 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 "goal_reviewer",
                 json!({"execution_context":reviewer}),
             )?;
-            let review=host.respond(&ModelRequest {role:"goal_reviewer".into(),execution_context:reviewer.clone(),model:text(&goal,"reviewer_model")?.into(),instructions:"Independently decide whether the exact standing objective and acceptance are satisfied by all observed merged targets, real check outputs and diffs. Do not infer completion from an empty queue or story statuses. Reject any acceptance obligation unsupported by evidence.".into(),prompt:json!({"goal":crate::context::goal_brief(&goal),"observations":observations}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?}, Path::new(text(repos[0], "path")?), current[0])?;
-            ensure!(
-                review["approved"] == true
-                    && review["reason"]
-                        .as_str()
-                        .is_some_and(|s| !s.trim().is_empty()),
-                "final goal review rejected: {review}"
-            );
+            let review=host.respond(&ModelRequest {role:"goal_reviewer".into(),execution_context:reviewer.clone(),model:text(&goal,"reviewer_model")?.into(),instructions:"Independently decide whether the exact standing objective and acceptance are satisfied by all observed merged targets, real check outputs and diffs. Do not infer completion from an empty queue or story statuses. Reject any acceptance obligation unsupported by evidence.".into(),prompt:json!({"goal":crate::context::goal_brief(&goal),"observations":observations}).to_string(),schema:crate::model::critique_schema(),timeout:host.remaining()?}, Path::new(text(repos[0], "path")?), current[0]).map_err(|error| latch_unless_interrupted(host, error))?;
+            if !(review["approved"] == true
+                && review["reason"]
+                    .as_str()
+                    .is_some_and(|s| !s.trim().is_empty()))
+            {
+                return Err(latch(format!("final goal review rejected: {review}")));
+            }
             let current_goal = host.row("GoalList", "goal_id", &goal["goal_id"])?;
             host.remaining()?;
             ensure!(
@@ -2086,18 +2151,8 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 current_goal["state"] == "Running" && current_goal["revision"] == goal["revision"],
                 "goal changed during final review"
             );
-            let current_repos = host
-                .rows("RepositoryRegistrationList")?
-                .into_iter()
-                .filter(|r| r["workspace_id"] == goal["workspace_id"] && r["state"] == "Registered")
-                .collect::<Vec<_>>();
-            let current_directories = host
-                .rows("WorkspaceDirectoryList")?
-                .into_iter()
-                .filter(|d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered")
-                .collect::<Vec<_>>();
             ensure!(
-                json!(current_repos) == json!(repos) && current_directories == directories,
+                host.members(&goal)? == expected,
                 "workspace membership or repository configuration changed during acceptance"
             );
             for repo in &repos {
@@ -2105,20 +2160,57 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                     .iter()
                     .find(|o| o["repository"] == repo["repository_id"])
                     .unwrap();
-                ensure!(
-                    remote_head(
-                        host,
-                        Path::new(text(repo, "path")?),
-                        text(repo, "base_branch")?
-                    )? == text(observed, "head")?,
-                    "target changed during goal acceptance review"
-                );
+                let head = remote_head(
+                    host,
+                    Path::new(text(repo, "path")?),
+                    text(repo, "base_branch")?,
+                )?;
+                if head != text(observed, "head")? {
+                    return Err(latch("target changed during goal acceptance review"));
+                }
             }
+            host.remaining()?;
+            ensure!(
+                !host.runner.cancel.is_cancelled(),
+                "goal acceptance cancelled"
+            );
             let receipt=json!({"kind":"goal_acceptance","goal_revision":goal["revision"],"observations":observations,"review_context":reviewer,"review":review}).to_string();
-            host.execute(
-                "SatisfyGoal",
-                json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),
-            )?;
+            // The checks above release the store while the targets are observed. Every store fact
+            // acceptance relied on is compared again under the lock that admits SatisfyGoal, so
+            // an operator change cannot land between the last comparison and the command.
+            host.handle.block_on(async {
+                let mut store = host.store.lock().await;
+                let current_goal = store
+                    .query("GoalList")?
+                    .as_array()
+                    .context("goals view")?
+                    .iter()
+                    .find(|row| row["goal_id"] == goal["goal_id"])
+                    .context("fleet entity no longer exists")?
+                    .clone();
+                ensure!(
+                    current_goal["state"] == "Running"
+                        && current_goal["revision"] == goal["revision"],
+                    "goal changed before its acceptance was recorded"
+                );
+                ensure!(
+                    members(&store, &goal)? == expected,
+                    "workspace membership or repository configuration changed before acceptance \
+                     was recorded"
+                );
+                let outcome = store
+                    .execute(
+                        "SatisfyGoal",
+                        json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),
+                        Actor::Supervisor,
+                    )
+                    .await?;
+                ensure!(
+                    outcome["outcome"] == "applied",
+                    "SatisfyGoal refused: {outcome}"
+                );
+                anyhow::Ok(())
+            })?;
             host.progress(
                 current[0],
                 "goal.acceptance.completed",
@@ -2129,6 +2221,7 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
         })();
         match result {
             Ok(()) => {
+                // A satisfied goal refuses edits, so its revision is the one recorded here.
                 host.acceptance_progress(
                     &goal,
                     &fingerprint,
@@ -2138,18 +2231,37 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 satisfied += 1;
             }
             Err(error) => {
-                let reason = format!("Goal acceptance blocked: {error:#}");
-                // A concurrent operator revision owns its own progress; never overwrite it.
-                if host.row("GoalList", "goal_id", &goal["goal_id"])?["revision"]
-                    == goal["revision"]
-                {
-                    host.acceptance_progress(&goal, &fingerprint, "failed", &reason)?;
-                    host.progress(
-                        current[0],
-                        "blocked",
-                        "goal_reviewer",
-                        json!({"reason":reason}),
-                    )?;
+                let now = host.row("GoalList", "goal_id", &goal["goal_id"])?;
+                // Only a verdict on unchanged inputs latches (`Latch`, or the attempt deadline).
+                // An edit, a pause, a service stop or a workspace change interrupts acceptance,
+                // as does any other failure, such as a host observation; an interruption is
+                // recorded without the `failed` status, so acceptance runs again.
+                let changed = now["revision"] != goal["revision"]
+                    || now["state"] != "Running"
+                    || host.runner.cancel.is_cancelled()
+                    || host.members(&goal)? != expected;
+                let timed_out = worker
+                    .deadline
+                    .is_some_and(|deadline| Instant::now() >= deadline);
+                let latched = !changed && (error.downcast_ref::<Latch>().is_some() || timed_out);
+                let reason = if latched {
+                    format!("Goal acceptance blocked: {error:#}")
+                } else {
+                    format!("Goal acceptance interrupted: {error:#}")
+                };
+                // An edited goal's new revision owns its progress; `acceptance_progress` records
+                // nothing for it, and the goal is planned again.
+                if latched {
+                    if host.acceptance_progress(&goal, &fingerprint, "failed", &reason)? {
+                        host.progress(
+                            current[0],
+                            "blocked",
+                            "goal_reviewer",
+                            json!({"reason":reason}),
+                        )?;
+                    }
+                } else {
+                    host.acceptance_progress(&goal, &fingerprint, "interrupted", &reason)?;
                 }
                 blockers.push(reason);
             }

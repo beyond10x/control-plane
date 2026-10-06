@@ -67,7 +67,7 @@ async fn invalid_edit_of_satisfied_goal_answers_the_declared_refusal() {
     let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
     let satisfy = (
         "SatisfyGoal",
-        json!({"satisfaction_receipt":"acceptance-verified"}),
+        json!({"satisfaction_receipt":json!({"kind":"goal_acceptance","goal_revision":1}).to_string()}),
         Actor::Supervisor,
     );
     let goal = finished(&mut store, temp.path(), satisfy).await;

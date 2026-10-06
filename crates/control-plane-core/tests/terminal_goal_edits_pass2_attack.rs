@@ -93,7 +93,7 @@ async fn every_field_check_yields_to_the_declared_refusal_on_a_finished_goal() {
     for (command, body, actor, refusal) in [
         (
             "SatisfyGoal",
-            json!({"satisfaction_receipt":"acceptance-verified"}),
+            json!({"satisfaction_receipt":json!({"kind":"goal_acceptance","goal_revision":1}).to_string()}),
             Actor::Supervisor,
             "satisfied",
         ),

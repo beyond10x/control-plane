@@ -862,6 +862,310 @@ async fn changed_revision_invalidates_evidence() {
     );
 }
 
+/// Hands the store to the next party that takes it, and returns once one has. Releasing a
+/// tokio `Mutex` gives it straight to a queued waiter, so a `try_lock` right after the release
+/// fails only when another party queued for the store, or took it, in the meantime. Until then
+/// the store is taken back and offered again.
+fn hand_over(store: &SharedStore, mut held: tokio::sync::OwnedMutexGuard<Store>) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        drop(held);
+        match store.clone().try_lock_owned() {
+            Ok(again) => held = again,
+            Err(_) => return,
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "nobody took the store within 30 s"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+/// An operator edit that lands inside goal acceptance after its post-review revision check and
+/// before `SatisfyGoal` (`satisfy_goals`, fleet.rs). The goal reviewer's turn takes the store,
+/// so after the review the acceptance thread's first store access, that check, waits for it.
+/// The editor hands the store over (nobody else uses it in this test, so the taker is that
+/// check) and at once queues for it again. tokio's `Mutex` is fair: the check sees the reviewed
+/// revision, then the edit runs, while acceptance re-reads the workspace and observes each
+/// target with `git ls-remote`, before its `SatisfyGoal`.
+struct EditAfterFinalCheck {
+    inner: Scripted,
+    store: SharedStore,
+    goal: Value,
+    editor: Mutex<Option<std::thread::JoinHandle<Value>>>,
+}
+impl AgentModel for EditAfterFinalCheck {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        let mut editor = self.editor.lock().unwrap();
+        if request.role == "goal_reviewer" && editor.is_none() {
+            let held = self.store.clone().blocking_lock_owned();
+            let store = self.store.clone();
+            let handle = tokio::runtime::Handle::current();
+            let edit = json!({"goal_id":self.goal,"objective":"Return 42 and document it in every registered repository","acceptance":"requested_answer passes and the README names the answer","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true});
+            *editor = Some(std::thread::spawn(move || {
+                hand_over(&store, held);
+                let mut store = store.blocking_lock();
+                handle
+                    .block_on(store.execute("UpdateGoal", edit, Actor::Operator))
+                    .unwrap()
+            }));
+        }
+        drop(editor);
+        self.inner.respond(request)
+    }
+}
+
+#[tokio::test]
+async fn goal_edit_during_acceptance_is_not_satisfied() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(EditAfterFinalCheck {
+        inner: Scripted::new(),
+        store: fixture.store.clone(),
+        goal: fixture.goal.clone(),
+        editor: Mutex::new(None),
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    let report = supervisor.fleet_tick().await;
+    let edit = model
+        .editor
+        .lock()
+        .unwrap()
+        .take()
+        .expect("goal acceptance reached its final review")
+        .join()
+        .unwrap();
+    assert_eq!(edit["outcome"], "applied", "{edit}");
+    let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
+    assert_eq!(assignments[0]["state"], "Merged", "{assignments}");
+    assert_eq!(assignments[0]["goal_revision"], 1);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Running", "{goal}");
+    assert_eq!(goal["revision"], 2, "{goal}");
+    assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
+    // The edit landed after the post-review check; the check that runs under the same store lock
+    // as SatisfyGoal found it.
+    let report = report.unwrap();
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("goal changed before its acceptance was recorded")),
+        "{report:?}"
+    );
+    assert!(
+        !report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("goal changed during final review")),
+        "{report:?}"
+    );
+    // Nothing latches the refusal: the next planning pass plans the edited revision.
+    let planned = |model: &EditAfterFinalCheck| {
+        model
+            .inner
+            .contexts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(role, _)| role == "planner")
+            .count()
+    };
+    let before = planned(&model);
+    supervisor.tick().await.unwrap();
+    assert!(planned(&model) > before);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["planning_revision"], 2, "{goal}");
+    assert_eq!(goal["state"], "Running", "{goal}");
+}
+
+/// Stops the service while the goal reviewer runs: cancels the service's shutdown token and
+/// returns its approval only once that cancellation has reached the review turn.
+struct ShutdownDuringGoalReview {
+    inner: Scripted,
+    shutdown: tokio_util::sync::CancellationToken,
+    stopped: std::sync::atomic::AtomicBool,
+}
+impl AgentModel for ShutdownDuringGoalReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        self.inner.respond(request)
+    }
+    fn respond_in(
+        &self,
+        request: &ModelRequest,
+        environment: &control_plane_runtime::ModelEnvironment,
+    ) -> Result<Value> {
+        if request.role == "goal_reviewer" && !self.stopped.swap(true, Ordering::SeqCst) {
+            self.shutdown.cancel();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while !environment.cancel.is_cancelled() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "shutdown never reached the goal review"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+        self.respond(request)
+    }
+}
+
+/// A service stop during goal acceptance interrupts it; it does not reject the goal. The
+/// interrupted acceptance is recorded without the `failed` status that latches acceptance and
+/// planning, so a restarted service accepts the unchanged goal.
+#[tokio::test]
+async fn shutdown_during_goal_review_does_not_latch_acceptance() {
+    let fixture = fixture(1).await;
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let model = Arc::new(ShutdownDuringGoalReview {
+        inner: Scripted::new(),
+        shutdown: shutdown.clone(),
+        stopped: std::sync::atomic::AtomicBool::new(false),
+    });
+    let service = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    service.run(shutdown).await.unwrap();
+    drop(service);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Running", "{goal}");
+    let acceptance = history(&fixture.store).await["acceptance"].clone();
+    assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    assert!(
+        acceptance["reason"]
+            .as_str()
+            .unwrap()
+            .contains("goal acceptance cancelled"),
+        "{acceptance}"
+    );
+    let restarted = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    restarted.tick().await.unwrap();
+    restarted.fleet_tick().await.unwrap();
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Satisfied", "{goal}");
+    let goal_reviews = model
+        .inner
+        .contexts
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(role, _)| role == "goal_reviewer")
+        .count();
+    assert_eq!(goal_reviews, 2);
+}
+
+/// Makes the reviewed repository's `origin` unreachable during the first goal review, the way
+/// a network outage starts while the reviewer runs. The test restores it.
+struct OriginOutageDuringGoalReview {
+    inner: Scripted,
+    broken: Mutex<Option<(PathBuf, String)>>,
+}
+impl AgentModel for OriginOutageDuringGoalReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        self.inner.respond(request)
+    }
+    fn respond_in(
+        &self,
+        request: &ModelRequest,
+        environment: &control_plane_runtime::ModelEnvironment,
+    ) -> Result<Value> {
+        let mut broken = self.broken.lock().unwrap();
+        if request.role == "goal_reviewer" && broken.is_none() {
+            let path = environment.workspace.clone();
+            let url = cmd(&path, "git", &["remote", "get-url", "origin"], &[])
+                .trim()
+                .to_owned();
+            let unreachable = format!("{url}-unreachable");
+            cmd(
+                &path,
+                "git",
+                &["remote", "set-url", "origin", &unreachable],
+                &[],
+            );
+            *broken = Some((path, url));
+        }
+        drop(broken);
+        self.respond(request)
+    }
+}
+
+/// The cost of an outage of `origin` that starts during the goal review. The post-review
+/// observation of the target fails, and the acceptance is recorded as interrupted, not latched.
+/// While `origin` stays unreachable, each later acceptance stops at its first observation of the
+/// target, before any check or review, so no goal review is paid for. Once `origin` answers,
+/// acceptance runs once more and satisfies the unchanged goal.
+#[tokio::test]
+async fn origin_outage_after_goal_review_costs_one_review_after_recovery() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(OriginOutageDuringGoalReview {
+        inner: Scripted::new(),
+        broken: Mutex::new(None),
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    let reviews = || {
+        model
+            .inner
+            .contexts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(role, _)| role == "goal_reviewer")
+            .count()
+    };
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 1);
+    let (path, url) = model
+        .broken
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("goal acceptance reached its review");
+    let acceptance = history(&fixture.store).await["acceptance"].clone();
+    assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    assert!(
+        acceptance["reason"].as_str().unwrap().contains("ls-remote"),
+        "{acceptance}"
+    );
+    for round in 0..3 {
+        supervisor.tick().await.unwrap();
+        let report = supervisor.fleet_tick().await.unwrap();
+        assert_eq!(reviews(), 1, "outage round {round}: {report:?}");
+        let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+        assert_eq!(goal["state"], "Running", "{goal}");
+        let acceptance = history(&fixture.store).await["acceptance"].clone();
+        assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    }
+    cmd(&path, "git", &["remote", "set-url", "origin", &url], &[]);
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 2);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Satisfied", "{goal}");
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 2);
+}
+
 #[tokio::test]
 async fn pause_and_limits_stop_dispatch() {
     let mut fixture = fixture(1).await;
