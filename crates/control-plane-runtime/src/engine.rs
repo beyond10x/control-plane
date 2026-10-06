@@ -69,6 +69,7 @@ enum OperationResult {
     SyntaxFeedback,
     ReviewFeedback,
     ValidationFeedback,
+    ReadSyntaxFeedback(String),
 }
 
 struct Planning<'a> {
@@ -400,6 +401,9 @@ impl Planning<'_> {
             }
             PlannerAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "read requests at most 32 files");
+                for name in &paths {
+                    crate::read_request::parse(name)?;
+                }
                 for name in paths {
                     let observation = self.read_observation(&name, 256 * 1024, |contents| {
                         crate::context::page(&name, contents, 1, 160)
@@ -676,7 +680,10 @@ impl ActionSelector for &Planning<'_> {
                 role: "planner".into(),
                 execution_context: self.input.namespace.clone(),
                 model: text(&self.input.goal, "planner_model")?.into(),
-                instructions: format!("{PLANNER_INSTRUCTIONS}\n{AEP_GRAMMAR}"),
+                instructions: format!(
+                    "{PLANNER_INSTRUCTIONS}\n{}\n{AEP_GRAMMAR}",
+                    crate::read_request::PATH_HELP
+                ),
                 prompt: self.prompt()?,
                 schema: planner_schema(),
                 timeout: self.remaining()?,
@@ -729,7 +736,11 @@ impl EffectPort for Planning<'_> {
             return Err(EffectError::new("selected action changed"));
         }
         let performed = self.perform(action).or_else(|error| {
-            if ess_validation_refusal(&error) {
+            if let Some(refusal)=error.downcast_ref::<crate::read_request::ReadPathSyntax>() {
+                let observation=refusal.observation();
+                self.read_record("read-path-syntax", "Read path syntax refusal", observation.clone())?;
+                Ok(OperationResult::ReadSyntaxFeedback(observation))
+            } else if ess_validation_refusal(&error) {
                 self.read_record("ess-validation", "ESS validation refusal", format!("{error}\nNo plan validation evidence or AEP mutation was produced. Correct the specification before retrying."))?;
                 Ok(OperationResult::ValidationFeedback)
             } else {
@@ -749,6 +760,9 @@ impl EffectPort for Planning<'_> {
             Ok(result)
         });
         match performed {
+            Ok(OperationResult::ReadSyntaxFeedback(reason)) => {
+                Ok(EffectOutcome::Refused(EffectOutcomeRefused { reason }))
+            }
             Ok(result) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
                 report: wire::Value::Text(
                     match result {
@@ -761,6 +775,9 @@ impl EffectPort for Planning<'_> {
                         }
                         OperationResult::ValidationFeedback => {
                             "ESS validation refused; corrective diagnostics recorded"
+                        }
+                        OperationResult::ReadSyntaxFeedback(_) => {
+                            unreachable!("handled as refused effect")
                         }
                     }
                     .into(),
@@ -1056,10 +1073,8 @@ pub(crate) fn context_path(
     goal: &Value,
     missing: bool,
 ) -> Result<PathBuf> {
-    if let Some(reference) = name.strip_prefix("workspace:") {
-        let (id, relative) = reference
-            .split_once('/')
-            .context("context read requires workspace:directory-id/relative-file")?;
+    let (directory, relative) = crate::read_request::parse(name)?;
+    if let Some(id) = directory {
         let directory = goal["directories"]
             .as_array()
             .context("workspace context unavailable")?

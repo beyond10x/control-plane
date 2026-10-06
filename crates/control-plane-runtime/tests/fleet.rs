@@ -857,10 +857,28 @@ async fn repository_execution_is_exclusive_across_workspace_aliases() {
 
 #[tokio::test]
 async fn native_loom_delivers_candidate_through_checks_review_and_observed_publication() {
+    native_read_recovery("absolute").await;
+}
+#[tokio::test]
+async fn native_loom_parent_read_is_refused_and_corrected() {
+    native_read_recovery("parent").await;
+}
+#[tokio::test]
+async fn native_loom_repeated_malformed_read_exhausts_refusal_budget() {
+    native_read_recovery("repeat").await;
+}
+#[tokio::test]
+async fn native_loom_symlink_read_remains_fatal() {
+    native_read_recovery("symlink").await;
+}
+async fn native_read_recovery(mode: &'static str) {
     use llm_core::{BoxFuture, Capabilities, Model, Provenance, TurnObservation};
     struct Provider {
         binding: Provenance,
         caps: Capabilities,
+        mode: &'static str,
+        absolute_paths: Vec<String>,
+        implementation_calls: AtomicUsize,
     }
     impl Model for Provider {
         fn provenance(&self) -> &Provenance {
@@ -892,7 +910,22 @@ async fn native_loom_delivers_candidate_through_checks_review_and_observed_publi
                     .instructions
                     .contains("Implement the accepted AEP story")
                 {
-                    if previous == 0 {
+                    self.implementation_calls.fetch_add(1, Ordering::SeqCst);
+                    assert!(!request.items.iter().any(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("EXTERNAL_SECRET_MUST_NOT_BE_READ"))), "confined read leaked external contents");
+                    if previous > 0 {
+                        assert!(request.items.iter().any(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("read_path_syntax") && text.contains("worktree-relative"))), "native continuation did not receive typed corrective feedback");
+                    }
+                    if previous == 0 || self.mode == "repeat" {
+                        let paths = match self.mode {
+                            "parent" => vec!["../outside-secret.txt".into()],
+                            "symlink" => vec!["external.txt".into()],
+                            _ => self.absolute_paths.clone(),
+                        };
+                        json!({"action":"read","paths":paths})
+                    } else if previous == 1 {
+                        json!({"action":"read","paths":["Cargo.toml"]})
+                    } else if previous == 2 {
+                        assert!(request.items.iter().any(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("fleet_fixture_0"))), "corrected relative read did not reach model");
                         json!({"action":"write","path":"src/lib.rs","contents":"pub fn answer() -> u32 { 42 }\n"})
                     } else {
                         json!({"action":"finish","summary":"Candidate ready for actual checks and independent review"})
@@ -931,11 +964,34 @@ async fn native_loom_delivers_candidate_through_checks_review_and_observed_publi
         }
     }
     let fixture = fixture(1).await;
-    let provider=Arc::new(Provider{binding:serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),caps:Capabilities{tools:true,tool_choice:true,temperature:false,top_p:false,reasoning_efforts:vec![],context_window:128000,max_output_tokens:32000}});
+    let primary = fixture.root.join("repos/repo0");
+    let sentinel = fixture.root.join("outside-secret.txt");
+    std::fs::write(&sentinel, "EXTERNAL_SECRET_MUST_NOT_BE_READ").unwrap();
+    if mode == "symlink" {
+        std::os::unix::fs::symlink(&sentinel, primary.join("external.txt")).unwrap();
+        cmd(&primary, "git", &["add", "external.txt"], &[]);
+        cmd(
+            &primary,
+            "git",
+            &["commit", "-m", "tracked external symlink"],
+            &[],
+        );
+        cmd(&primary, "git", &["push", "origin", "HEAD:main"], &[]);
+    }
+    let absolute_paths = [
+        primary.join("AGENTS.md"),
+        primary.join("TASK.md"),
+        primary.join("Cargo.toml"),
+        sentinel.clone(),
+    ]
+    .iter()
+    .map(|p| p.display().to_string())
+    .collect();
+    let provider=Arc::new(Provider{mode,absolute_paths,implementation_calls:AtomicUsize::new(0),binding:serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),caps:Capabilities{tools:true,tool_choice:true,temperature:false,top_p:false,reasoning_efforts:vec![],context_window:128000,max_output_tokens:32000}});
     let sessions = tempfile::tempdir().unwrap();
     let model = Arc::new(control_plane_runtime::CodexAgentModel::with_provider(
         sessions.path().into(),
-        provider,
+        provider.clone(),
     ));
     let supervisor = Supervisor::new(
         fixture.store.clone(),
@@ -946,6 +1002,32 @@ async fn native_loom_delivers_candidate_through_checks_review_and_observed_publi
     let planning = supervisor.tick().await.unwrap();
     assert_eq!(planning.queued, 1, "{planning:?}");
     let fleet = supervisor.fleet_tick().await.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&sentinel).unwrap(),
+        "EXTERNAL_SECRET_MUST_NOT_BE_READ"
+    );
+    if mode == "repeat" || mode == "symlink" {
+        let expected = if mode == "repeat" {
+            "read path syntax refusal budget exhausted"
+        } else {
+            "symlink paths are not tool inputs"
+        };
+        assert!(
+            fleet.blockers.iter().any(|b| b.contains(expected)),
+            "{fleet:?}"
+        );
+        assert_eq!(
+            provider.implementation_calls.load(Ordering::SeqCst),
+            if mode == "repeat" { 3 } else { 1 }
+        );
+        let store = fixture.store.lock().await;
+        assert_eq!(
+            store.query("AssignmentList").unwrap()[0]["state"],
+            "Blocked"
+        );
+        assert_eq!(store.query("PublicationIntentList").unwrap(), json!([]));
+        return;
+    }
     assert!(fleet.blockers.is_empty(), "{fleet:?}");
     let store = fixture.store.lock().await;
     let assignments = store.query("AssignmentList").unwrap();

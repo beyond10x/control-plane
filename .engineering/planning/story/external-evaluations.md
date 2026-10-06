@@ -20,7 +20,7 @@ scope:
   path: ess/
 - confidence: inferred
   path: generated/
-revision: 14
+revision: 15
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -125,3 +125,7 @@ Proposed next implementation, awaiting operator approval:
 3. Lock down the recorded sequence in a native-runtime regression: absolute primary read is refused without accessing it; the observation reaches the next model turn; a corrected relative read allows implementation, real checks, independent review and observed publication. Add negative checks for escape/authority failures and unchanged-refusal exhaustion, then rerun repository gates and a fresh isolated Go eval under the same budget.
 
 The operator's round-by-round approval is required before implementing this proposal. Once approved, delegate this bounded correction to a sub-agent, integrate and independently verify it, then run the next eval. Preserve all round-5 artifacts. Do not report the overall autonomous delivery goal complete from Vue/browser tests or planning success.
+
+## Approved round 5 recovery
+
+The operator approved the proposed path-contract and recoverable malformed-read correction plus the next isolated eval. Delegate exactly that scope to one implementation worker in a managed worktree: crates/control-plane-runtime/ and its tests/documentation. Root owns plan updates, integration, fresh external fixture setup, running-service installation and real-provider verification. Keep malformed syntax recovery separate from confinement, authority, persistence and provider failures; use Commission EffectOutcome and native Loom observations rather than a replacement execution loop. Approval does not authorize unrelated product changes or unbounded retry.

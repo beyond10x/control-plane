@@ -1418,36 +1418,40 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
                 request.validate_for(&self.binding, &self.caps)?;
                 let n = self.calls.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(request.items.iter().filter(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("Goal: "))).count(), 1, "each native role gets its brief once");
-                if n == 1 {
+                if n == 2 {
                     assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("a81a8729dc252830d4e0557176522b59be6ff253") && text.contains("#/definitions/Field"))), "authoritative ESS reference must return through Commission and native Loom session");
                 }
-                if n == 2 {
+                if n == 3 {
                     assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::Opaque {payload,..} if payload==&json!({"retained":"provider-state"}))));
                     assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("File not found: ess/domains/item.yaml"))));
                 }
+                if n == 1 {
+                    assert!(request.items.iter().any(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("read_path_syntax"))), "planner refusal must reach native continuation");
+                }
                 let arguments = match n {
-                    0 => json!({"action":"ess_schema","pointer":"/definitions/RawEntitySpec"}),
-                    1 => json!({"action":"read","paths":["ess/domains/item.yaml"]}),
-                    2 => {
+                    0 => json!({"action":"read","paths":["/outside/AGENTS.md"]}),
+                    1 => json!({"action":"ess_schema","pointer":"/definitions/RawEntitySpec"}),
+                    2 => json!({"action":"read","paths":["ess/domains/item.yaml"]}),
+                    3 => {
                         json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
                     }
-                    3 => {
+                    4 => {
                         json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: auth.session\nentities:\n  - name: auth.session.Session\n    identity: {name: session_id, type: Uuid}\n    fields: [{name: username, type: String}]\n    lifecycle:\n      initial: Active\n      states: [Active, Revoked]\n      terminal: [Revoked]\n"})
                     }
-                    4 => {
+                    5 => {
                         json!({"action":"aep","args":["new","story","must-not-exist"],"body":null})
                     }
-                    5 => {
+                    6 => {
                         assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("dead_end_state") && text.contains("conflicting_declaration"))), "ESS refusal must return through the native session");
                         json!({"action":"finish","stories":["story:deliver"],"summary":"Finish must also return invalid ESS feedback without spending a critic review."})
                     }
-                    6 => {
+                    7 => {
                         json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
                     }
-                    7 => {
+                    8 => {
                         json!({"action":"finish","stories":["story:deliver"],"summary":"Recovered missing source; actual ESS and AEP validation required."})
                     }
-                    8 => {
+                    9 => {
                         assert!(
                             !request
                                 .items
@@ -1506,7 +1510,7 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
         .await
         .unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
-    assert_eq!(provider.calls.load(Ordering::SeqCst), 9);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 10);
     let goals = store.lock().await.query("GoalList").unwrap();
     let receipt = goals[0]["planning_receipt"].as_str().unwrap();
     let planning_tree = goals[0]["planning_worktree_path"].as_str().unwrap();

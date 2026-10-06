@@ -51,6 +51,16 @@ implementation frontier. The durable host store remains authoritative for effect
 Missing files, ESS validation diagnostics and unsuccessful inspection/build exits return observations; authority,
 confinement, persistence and cancellation failures stop effects.
 
+Read paths use the managed worktree namespace (`AGENTS.md`, `TASK.md`, `go.mod`), or
+`workspace:<directory_id>/relative-file` for registered read-only context. Absolute
+paths and parent traversal are refused without reading or remapping them. A typed
+read-syntax refusal uses Commission's `EffectOutcome::Refused` and reaches the next
+native Loom turn as bounded corrective feedback. An implementation attempt stops
+after three malformed read requests; planners retain their existing unchanged-read
+limit. These are adapter input limits, not a replacement agent loop. Unknown context
+registrations, root/symlink escapes, permissions and other operational failures stay
+fatal. Every path in a read batch is syntax-checked before any file in that batch is read.
+
 The planner's `ess_schema` action reads bounded JSON-pointer fragments from the exact
 ESS-owned authoring schema recorded in `resources/ess-0.53.0/README.md`. An empty pointer
 returns the definition/property index. The resource must match `ess specify toolchain

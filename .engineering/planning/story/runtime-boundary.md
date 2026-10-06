@@ -39,7 +39,7 @@ scope:
   path: ess/
 - confidence: cited
   path: frontend/
-revision: 19
+revision: 21
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 3, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
 - {from: "proposed", to: "active", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 4, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
@@ -205,3 +205,17 @@ The operator's round-by-round approval is required before implementing this prop
 ## Round 5 deterministic control
 
 The one-variable control passed in 14.44 seconds: supplying Cargo.toml as the relative read path, with unchanged product code, let the real native Loom/Commission fixture reach Merged and Satisfied with matching checked/reviewed/published candidate. The absolute-path variant failed in 4.90 seconds with the exact recorded ExternalAvailability error. This establishes the path-contract/refusal seam; it does not fix the product or establish real-provider recovery. The external results retain the diagnostic source and red/control logs. Temporary source-tree test registration was removed.
+
+## Approved round 5 recovery
+
+The operator approved the proposed path-contract and recoverable malformed-read correction plus the next isolated eval. Delegate exactly that scope to one implementation worker in a managed worktree: crates/control-plane-runtime/ and its tests/documentation. Root owns plan updates, integration, fresh external fixture setup, running-service installation and real-provider verification. Keep malformed syntax recovery separate from confinement, authority, persistence and provider failures; use Commission EffectOutcome and native Loom observations rather than a replacement execution loop. Approval does not authorize unrelated product changes or unbounded retry.
+
+## Round 5 recovery integrated and verified
+
+The approved worker patch is integrated. ReadPathSyntax identifies only malformed read-address syntax; it produces the supported Commission EffectOutcome::Refused with bounded corrective feedback through native Loom continuation. Reads never remap primary absolute paths into worktree paths. The implementation adapter stops at the third malformed read request in one attempt; planner uses its existing unchanged-observation limit. Root/symlink/.git and unregistered-context failures remain non-syntax errors and fatal. Input preflight covers the whole read list, so a refusal reporting files_read=0 has not partially read earlier entries. Role instructions and tool schema descriptions name worktree-relative paths and registered workspace context addresses.
+
+Coordinator review checked typed-error classification, full-list preflight, failure propagation, post-refusal authority checks and native continuation. Native tests prove captured absolute-primary reads are denied, the next model turn receives feedback, corrected reads proceed through real checks, independent review and observed publication. Parent traversal recovery, three-request exhaustion and fatal symlink cases pass without leaking external sentinel content. Planner uses the same typed syntax seam without expanding other recovery categories.
+
+Full task check passed after integration: strict ESS/AEP validation, deterministic embedded Vue drift, formatting, denied-warning Clippy, 157 Rust tests, generated contracts, 167 durable conformance scenarios with zero failures/errors/unsupported/skips, and foundation dependency qualification. The live executable digest equals the new build. Restart retained six workspaces, both failed/cancelled eval goals and the paused round-6 goal. Chromium observed Live SSE, six workspace links, zero iframes and no JavaScript errors.
+
+Round 6 now runs from another fresh external seed, retaining all previous evidence and the round-4 published application. One worker, one attempt, gpt-5.6-sol and the ten-minute total cutoff remain unchanged. Its real-provider outcome is pending; component success is not application delivery.

@@ -50,9 +50,9 @@ impl PlannerAction {
 pub fn planner_schema() -> Value {
     json!({"oneOf":[
         {"type":"object","properties":{"action":{"const":"ess_schema"},"pointer":{"type":"string","maxLength":1024}},"required":["action","pointer"],"additionalProperties":false},
-        {"type":"object","properties":{"action":{"const":"read"},"paths":{"type":"array","items":{"type":"string"}}},"required":["action","paths"],"additionalProperties":false},
-        {"type":"object","properties":{"action":{"const":"read_range"},"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"line_count":{"type":"integer","minimum":1,"maximum":200}},"required":["action","path","start_line","line_count"],"additionalProperties":false},
-        {"type":"object","properties":{"action":{"const":"read_bytes"},"path":{"type":"string"},"start_byte":{"type":"integer","minimum":0},"byte_count":{"type":"integer","minimum":1,"maximum":12288}},"required":["action","path","start_byte","byte_count"],"additionalProperties":false},
+        {"type":"object","properties":{"action":{"const":"read"},"paths":{"type":"array","maxItems":32,"items":{"type":"string","description":crate::read_request::PATH_HELP}}},"required":["action","paths"],"additionalProperties":false},
+        {"type":"object","properties":{"action":{"const":"read_range"},"path":{"type":"string","description":crate::read_request::PATH_HELP},"start_line":{"type":"integer","minimum":1},"line_count":{"type":"integer","minimum":1,"maximum":200}},"required":["action","path","start_line","line_count"],"additionalProperties":false},
+        {"type":"object","properties":{"action":{"const":"read_bytes"},"path":{"type":"string","description":crate::read_request::PATH_HELP},"start_byte":{"type":"integer","minimum":0},"byte_count":{"type":"integer","minimum":1,"maximum":12288}},"required":["action","path","start_byte","byte_count"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"write_specification"},"path":{"type":"string"},"contents":{"type":"string"}},"required":["action","path","contents"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"aep"},"args":{"type":"array","items":{"type":"string"}},"body":{"type":["string","null"]}},"required":["action","args","body"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"finish"},"stories":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["action","stories","summary"],"additionalProperties":false}

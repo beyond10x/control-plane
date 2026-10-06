@@ -969,6 +969,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
         pending: std::sync::Mutex::new(None),
         finished: std::sync::atomic::AtomicBool::new(false),
         failure: std::sync::Mutex::new(None),
+        read_syntax_refusals: std::sync::Mutex::new(0),
         allow_go: host.config.local_eval(path, &host.runner)?,
     };
     let executor = ImplementationExecutor {
@@ -1034,6 +1035,7 @@ struct ImplementationPhase<'a> {
     pending: std::sync::Mutex<Option<ImplementationAction>>,
     finished: std::sync::atomic::AtomicBool,
     failure: std::sync::Mutex<Option<String>>,
+    read_syntax_refusals: std::sync::Mutex<usize>,
     allow_go: bool,
 }
 struct ImplementationExecutor<'a> {
@@ -1078,7 +1080,7 @@ impl loom_sdk::ActionSelector for &ImplementationPhase<'_> {
             let continuation=json!({"observations":observations,"frontier":frontier}).to_string();
             let prompt=json!({"goal":crate::context::goal_brief(goal),"story":self.story,"scope":self.scope,"observations":observations,"frontier":frontier}).to_string();
             host.progress(assignment,"model.request","implementor",json!({"execution_context":run}))?;
-            let response=host.respond_continuing(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt."),prompt,schema:implementation_schema(),timeout:host.remaining()?},path,assignment,Some(continuation))?;
+            let response=host.respond_continuing(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} {} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt.",crate::read_request::PATH_HELP),prompt,schema:implementation_schema(),timeout:host.remaining()?},path,assignment,Some(continuation))?;
             self.transcript.lock().map_err(|_|anyhow::anyhow!("implementation context poisoned"))?.clear();
             let action:ImplementationAction=serde_json::from_value(response)?;
             let name=implementation_protocol_action(&action).into();
@@ -1146,6 +1148,19 @@ impl EffectPort for ImplementationPhase<'_> {
             );
             self.perform(action)
         })();
+        // Commission distinguishes a refused request from an unavailable effect
+        // port. Only this typed input-syntax error is recoverable here.
+        let result = match result {
+            Err(error) if error.is::<crate::read_request::ReadPathSyntax>() => {
+                match self.read_syntax_feedback(error.downcast_ref().expect("checked error type")) {
+                    Ok(reason) => {
+                        return Ok(EffectOutcome::Refused(EffectOutcomeRefused { reason }));
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            result => result,
+        };
         match result {
             Ok(report) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
                 report: wire::Value::Text(report),
@@ -1161,6 +1176,40 @@ impl EffectPort for ImplementationPhase<'_> {
     }
 }
 impl ImplementationPhase<'_> {
+    fn read_syntax_feedback(
+        &self,
+        refusal: &crate::read_request::ReadPathSyntax,
+    ) -> Result<String> {
+        let Execution {
+            host,
+            assignment,
+            goal,
+            repo,
+            ..
+        } = self.execution;
+        host.guard(assignment, goal, repo, false)?;
+        let mut count = self
+            .read_syntax_refusals
+            .lock()
+            .map_err(|_| anyhow::anyhow!("read syntax counter poisoned"))?;
+        *count += 1;
+        ensure!(
+            *count < 3,
+            "read path syntax refusal budget exhausted after 3 malformed requests"
+        );
+        let observation = refusal.observation();
+        self.transcript
+            .lock()
+            .map_err(|_| anyhow::anyhow!("implementation context poisoned"))?
+            .push(observation.clone());
+        host.progress(
+            assignment,
+            "read.syntax_refused",
+            "implementor",
+            json!({"refusal":serde_json::from_str::<Value>(&observation)?,"count":*count}),
+        )?;
+        Ok(observation)
+    }
     fn perform(&self, action: ImplementationAction) -> Result<String> {
         let Execution {
             host,
@@ -1184,6 +1233,9 @@ impl ImplementationPhase<'_> {
         match action {
             ImplementationAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "too many file reads");
+                for name in &paths {
+                    crate::read_request::parse(name)?;
+                }
                 for name in paths {
                     let file = engine::context_path(path, &name, goal, true)?;
                     match std::fs::metadata(&file) {
@@ -1300,7 +1352,7 @@ impl ImplementationPhase<'_> {
 }
 fn implementation_schema() -> Value {
     json!({"oneOf":[
-        {"type":"object","properties":{"action":{"const":"read"},"paths":{"type":"array","items":{"type":"string"}}},"required":["action","paths"],"additionalProperties":false},
+        {"type":"object","properties":{"action":{"const":"read"},"paths":{"type":"array","maxItems":32,"items":{"type":"string","description":crate::read_request::PATH_HELP}}},"required":["action","paths"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"write"},"path":{"type":"string"},"contents":{"type":"string"}},"required":["action","path","contents"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"delete"},"path":{"type":"string"}},"required":["action","path"],"additionalProperties":false},
         {"type":"object","properties":{"action":{"const":"run"},"program":{"type":"string"},"args":{"type":"array","items":{"type":"string"}}},"required":["action","program","args"],"additionalProperties":false},
