@@ -2,18 +2,15 @@
 //!
 //! A scripted operator and supervisor drive real repositories through the public
 //! `control_plane_core::Store::execute`, so the fixture holds exactly what the Store writes. The
-//! script applies every generated command at least once and records one declared refusal;
-//! `crates/control-plane-core/tests/recorded_history.rs` checks that coverage against the
-//! generated routes. No gate runs this command: the committed fixture is evidence about stored
-//! history, and refreshing it after a replay failure would discard that evidence.
+//! script applies every generated command at least once and records every declared refusal
+//! response of every command: `not-found` for each, `wrong-state` (or `DeleteGoal`'s `paused`)
+//! where declared. `crates/control-plane-core/tests/recorded_history.rs` checks that coverage
+//! against the generated contract. No gate runs this command: the committed fixture is evidence
+//! about stored history, and refreshing it after a replay failure would discard that evidence.
 use anyhow::{Context, Result, bail, ensure};
 use control_plane_core::{Actor, Store};
 use serde_json::{Map, Value, json};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{fs, path::Path, process::Command};
 
 pub const HISTORY: &str = "crates/control-plane-core/tests/fixtures/recorded-history.db";
 pub const VIEWS: &str = "crates/control-plane-core/tests/fixtures/recorded-history.views.json";
@@ -27,25 +24,20 @@ const VIEW_NAMES: [&str; 6] = [
 ];
 
 pub fn run(root: &Path, work_dir: &Path) -> Result<()> {
-    let work = prepare(work_dir)?;
+    ensure!(
+        !work_dir.exists(),
+        "{} already exists; choose a new directory",
+        work_dir.display()
+    );
+    fs::create_dir_all(work_dir)?;
+    let work = work_dir.canonicalize()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let history = root.join(HISTORY);
-    if history.exists() {
-        let previous = work.join("previous");
-        fs::create_dir(&previous)?;
-        let copy = previous.join("state.sqlite");
-        fs::copy(&history, &copy)?;
-        runtime
-            .block_on(Store::open(&copy))
-            .with_context(|| {
-                format!(
-                    "the committed {HISTORY} no longer replays; regenerating would discard that evidence. \
-                     Migrate stored history instead, or delete the fixture deliberately before recording a new one"
-                )
-            })?;
-    }
+    // The committed evidence is checked before anything about the new recording, so a fixture
+    // that no longer replays is refused whatever else is wrong with this invocation.
+    runtime.block_on(still_replays(root, &work))?;
+    refuse_unsuitable(&work)?;
     for repository in ["workspace/alpha", "workspace/beta", "manual"] {
         git_init(&work.join(repository))?;
     }
@@ -80,20 +72,45 @@ pub fn run(root: &Path, work_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A fresh directory outside every home directory and Git work tree: recorded paths are committed,
-/// and repository discovery must not attach the scripted workspace to an enclosing repository.
-fn prepare(work_dir: &Path) -> Result<PathBuf> {
+/// A committed history may be replaced only while it still replays exactly: `Store::open` accepts
+/// every recorded outcome and the replayed views equal the committed views. Anything else is
+/// evidence of a specification change that needs a migration, not a new recording.
+async fn still_replays(root: &Path, work: &Path) -> Result<()> {
+    let (history, views) = (root.join(HISTORY), root.join(VIEWS));
+    match (history.exists(), views.exists()) {
+        (false, false) => return Ok(()),
+        (true, true) => {}
+        _ => bail!("{HISTORY} and {VIEWS} are committed together; restore the missing one"),
+    }
+    let refuse = |why: &str| {
+        format!(
+            "the committed {HISTORY} {why}; re-recording would discard that evidence. \
+             Migrate stored history instead, or delete both fixture files deliberately before recording"
+        )
+    };
+    let previous = work.join("previous");
+    fs::create_dir(&previous)?;
+    let copy = previous.join("state.sqlite");
+    fs::copy(&history, &copy)?;
+    let store = Store::open(&copy)
+        .await
+        .with_context(|| refuse("no longer opens"))?;
+    let committed: Value = serde_json::from_slice(&fs::read(&views)?)
+        .with_context(|| format!("{VIEWS} is not JSON"))?;
     ensure!(
-        !work_dir.exists(),
-        "{} already exists; choose a new directory",
-        work_dir.display()
+        query_views(&store)? == committed,
+        refuse("no longer replays to the committed views")
     );
-    fs::create_dir_all(work_dir)?;
-    let work = work_dir.canonicalize()?;
+    Ok(())
+}
+
+/// Outside every home directory and Git work tree: recorded paths are committed, and repository
+/// discovery must not attach the scripted workspace to an enclosing repository.
+fn refuse_unsuitable(work: &Path) -> Result<()> {
     refuse_personal_paths(work.as_os_str().as_encoded_bytes())?;
     let enclosing = Command::new("git")
         .arg("-C")
-        .arg(&work)
+        .arg(work)
         .args(["rev-parse", "--show-toplevel"])
         .output()?;
     ensure!(
@@ -101,7 +118,7 @@ fn prepare(work_dir: &Path) -> Result<PathBuf> {
         "{} is inside a Git work tree; choose a directory outside every repository",
         work.display()
     );
-    Ok(work)
+    Ok(())
 }
 
 /// The Security gate rejects personal paths in any committed byte.
@@ -199,6 +216,7 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?,
         "workspace_id",
     )?;
+    unknown_instances(&mut run).await?;
     let directory = identity(
         &run.expect(
             "AddWorkspaceDirectory",
@@ -250,6 +268,13 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         )
         .await?;
     }
+    run.expect(
+        "EnableRepositoryRegistration",
+        json!({"repository_id": manual}),
+        Operator,
+        "wrong-state",
+    )
+    .await?;
 
     let mut goal_body = json!({"workspace_id": workspace, "objective": "Deliver the recorded change",
         "acceptance": "Tests and an independent review pass", "max_workers": 2, "max_attempts": 3,
@@ -276,6 +301,8 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
     run.expect("UpdateGoal", goal_body, Operator, "applied")
         .await?;
     run.expect("StartGoal", subject.clone(), Operator, "applied")
+        .await?;
+    run.expect("StartGoal", subject.clone(), Operator, "wrong-state")
         .await?;
     let planning = |phase: &str| {
         json!({"goal_id": goal, "planning_revision": 2, "planning_fingerprint": "plan-fingerprint",
@@ -333,6 +360,29 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         run.expect(command, with(&first, body), Supervisor, "applied")
             .await?;
     }
+    // Ready to merge: every earlier step of the lifecycle now refuses with `wrong-state`.
+    for (command, body) in [
+        (
+            "ClaimAssignment",
+            json!({"worktree_id": "tree-first", "implementor_run": "implementor-first-3",
+                "base_revision": "base-first"}),
+        ),
+        (
+            "ReviewAssignment",
+            json!({"candidate": "candidate-first-2", "test_revision": "candidate-first-2"}),
+        ),
+        (
+            "RepairAssignment",
+            json!({"reason": "late review comment", "implementor_run": "implementor-first-3"}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"reviewer_run": "reviewer-first", "review_revision": "candidate-first-2"}),
+        ),
+    ] {
+        run.expect(command, with(&first, body), Supervisor, "wrong-state")
+            .await?;
+    }
     let published = identity(
         &run.expect(
             "PreparePublication",
@@ -344,13 +394,15 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?,
         "publication_id",
     )?;
-    run.expect(
-        "MergeAssignment",
-        json!({"assignment_id": first}),
-        Supervisor,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "MergeAssignment",
+            json!({"assignment_id": first}),
+            Supervisor,
+            outcome,
+        )
+        .await?;
+    }
     run.expect(
         "ConfirmPublication",
         json!({"publication_id": published, "receipt": "merge-receipt-first"}),
@@ -358,13 +410,31 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         "applied",
     )
     .await?;
-    run.expect(
-        "CompleteAssignment",
-        json!({"assignment_id": first, "merge_receipt": "merge-receipt-first"}),
-        Supervisor,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "CompleteAssignment",
+            json!({"assignment_id": first, "merge_receipt": "merge-receipt-first"}),
+            Supervisor,
+            outcome,
+        )
+        .await?;
+    }
+    for (command, body) in [
+        (
+            "BlockAssignment",
+            json!({"assignment_id": first, "reason": "too late to block"}),
+        ),
+        (
+            "MarkPublicationUncertain",
+            json!({"publication_id": published}),
+        ),
+        (
+            "ConfirmPublication",
+            json!({"publication_id": published, "receipt": "merge-receipt-first"}),
+        ),
+    ] {
+        run.expect(command, body, Supervisor, "wrong-state").await?;
+    }
 
     // Blocked, repaired from Blocked, published with an uncertain outcome and reconciled.
     let second = identity(
@@ -442,13 +512,15 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         "applied",
     )
     .await?;
-    run.expect(
-        "ReconcileAssignment",
-        json!({"assignment_id": second, "merge_receipt": "merge-receipt-second"}),
-        Supervisor,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "ReconcileAssignment",
+            json!({"assignment_id": second, "merge_receipt": "merge-receipt-second"}),
+            Supervisor,
+            outcome,
+        )
+        .await?;
+    }
 
     let third = identity(
         &run.expect(
@@ -460,13 +532,15 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?,
         "assignment_id",
     )?;
-    run.expect(
-        "CancelAssignment",
-        json!({"assignment_id": third}),
-        Supervisor,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "CancelAssignment",
+            json!({"assignment_id": third}),
+            Supervisor,
+            outcome,
+        )
+        .await?;
+    }
     run.expect(
         "RecordPlanningProgress",
         planning("Queued"),
@@ -474,13 +548,17 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         "applied",
     )
     .await?;
-    run.expect(
-        "SatisfyGoal",
-        json!({"goal_id": goal, "satisfaction_receipt": "acceptance-verified"}),
-        Supervisor,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "SatisfyGoal",
+            json!({"goal_id": goal, "satisfaction_receipt": "acceptance-verified"}),
+            Supervisor,
+            outcome,
+        )
+        .await?;
+    }
+    run.expect("CancelGoal", subject, Operator, "wrong-state")
+        .await?;
 
     let abandoned = identity(
         &run.expect(
@@ -496,25 +574,154 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?,
         "goal_id",
     )?;
-    for command in ["CancelGoal", "DeleteGoal"] {
-        run.expect(command, json!({"goal_id": abandoned}), Operator, "applied")
+    for (command, outcome) in [
+        ("DeleteGoal", "paused"),
+        ("CancelGoal", "applied"),
+        ("DeleteGoal", "applied"),
+    ] {
+        run.expect(command, json!({"goal_id": abandoned}), Operator, outcome)
             .await?;
     }
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "RemoveWorkspaceDirectory",
+            json!({"directory_id": directory}),
+            Operator,
+            outcome,
+        )
+        .await?;
+    }
+    // Removing the directory disabled the repositories it introduced.
     run.expect(
-        "RemoveWorkspaceDirectory",
-        json!({"directory_id": directory}),
+        "DisableRepositoryRegistration",
+        json!({"repository_id": alpha}),
         Operator,
-        "applied",
+        "wrong-state",
     )
     .await?;
-    run.expect(
-        "ArchiveWorkspace",
-        json!({"workspace_id": workspace}),
-        Operator,
-        "applied",
-    )
-    .await?;
+    for outcome in ["applied", "wrong-state"] {
+        run.expect(
+            "ArchiveWorkspace",
+            json!({"workspace_id": workspace}),
+            Operator,
+            outcome,
+        )
+        .await?;
+    }
     Ok(run.steps)
+}
+
+/// Every command that can name an unknown instance answers `not-found`, and that answer is
+/// recorded history like any other.
+async fn unknown_instances(run: &mut Script<'_>) -> Result<()> {
+    use Actor::{Operator, Supervisor};
+    let unknown = "00000000-0000-4000-8000-000000000000";
+    let goal = json!({"goal_id": unknown, "objective": "Unknown goal", "acceptance": "None",
+        "max_workers": 1, "max_attempts": 1, "max_minutes": 1, "planner_model": "scripted-planner",
+        "implementor_model": "scripted-implementor", "reviewer_model": "scripted-reviewer",
+        "merge_authority": false});
+    let planning = json!({"goal_id": unknown, "planning_revision": 1,
+        "planning_fingerprint": "unknown", "planning_repository": unknown,
+        "planning_worktree_id": "unknown", "planning_worktree_path": "unknown",
+        "planning_reason": "", "planning_receipt": "", "planning_phase": "Idle"});
+    let assignment = |fields: Value| {
+        let mut body = fields;
+        body["assignment_id"] = json!(unknown);
+        body
+    };
+    let calls = [
+        (
+            "RemoveWorkspaceDirectory",
+            json!({"directory_id": unknown}),
+            Operator,
+        ),
+        (
+            "ArchiveWorkspace",
+            json!({"workspace_id": unknown}),
+            Operator,
+        ),
+        (
+            "DisableRepositoryRegistration",
+            json!({"repository_id": unknown}),
+            Operator,
+        ),
+        (
+            "EnableRepositoryRegistration",
+            json!({"repository_id": unknown}),
+            Operator,
+        ),
+        (
+            "ConfigureRepository",
+            json!({"repository_id": unknown, "base_branch": "main", "test_command": "task check",
+                "publish_command": ""}),
+            Operator,
+        ),
+        ("StartGoal", json!({"goal_id": unknown}), Operator),
+        ("PauseGoal", json!({"goal_id": unknown}), Operator),
+        ("CancelGoal", json!({"goal_id": unknown}), Operator),
+        ("DeleteGoal", json!({"goal_id": unknown}), Operator),
+        ("UpdateGoal", goal, Operator),
+        (
+            "SatisfyGoal",
+            json!({"goal_id": unknown, "satisfaction_receipt": "unknown"}),
+            Supervisor,
+        ),
+        ("RecordPlanningProgress", planning, Supervisor),
+        (
+            "ClaimAssignment",
+            assignment(
+                json!({"worktree_id": "unknown", "implementor_run": "unknown",
+                "base_revision": "unknown"}),
+            ),
+            Supervisor,
+        ),
+        (
+            "ReviewAssignment",
+            assignment(json!({"candidate": "unknown", "test_revision": "unknown"})),
+            Supervisor,
+        ),
+        (
+            "RepairAssignment",
+            assignment(json!({"reason": "unknown", "implementor_run": "unknown"})),
+            Supervisor,
+        ),
+        (
+            "ReadyAssignment",
+            assignment(json!({"reviewer_run": "unknown", "review_revision": "unknown"})),
+            Supervisor,
+        ),
+        ("MergeAssignment", assignment(json!({})), Supervisor),
+        (
+            "CompleteAssignment",
+            assignment(json!({"merge_receipt": "unknown"})),
+            Supervisor,
+        ),
+        (
+            "BlockAssignment",
+            assignment(json!({"reason": "unknown"})),
+            Supervisor,
+        ),
+        ("CancelAssignment", assignment(json!({})), Supervisor),
+        (
+            "ReconcileAssignment",
+            assignment(json!({"merge_receipt": "unknown"})),
+            Supervisor,
+        ),
+        (
+            "MarkPublicationUncertain",
+            json!({"publication_id": unknown}),
+            Supervisor,
+        ),
+        (
+            "ConfirmPublication",
+            json!({"publication_id": unknown, "receipt": "unknown"}),
+            Supervisor,
+        ),
+    ];
+    for (command, body, actor) in calls {
+        run.expect(command, body, actor, "not-found").await?;
+    }
+    Ok(())
 }
 
 fn with(assignment: &str, mut body: Value) -> Value {

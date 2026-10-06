@@ -1,36 +1,17 @@
 {
   "AssignmentList": [
     {
-      "assignment_id": "34fa0fb6-6859-4ea8-8eb6-871b12fd8fa1",
-      "attempt": 0,
-      "base_revision": "",
-      "candidate": "",
-      "case_id": "story:third/case",
-      "goal_id": "939abecc-7dff-4cca-acd2-f8ac4e120cc0",
-      "goal_revision": 2,
-      "implementor_run": "",
-      "merge_receipt": "",
-      "reason": "",
-      "repository_id": "dbbb9021-e946-48a2-871f-fcb1c2132981",
-      "review_revision": "",
-      "reviewer_run": "",
-      "state": "Cancelled",
-      "story_id": "story:third",
-      "test_revision": "",
-      "worktree_id": ""
-    },
-    {
-      "assignment_id": "7e029cfc-2499-43cc-ba5c-de099d797857",
+      "assignment_id": "a232b0bd-1eba-49c2-a32a-a9c278163a40",
       "attempt": 2,
       "base_revision": "base-first",
       "candidate": "candidate-first-2",
       "case_id": "story:first/case",
-      "goal_id": "939abecc-7dff-4cca-acd2-f8ac4e120cc0",
+      "goal_id": "cef77b42-8849-4250-b795-b63f0379ab77",
       "goal_revision": 2,
       "implementor_run": "implementor-first-2",
       "merge_receipt": "merge-receipt-first",
       "reason": "review requested changes",
-      "repository_id": "945dad03-6ce8-4dae-99ee-3d0f7f934697",
+      "repository_id": "91e226ef-8b32-4d9d-b8e3-5b598b12800d",
       "review_revision": "candidate-first-2",
       "reviewer_run": "reviewer-first",
       "state": "Merged",
@@ -39,17 +20,36 @@
       "worktree_id": "tree-first"
     },
     {
-      "assignment_id": "de24b0b9-22a6-4fe4-bad1-37463631c5f0",
+      "assignment_id": "a5ee589a-0286-4413-9fbb-fb46838c45f6",
+      "attempt": 0,
+      "base_revision": "",
+      "candidate": "",
+      "case_id": "story:third/case",
+      "goal_id": "cef77b42-8849-4250-b795-b63f0379ab77",
+      "goal_revision": 2,
+      "implementor_run": "",
+      "merge_receipt": "",
+      "reason": "",
+      "repository_id": "fd16ccb6-a5ee-4a9a-8eca-0f12cb7531dc",
+      "review_revision": "",
+      "reviewer_run": "",
+      "state": "Cancelled",
+      "story_id": "story:third",
+      "test_revision": "",
+      "worktree_id": ""
+    },
+    {
+      "assignment_id": "c0ac3f5f-15d3-42e6-96c6-fe9b9d7109c8",
       "attempt": 2,
       "base_revision": "base-second",
       "candidate": "candidate-second",
       "case_id": "story:second/case",
-      "goal_id": "939abecc-7dff-4cca-acd2-f8ac4e120cc0",
+      "goal_id": "cef77b42-8849-4250-b795-b63f0379ab77",
       "goal_revision": 2,
       "implementor_run": "implementor-second-2",
       "merge_receipt": "merge-receipt-second",
       "reason": "publication outcome uncertain",
-      "repository_id": "8e61db86-b649-4bb6-bca9-01e2c51782f5",
+      "repository_id": "f40acd34-09a3-48e1-b497-358c656b1c2b",
       "review_revision": "candidate-second",
       "reviewer_run": "reviewer-second",
       "state": "Merged",
@@ -61,7 +61,7 @@
   "GoalList": [
     {
       "acceptance": "Tests and an independent review pass",
-      "goal_id": "939abecc-7dff-4cca-acd2-f8ac4e120cc0",
+      "goal_id": "cef77b42-8849-4250-b795-b63f0379ab77",
       "implementor_model": "scripted-implementor",
       "max_attempts": 3,
       "max_minutes": 90,
@@ -73,7 +73,7 @@
       "planning_phase": "Queued",
       "planning_reason": "",
       "planning_receipt": "plan-receipt",
-      "planning_repository": "945dad03-6ce8-4dae-99ee-3d0f7f934697",
+      "planning_repository": "91e226ef-8b32-4d9d-b8e3-5b598b12800d",
       "planning_revision": 2,
       "planning_worktree_id": "planning-tree",
       "planning_worktree_path": "/dev/shm/control-plane-history/planning",
@@ -81,25 +81,25 @@
       "revision": 2,
       "satisfaction_receipt": "acceptance-verified",
       "state": "Satisfied",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
     }
   ],
   "PublicationIntentList": [
     {
-      "assignment_id": "7e029cfc-2499-43cc-ba5c-de099d797857",
-      "candidate": "candidate-first-2",
-      "expected_base": "base-first",
-      "publication_id": "43987abc-6c64-4100-9d75-c0a1552a60e7",
-      "receipt": "merge-receipt-first",
+      "assignment_id": "c0ac3f5f-15d3-42e6-96c6-fe9b9d7109c8",
+      "candidate": "candidate-second",
+      "expected_base": "base-second",
+      "publication_id": "2a88cc86-dbed-4d81-93d0-93768362ea49",
+      "receipt": "merge-receipt-second",
       "state": "Confirmed",
       "target": "main"
     },
     {
-      "assignment_id": "de24b0b9-22a6-4fe4-bad1-37463631c5f0",
-      "candidate": "candidate-second",
-      "expected_base": "base-second",
-      "publication_id": "9bad9456-5b89-4a2a-b9c0-99659757c9e6",
-      "receipt": "merge-receipt-second",
+      "assignment_id": "a232b0bd-1eba-49c2-a32a-a9c278163a40",
+      "candidate": "candidate-first-2",
+      "expected_base": "base-first",
+      "publication_id": "38d0c146-678e-4234-bc88-53aed5d048d8",
+      "receipt": "merge-receipt-first",
       "state": "Confirmed",
       "target": "main"
     }
@@ -107,25 +107,25 @@
   "RepositoryRegistrationList": [
     {
       "base_branch": "main",
-      "common_dir": "/dev/shm/control-plane-history/workspace/beta/.git",
-      "name": "beta",
-      "path": "/dev/shm/control-plane-history/workspace/beta",
-      "publish_command": "",
-      "repository_id": "8e61db86-b649-4bb6-bca9-01e2c51782f5",
-      "state": "Disabled",
-      "test_command": "task check",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
-    },
-    {
-      "base_branch": "main",
       "common_dir": "/dev/shm/control-plane-history/workspace/alpha/.git",
       "name": "alpha",
       "path": "/dev/shm/control-plane-history/workspace/alpha",
       "publish_command": "publish-helper",
-      "repository_id": "945dad03-6ce8-4dae-99ee-3d0f7f934697",
+      "repository_id": "91e226ef-8b32-4d9d-b8e3-5b598b12800d",
       "state": "Disabled",
       "test_command": "task check",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
+    },
+    {
+      "base_branch": "main",
+      "common_dir": "/dev/shm/control-plane-history/workspace/beta/.git",
+      "name": "beta",
+      "path": "/dev/shm/control-plane-history/workspace/beta",
+      "publish_command": "",
+      "repository_id": "f40acd34-09a3-48e1-b497-358c656b1c2b",
+      "state": "Disabled",
+      "test_command": "task check",
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
     },
     {
       "base_branch": "main",
@@ -133,23 +133,15 @@
       "name": "manual",
       "path": "/dev/shm/control-plane-history/manual",
       "publish_command": "publish-helper",
-      "repository_id": "dbbb9021-e946-48a2-871f-fcb1c2132981",
+      "repository_id": "fd16ccb6-a5ee-4a9a-8eca-0f12cb7531dc",
       "state": "Registered",
       "test_command": "cargo test",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
     }
   ],
   "WorkspaceDirectoryList": [
     {
-      "directory_id": "51e7bb50-988f-4e00-b9c1-8bab971576b0",
-      "managed_common_dirs": [],
-      "path": "/dev/shm/control-plane-history/context",
-      "repository_common_dirs": [],
-      "state": "Registered",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
-    },
-    {
-      "directory_id": "daf0f088-077d-4659-b001-ef1cec9caa6d",
+      "directory_id": "681b0868-b562-4946-bf51-3dc31f2c9816",
       "managed_common_dirs": [
         "/dev/shm/control-plane-history/workspace/alpha/.git",
         "/dev/shm/control-plane-history/workspace/beta/.git"
@@ -160,7 +152,15 @@
         "/dev/shm/control-plane-history/workspace/beta/.git"
       ],
       "state": "Removed",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
+    },
+    {
+      "directory_id": "e698b1c7-bdb1-48e4-9290-19c5be147c46",
+      "managed_common_dirs": [],
+      "path": "/dev/shm/control-plane-history/context",
+      "repository_common_dirs": [],
+      "state": "Registered",
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
     }
   ],
   "WorkspaceList": [
@@ -168,7 +168,7 @@
       "name": "recorded",
       "path": "/dev/shm/control-plane-history/workspace",
       "state": "Archived",
-      "workspace_id": "521231f0-8681-4f11-b964-741c4c88300e"
+      "workspace_id": "440e7c70-4d3c-40dc-8683-da7962f40806"
     }
   ]
 }

@@ -9,7 +9,7 @@
 //! a migration to write, not a fixture to refresh.
 use anyhow::{Context, Result, ensure};
 use control_plane_core::Store;
-use controlplane_model::server::control_plane::ROUTES;
+use controlplane_model::server::control_plane::{OPENAPI, ROUTES};
 use eventlog_core::{EventStore, StreamId, TenantId};
 use eventlog_sqlite::SqliteEventStore;
 use serde_json::Value;
@@ -35,6 +35,52 @@ fn declared(method: &str, prefix: &str) -> BTreeSet<&'static str> {
         .filter(|(m, _)| *m == method)
         .filter_map(|(_, path)| path.strip_prefix(prefix))
         .collect()
+}
+
+/// Every declared refusal response of every command, with the outcomes it may carry, read from
+/// the generated contract. `2xx` answers are successes; `403` (no grant) and `501` (unfinished
+/// realization) carry no declared outcome. Any other response must name its outcomes.
+fn declared_refusals() -> Result<Vec<(&'static str, String, BTreeSet<String>)>> {
+    fn references<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
+        match value {
+            Value::Object(object) => {
+                for (key, value) in object {
+                    match (key.as_str(), value) {
+                        ("$ref", Value::String(target)) => found.push(target),
+                        _ => references(value, found),
+                    }
+                }
+            }
+            Value::Array(values) => values.iter().for_each(|value| references(value, found)),
+            _ => {}
+        }
+    }
+    let contract: Value = serde_json::from_str(OPENAPI)?;
+    let mut refusals = Vec::new();
+    for command in declared("POST", "/host/commands/") {
+        let responses = contract["paths"][format!("/host/commands/{command}")]["post"]["responses"]
+            .as_object()
+            .with_context(|| format!("the contract declares no responses for {command}"))?;
+        let prefix = format!("#/components/schemas/controlplane.host.{command}.");
+        for (status, response) in responses {
+            if status.starts_with('2') || matches!(status.as_str(), "403" | "501") {
+                continue;
+            }
+            let mut found = Vec::new();
+            references(response, &mut found);
+            let outcomes: BTreeSet<String> = found
+                .iter()
+                .filter_map(|target| target.strip_prefix(&prefix)?.strip_suffix(".Response"))
+                .map(str::to_owned)
+                .collect();
+            ensure!(
+                !outcomes.is_empty(),
+                "{command} {status} names no declared outcome this test can read"
+            );
+            refusals.push((command, status.clone(), outcomes));
+        }
+    }
+    Ok(refusals)
 }
 
 /// A private copy: opening a store takes its lock and may write, and the fixture is evidence.
@@ -90,6 +136,37 @@ async fn recorded_history_replays() -> Result<()> {
     ensure!(
         missing.is_empty(),
         "the recorded history never applies {missing:?}; extend record-history and regenerate"
+    );
+    let answered: BTreeSet<(&str, &str)> = recorded
+        .iter()
+        .filter_map(|decision| {
+            Some((
+                decision["command"].as_str()?,
+                decision["outcome"]["outcome"].as_str()?,
+            ))
+        })
+        .collect();
+    let refusals = declared_refusals()?;
+    let unrecorded: Vec<_> = refusals
+        .iter()
+        .filter(|(command, _, outcomes)| {
+            !outcomes
+                .iter()
+                .any(|outcome| answered.contains(&(*command, outcome.as_str())))
+        })
+        .map(|(command, status, outcomes)| format!("{command} {status} {outcomes:?}"))
+        .collect();
+    ensure!(
+        unrecorded.is_empty(),
+        "the recorded history never answers these declared refusals: {unrecorded:?}; extend record-history and regenerate"
+    );
+    let refused: BTreeSet<&str> = refusals.iter().map(|(command, _, _)| *command).collect();
+    eprintln!(
+        "{} decisions; {} commands applied; {} declared refusal responses of {} commands answered",
+        recorded.len(),
+        applied.len(),
+        refusals.len(),
+        refused.len()
     );
 
     let store = Store::open(&copy).await?;

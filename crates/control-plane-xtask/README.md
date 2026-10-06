@@ -56,19 +56,40 @@ not introduce Cargo runtime dependencies.
 
 ## Stored history
 
-`Store::open` replays every recorded decision through current generated behavior and refuses to
-start when a recorded outcome differs. Two checks keep a specification change from doing that
-silently.
+`Store::open` re-invokes every recorded command with its recorded body and actor through current
+generated behavior. It refuses to start when any answer differs from the recorded one. Two checks
+keep a specification change from doing that silently.
 
 `spec-history-check`, a `task check` step, compares the specification at a baseline commit with
-`ess/`. `ess/spec-acknowledgements.json` names the baseline as a full commit id. The check copies
-that commit's `ess/` tree into `.scratch/` and runs
-`ess verify diff --compatibility --format json`. It fails on every change whose `history` verdict
-is `breaking` or `unknown`, unless the file acknowledges the change's id with a reason. It also
-fails on an acknowledgement that names no such change. Caller and reader verdicts do not gate,
-because stored history is what blocks startup. Removing `Blocked` from `Assignment.repair.from`
-produces `entity/controlplane.host.Assignment/transition-route-changed/repair` with history
-`unknown`. The same edit's `RepairAssignment` outcome-subject change is history `compatible`:
+`ess/`. It copies the baseline's `ess/` tree into `.scratch/` and runs
+`ess verify diff --compatibility --format json`. The baseline is chosen like this:
+
+- Use the merge base of `HEAD` with `origin/main` when that commit holds `ess/ess-inputs.yaml`.
+  A clone without `origin/main` uses `main` instead.
+- Otherwise use the full commit id recorded as `baseline` in `ess/spec-acknowledgements.json`.
+- When both exist, use the one that descends from the other. When neither descends from the
+  other, the check fails.
+
+The baseline must be in the clone, so CI checks out full history.
+
+A change fails the check when ESS rates any of `callers`, `readers` or `history` other than
+`compatible`. ESS rates a changed outcome, payload, error shape or grant `history: compatible`,
+but replay still fails, so the history verdict alone is not enough. Purely additive changes are
+exempt, because no recorded call can observe them:
+
+- an enum or union variant added (`variant-added`, relation `expanded`)
+- an `Optional<…>` input added to a command
+- an `Optional<…>` field added to an entity or a view
+
+New commands, views, events, entities, errors, types, actors and grants are already `compatible`
+in every dimension. A required input or field, and any field added to an event or error, still
+fails. A command's `outcome-subject-changed` that only restates a reported
+`transition-route-changed` of the same entity and transition is decided by that route change.
+
+An acknowledgement admits exactly the change it reviewed: the id, plus the `change` object ESS
+printed for it. If a different change later carries the same id, it is not acknowledged. The
+refusal prints a ready entry for each unacknowledged change. Removing `Blocked` from
+`Assignment.repair.from` needs this one entry:
 
 ```json
 {
@@ -77,22 +98,36 @@ produces `entity/controlplane.host.Assignment/transition-route-changed/repair` w
   "acknowledged": [
     {
       "id": "entity/controlplane.host.Assignment/transition-route-changed/repair",
+      "change": {
+        "category": "entity",
+        "subject": "controlplane.host.Assignment",
+        "changed": {
+          "kind": "transition-route-changed",
+          "transition": "repair",
+          "before": "Blocked, Reviewing -> Implementing",
+          "after": "Reviewing -> Implementing"
+        }
+      },
       "reason": "stored Blocked repairs are migrated by <change>"
     }
   ]
 }
 ```
 
-Acknowledge a change only after stored history has a migration or cannot contain the affected
-decision. Move the baseline deliberately to a released or published commit, and empty the
-acknowledgements in the same change. The baseline must be in the clone, so CI checks out full
-history.
+An acknowledgement that matches no failing change is stale and fails the check. The exception is
+an entry that the baseline commit's own acknowledgement file already holds: it was published with
+that baseline. Acknowledge a change only after stored history has a migration or cannot contain
+the affected decision. When you move the recorded baseline, empty the acknowledgements in the
+same change.
 
 `crates/control-plane-core/tests/recorded_history.rs` opens a committed history,
 `crates/control-plane-core/tests/fixtures/recorded-history.db`, and compares every view with
-`recorded-history.views.json`. It also requires the history to apply every generated command at
-least once. A second test changes one stored `applied` outcome in a copy and requires
-`Store::open` to refuse it. No test or gate writes the fixture. Re-record it only on purpose:
+`recorded-history.views.json`. The history must apply every generated command at least once. It
+must also answer every declared refusal response of every command at least once: each
+`not-found`, and each `wrong-state` or `DeleteGoal` `paused`. The test reads those responses
+from the generated OpenAPI contract. A second test changes one stored `applied` outcome in a copy
+and requires `Store::open` to refuse it. No test or gate writes the fixture. Re-record it only on
+purpose:
 
 ```console
 cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/control-plane-history
@@ -100,10 +135,12 @@ cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/
 
 `record-history` runs a scripted operator and supervisor through `Store::execute` against real Git
 repositories in the new work directory. That directory must be outside every home directory and
-Git work tree: recorded paths are committed, and the Security gate rejects personal paths. The
-command refuses to replace a committed history that no longer replays. If replay fails after a
-specification change, write a migration; do not re-record. Re-record only to cover a new command,
-and review the views diff.
+Git work tree: recorded paths are committed, and the Security gate rejects personal paths. Before
+anything else, the command replays the committed history. It refuses to replace that history
+when `Store::open` fails or the replayed views differ from `recorded-history.views.json`. If
+replay fails after a specification change, write a migration; do not re-record. Re-record only to
+cover a new command or refusal, and review the views diff. A new view field also changes the
+recorded views, so delete both fixture files deliberately before you re-record.
 
 ## Evidence and negative controls
 
