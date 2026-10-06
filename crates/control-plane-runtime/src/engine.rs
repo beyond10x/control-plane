@@ -1,4 +1,5 @@
 //! One bounded planning commission. Loom proposes; trusted effects validate and mutate.
+use crate::refusal::InputRefusal;
 use crate::{
     AgentModel, ModelRequest, RuntimeConfig,
     model::{PlannerAction, critique_schema, planner_schema},
@@ -69,7 +70,7 @@ enum OperationResult {
     SyntaxFeedback,
     ReviewFeedback,
     ValidationFeedback,
-    ReadSyntaxFeedback(String),
+    Refused(String),
 }
 
 struct Planning<'a> {
@@ -78,6 +79,7 @@ struct Planning<'a> {
     governor: crate::governance::HostGovernor,
     case_id: CaseId,
     state: Mutex<State>,
+    refusals: crate::refusal::RefusalBudget,
     started: std::time::Instant,
 }
 
@@ -137,6 +139,7 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
         case_id: CaseId(input.namespace.clone()),
         input: &input,
         model: model.as_ref(),
+        refusals: Default::default(),
         started: std::time::Instant::now(),
         state: Mutex::new(State {
             revision: 1,
@@ -400,7 +403,14 @@ impl Planning<'_> {
                 self.read_record(&action_key, &label, observation)?;
             }
             PlannerAction::Read { paths } => {
-                ensure!(paths.len() <= 32, "read requests at most 32 files");
+                if paths.len() > 32 {
+                    return Err(InputRefusal::new(
+                        "too_many_reads",
+                        format!("{} paths requested", paths.len()),
+                        "Read at most 32 files per request.",
+                    )
+                    .into());
+                }
                 for name in &paths {
                     crate::read_request::parse(name)?;
                 }
@@ -436,26 +446,45 @@ impl Planning<'_> {
                 contents,
             } => {
                 let root = spec_root(path)?;
+                let refuse = |code, reason: String| -> anyhow::Error {
+                    InputRefusal::new(code, reason, SPECIFICATION_WRITE_HELP).into()
+                };
+                if crate::read_request::parse(&name)
+                    .map_or(true, |(directory, _)| directory.is_some())
+                {
+                    return Err(refuse(
+                        "write_path_syntax",
+                        format!("{name} is not a normalized worktree-relative path"),
+                    ));
+                }
                 let file = confined(path, &name, true)?;
-                ensure!(
-                    file.starts_with(&root),
-                    "writes are restricted to the specification root"
-                );
-                ensure!(
-                    specification_path(path, &root, &file),
-                    "path is not an admitted ESS source"
-                );
-                ensure!(
-                    matches!(
-                        file.extension().and_then(|s| s.to_str()),
-                        Some("yaml" | "yml")
-                    ),
-                    "specification source must be YAML"
-                );
-                ensure!(
-                    contents.len() <= 256 * 1024,
-                    "specification write exceeds budget"
-                );
+                if !file.starts_with(&root) {
+                    return Err(refuse(
+                        "write_outside_specification_root",
+                        format!("{name} is outside the specification root"),
+                    ));
+                }
+                if !specification_path(path, &root, &file) {
+                    return Err(refuse(
+                        "write_not_specification_source",
+                        format!("{name} is not an admitted ESS source"),
+                    ));
+                }
+                if !matches!(
+                    file.extension().and_then(|s| s.to_str()),
+                    Some("yaml" | "yml")
+                ) {
+                    return Err(refuse(
+                        "write_not_yaml",
+                        format!("{name} is not a YAML specification source"),
+                    ));
+                }
+                if contents.len() > 256 * 1024 {
+                    return Err(refuse(
+                        "write_too_large",
+                        format!("{name} would have {} bytes", contents.len()),
+                    ));
+                }
                 match std::fs::read(&file) {
                     Ok(existing) if existing == contents.as_bytes() => {
                         self.read_record(&format!("unchanged-write:{name}"), &label, format!("No change: {name} already contains exactly these bytes. Create the missing domain file, make a substantive correction, or finish; repeating this write is not progress."))?;
@@ -500,17 +529,65 @@ impl Planning<'_> {
                 }
             }
             PlannerAction::Finish { stories, summary } => {
-                // An invalid draft is feedback, not an independent review attempt.
+                // An invalid draft or selection is feedback, not an independent review attempt.
                 let validation = validate_spec(path, runner)?;
+                let refuse = |code, reason: String| -> anyhow::Error {
+                    InputRefusal::new(code, reason, FINISH_HELP).into()
+                };
+                let unique: BTreeSet<_> = stories.iter().collect();
+                if unique.len() != stories.len() {
+                    return Err(refuse(
+                        "duplicate_story_selection",
+                        format!("{} selects a story twice", json!(stories)),
+                    ));
+                }
+                let mut reviewed = Vec::new();
+                for story in &stories {
+                    if !story.starts_with("story:") || story.contains(char::is_whitespace) {
+                        return Err(refuse(
+                            "selection_not_a_story",
+                            format!("{story} is not an AEP story id"),
+                        ));
+                    }
+                    let shown = match runner.command(
+                        path,
+                        "aep",
+                        &["plan", "artifact", "show", story, "--format", "json"],
+                    ) {
+                        Err(error) if error.is::<crate::process::ProcessExit>() => {
+                            return Err(refuse(
+                                "selection_unknown_story",
+                                format!("{story} is not in this planning store"),
+                            ));
+                        }
+                        shown => shown?,
+                    };
+                    let item: Value = serde_json::from_str(&shown)?;
+                    if !matches!(text(&item, "status")?, "draft" | "proposed" | "active") {
+                        return Err(refuse(
+                            "story_not_available",
+                            format!("{story} is {}", text(&item, "status")?),
+                        ));
+                    }
+                    if !item["scope"].as_array().is_some_and(|s| !s.is_empty()) {
+                        return Err(refuse(
+                            "story_without_scope",
+                            format!("{story} has no machine-readable scope"),
+                        ));
+                    }
+                    reviewed.push(item);
+                }
                 {
                     let mut state = self
                         .state
                         .lock()
                         .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
-                    ensure!(
-                        state.rejected_revision != Some(state.revision),
-                        "independent plan critique rejected this unchanged revision; revise the plan before requesting review"
-                    );
+                    if state.rejected_revision == Some(state.revision) {
+                        return Err(refuse(
+                            "plan_unchanged_since_rejection",
+                            "independent plan critique rejected this unchanged revision".into(),
+                        ));
+                    }
                     ensure!(
                         state.review_attempts < 2,
                         "independent plan review budget exhausted"
@@ -520,29 +597,6 @@ impl Planning<'_> {
                 let plan_validation =
                     runner.command(path, "aep", &["plan", "artifact", "validate"])?;
                 self.record(format!("Observed ESS validation:\n{validation}\nObserved AEP validation:\n{plan_validation}"))?;
-                let mut reviewed = Vec::new();
-                let unique: BTreeSet<_> = stories.iter().collect();
-                ensure!(unique.len() == stories.len(), "duplicate story selection");
-                for story in &stories {
-                    ensure!(
-                        story.starts_with("story:") && !story.contains(char::is_whitespace),
-                        "selected id is not an AEP story"
-                    );
-                    let item: Value = serde_json::from_str(&runner.command(
-                        path,
-                        "aep",
-                        &["plan", "artifact", "show", story, "--format", "json"],
-                    )?)?;
-                    ensure!(
-                        matches!(text(&item, "status")?, "draft" | "proposed" | "active"),
-                        "story is not available for implementation"
-                    );
-                    ensure!(
-                        item["scope"].as_array().is_some_and(|s| !s.is_empty()),
-                        "story lacks machine-readable scope"
-                    );
-                    reviewed.push(item);
-                }
                 let critic_context = format!("critic-{}", uuid::Uuid::new_v4());
                 let critique=self.respond(ModelRequest { role:"critic".into(),execution_context:critic_context.clone(),model:text(&self.input.goal,"reviewer_model")?.into(),instructions:"Independently review this proposed plan against the standing goal, repository observations and ESS. Reject duplicate backlog, missing named conformance scenarios, unsafe scope, unsupported dependencies or goal claims unsupported by evidence. You cannot execute tools or grant authority.".into(),prompt:format!("{}\nSelected stories: {}\nSummary: {summary}\nActual validations:\n{validation}\n{plan_validation}",self.prompt()?,serde_json::to_string(&reviewed)?),schema:critique_schema(),timeout:self.remaining()? })?;
                 ensure!(
@@ -651,11 +705,23 @@ impl Planning<'_> {
         // absence as ordinary tool feedback. Other I/O failures stay fatal.
         let file = context_path(&self.input.path, name, &self.input.goal, true)?;
         let read = || -> Result<String> {
-            ensure!(
-                std::fs::metadata(&file)?.len() <= limit,
-                "file exceeds read budget"
-            );
-            Ok(std::fs::read_to_string(&file)?)
+            let size = std::fs::metadata(&file)?.len();
+            if size > limit {
+                return Err(InputRefusal::new(
+                    "read_too_large",
+                    format!("{name} has {size} bytes"),
+                    "Use read_range or read_bytes for a part of a large file.",
+                )
+                .into());
+            }
+            String::from_utf8(std::fs::read(&file)?).map_err(|_| {
+                InputRefusal::new(
+                    "read_not_utf8",
+                    format!("{name} is not UTF-8 text"),
+                    "Binary and non-UTF-8 files cannot be read.",
+                )
+                .into()
+            })
         };
         match read() {
             Ok(contents) => render(&contents),
@@ -736,10 +802,11 @@ impl EffectPort for Planning<'_> {
             return Err(EffectError::new("selected action changed"));
         }
         let performed = self.perform(action).or_else(|error| {
-            if let Some(refusal)=error.downcast_ref::<crate::read_request::ReadPathSyntax>() {
-                let observation=refusal.observation();
-                self.read_record("read-path-syntax", "Read path syntax refusal", observation.clone())?;
-                Ok(OperationResult::ReadSyntaxFeedback(observation))
+            if let Some(refusal) = crate::refusal::refusal_of(&error) {
+                self.refusals.refused(&refusal)?;
+                let observation = refusal.observation();
+                self.record(format!("Refused action: {observation}"))?;
+                Ok(OperationResult::Refused(observation))
             } else if ess_validation_refusal(&error) {
                 self.read_record("ess-validation", "ESS validation refusal", format!("{error}\nNo plan validation evidence or AEP mutation was produced. Correct the specification before retrying."))?;
                 Ok(OperationResult::ValidationFeedback)
@@ -760,29 +827,32 @@ impl EffectPort for Planning<'_> {
             Ok(result)
         });
         match performed {
-            Ok(OperationResult::ReadSyntaxFeedback(reason)) => {
+            Ok(OperationResult::Refused(reason)) => {
                 Ok(EffectOutcome::Refused(EffectOutcomeRefused { reason }))
             }
-            Ok(result) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
-                report: wire::Value::Text(
-                    match result {
-                        OperationResult::Completed => "host operation completed",
-                        OperationResult::SyntaxFeedback => {
-                            "command syntax rejected; corrective feedback recorded"
+            Ok(result) => {
+                self.refusals.admitted();
+                Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                    report: wire::Value::Text(
+                        match result {
+                            OperationResult::Completed => "host operation completed",
+                            OperationResult::SyntaxFeedback => {
+                                "command syntax rejected; corrective feedback recorded"
+                            }
+                            OperationResult::ReviewFeedback => {
+                                "plan review rejected; revision feedback recorded"
+                            }
+                            OperationResult::ValidationFeedback => {
+                                "ESS validation refused; corrective diagnostics recorded"
+                            }
+                            OperationResult::Refused(_) => {
+                                unreachable!("handled as refused effect")
+                            }
                         }
-                        OperationResult::ReviewFeedback => {
-                            "plan review rejected; revision feedback recorded"
-                        }
-                        OperationResult::ValidationFeedback => {
-                            "ESS validation refused; corrective diagnostics recorded"
-                        }
-                        OperationResult::ReadSyntaxFeedback(_) => {
-                            unreachable!("handled as refused effect")
-                        }
-                    }
-                    .into(),
-                ),
-            })),
+                        .into(),
+                    ),
+                }))
+            }
             Err(error) => {
                 let message = error.to_string();
                 if let Ok(mut state) = self.state.lock() {
@@ -1036,6 +1106,9 @@ pub fn validate_spec(root: &Path, runner: &ProcessRunner) -> Result<String> {
         ],
     )
 }
+const SPECIFICATION_WRITE_HELP: &str = "write_specification takes a worktree-relative YAML path of an admitted ESS source beneath the specification root, at most 256 KiB.";
+const FINISH_HELP: &str = "Finish selects distinct existing story ids (story:<name>) in draft, proposed or active status with machine-readable scope; after a rejected review, revise the plan before finishing again.";
+
 pub fn confined(root: &Path, name: &str, missing: bool) -> Result<PathBuf> {
     ensure!(
         root.canonicalize()? == root,
@@ -1080,7 +1153,13 @@ pub(crate) fn context_path(
             .context("workspace context unavailable")?
             .iter()
             .find(|d| d["directory_id"] == id && d["state"] == "Registered")
-            .context("workspace context directory is not registered")?;
+            .ok_or_else(|| {
+                InputRefusal::new(
+                    "context_directory_unknown",
+                    format!("{id} is not a registered workspace directory"),
+                    "Use a directory_id from the registered workspace directories.",
+                )
+            })?;
         confined(Path::new(text(directory, "path")?), relative, missing)
     } else {
         confined(root, name, missing)

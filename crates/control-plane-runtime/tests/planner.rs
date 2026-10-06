@@ -778,13 +778,14 @@ async fn model_cannot_write_workflows_when_ess_is_at_root() {
     std::fs::rename(repo.join("ess/domains"), repo.join("domains")).unwrap();
     run(&repo, "git", &["add", "."], &[]);
     run(&repo, "git", &["commit", "-m", "root specification"], &[]);
-    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
-        json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"}),
-    ]))));
+    // Each attempt is a refusal the model can correct; the fifth consecutive one ends planning.
+    let write = json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"});
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from(vec![write; 5]))));
     let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
     let report = supervisor.tick().await.unwrap();
     assert!(
-        report.blockers[0].contains("not an admitted ESS source"),
+        report.blockers[0].contains("refusal budget exhausted")
+            && report.blockers[0].contains("write_not_specification_source"),
         "{report:?}"
     );
     let goals = store.lock().await.query("GoalList").unwrap();
@@ -1529,4 +1530,32 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
         2,
         "planner and reviewer sessions filed separately"
     );
+}
+
+#[tokio::test]
+async fn planner_input_refusals_reach_the_model() {
+    let (_, store, config, _, _) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"}),
+        json!({"action":"finish","stories":["story:deliver","story:deliver"],"summary":"Duplicate selection."}),
+        json!({"action":"finish","stories":["story:missing"],"summary":"Unknown story."}),
+        json!({"action":"read","paths":["workspace:unregistered/README.md"]}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Existing scoped story meets the goal."}),
+        json!({"approved":true,"reason":"Existing scoped story meets acceptance."}),
+    ]))));
+    let report = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model)
+        .tick()
+        .await
+        .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    for code in [
+        "write_outside_specification_root",
+        "duplicate_story_selection",
+        "selection_unknown_story",
+        "context_directory_unknown",
+    ] {
+        assert!(receipt.contains(code), "{code} did not reach the planner");
+    }
 }

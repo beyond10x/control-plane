@@ -13,6 +13,7 @@ mod loom_model;
 mod model;
 pub mod process;
 mod read_request;
+mod refusal;
 mod supervisor;
 pub use loom_model::CodexAgentModel;
 pub use supervisor::Supervisor;

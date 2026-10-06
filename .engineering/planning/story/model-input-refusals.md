@@ -23,7 +23,7 @@ scope:
   path: crates/control-plane-runtime/tests/fleet.rs
 - confidence: inferred
   path: crates/control-plane-runtime/tests/planner.rs
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-review-session"}
 - {from: "proposed", to: "active", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-review-session"}
@@ -56,3 +56,12 @@ Cited: crates/control-plane-runtime/src/fleet.rs, crates/control-plane-runtime/s
 ## Relation to the round-6 proposal
 
 On 2026-10-06 the operator chose this story over the round-6 correction proposed in story:runtime-boundary ("commit + fix" in answer to options A/B/C, A being story:candidate-process-environment then this story). The round-6 proposal is superseded by it; the next eval round runs after both stories pass.
+
+## Implementation notes (2026-10-06)
+
+- `crates/control-plane-runtime/src/refusal.rs` holds the typed `InputRefusal`, the classification `refusal_of` (input refusals, read-path syntax, typed process limits) and the consecutive budget (`CONSECUTIVE_REFUSAL_LIMIT = 5`, reset by any admitted action). Planner and implementor effect ports both return `EffectOutcome::Refused` for these and stay fatal for everything else.
+- Two members never reach the host through the native runtime: Loom refuses a 33-path read against the published tool schema (`maxItems: 32`) and any tool arguments over 65,536 bytes, so a write over 256 KiB is refused by Loom. Both arrive at the model as a failed tool result; `admission_refusals_reach_the_model` asserts Loom's text for these two. The host checks stay as a second layer.
+- The timeout member is exercised below the native runtime by `execution_limits_are_typed_and_stop_the_process_group` (process.rs): a fixture command cannot be made slow without also slowing the host's own checks. Output size and encoding run natively in `execution_refusals_reach_the_model`.
+- The implementor's instructions and every command refusal carry the admitted command grammar (`COMMAND_GRAMMAR`); `command_grammar_examples_are_admitted` keeps its examples tied to the validator.
+- Planner Finish now checks the story selection before it spends a review attempt, and an unchanged revision after a rejected review is a refusal rather than a fatal error.
+- An unregistered `workspace:<directory>` read is now a refusal: it reads nothing, as the parent-traversal refusal approved in round 5. Symlink, `.git` and changed-root failures stay fatal.

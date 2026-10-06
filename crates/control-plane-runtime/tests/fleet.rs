@@ -1065,7 +1065,7 @@ async fn native_read_recovery(mode: &'static str) {
     );
     if mode == "repeat" || mode == "symlink" {
         let expected = if mode == "repeat" {
-            "read path syntax refusal budget exhausted"
+            "refusal budget exhausted after 5 consecutive refused actions"
         } else {
             "symlink paths are not tool inputs"
         };
@@ -1075,7 +1075,7 @@ async fn native_read_recovery(mode: &'static str) {
         );
         assert_eq!(
             provider.implementation_calls.load(Ordering::SeqCst),
-            if mode == "repeat" { 3 } else { 1 }
+            if mode == "repeat" { 5 } else { 1 }
         );
         let store = fixture.store.lock().await;
         assert_eq!(
@@ -1106,5 +1106,371 @@ async fn native_read_recovery(mode: &'static str) {
         std::fs::read_dir(sessions.path()).unwrap().count(),
         5,
         "planner, critic, implementor, reviewer and goal reviewer sessions"
+    );
+}
+
+/// One implementor turn: the proposed action, and the refusal code the next turn's input
+/// must carry when the host refuses it.
+type Turn = (Value, Option<&'static str>);
+
+struct RefusalProvider {
+    binding: llm_core::Provenance,
+    caps: llm_core::Capabilities,
+    turns: Vec<Turn>,
+    implementation_calls: AtomicUsize,
+    unseen: Mutex<Vec<&'static str>>,
+    inputs: Mutex<Vec<String>>,
+}
+impl llm_core::Model for RefusalProvider {
+    fn provenance(&self) -> &llm_core::Provenance {
+        &self.binding
+    }
+    fn capabilities(&self) -> &llm_core::Capabilities {
+        &self.caps
+    }
+    fn turn<'a>(
+        &'a self,
+        request: &'a llm_core::TurnRequest,
+        _: &'a mut dyn llm_core::StreamSink,
+        _: &'a llm_core::Cancel,
+    ) -> llm_core::BoxFuture<'a, Result<llm_core::TurnOutcome, llm_core::Error>> {
+        Box::pin(async move {
+            request.validate_for(&self.binding, &self.caps)?;
+            let previous = request
+                .items
+                .iter()
+                .filter(|item| matches!(item, llm_core::Item::ToolCall(_)))
+                .count();
+            let arguments = if request
+                .instructions
+                .contains("Implement the accepted AEP story")
+            {
+                self.implementation_calls.fetch_add(1, Ordering::SeqCst);
+                let input = request
+                    .items
+                    .iter()
+                    .filter_map(|item| match item {
+                        llm_core::Item::UserText { text } => Some(text.clone()),
+                        llm_core::Item::ToolResult { output, .. } => Some(output.to_string()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if let Some(code) = previous
+                    .checked_sub(1)
+                    .and_then(|index| self.turns[index].1)
+                    && !input.contains(code)
+                {
+                    self.unseen.lock().unwrap().push(code);
+                }
+                self.inputs.lock().unwrap().push(input);
+                self.turns
+                    .get(previous)
+                    .map(|turn| turn.0.clone())
+                    .unwrap_or_else(|| json!({"action":"finish","summary":"Script exhausted"}))
+            } else if request.instructions.contains("Independently") {
+                json!({"approved":true,"reason":"Trusted test output and exact diff establish the accepted answer"})
+            } else {
+                json!({"action":"finish","stories":["story:deliver"],"summary":"Select existing accepted scope"})
+            };
+            Ok(llm_core::TurnOutcome {
+                stop_reason: llm_core::StopReason::ToolCalls,
+                items: vec![
+                    llm_core::Item::Opaque {
+                        provenance: self.binding.clone(),
+                        payload: json!({"retained":true}),
+                    },
+                    llm_core::Item::ToolCall(llm_core::ToolCall {
+                        call_id: llm_core::CallId::new(format!("call-{previous}")).unwrap(),
+                        name: request.tools[0].name.clone(),
+                        arguments,
+                    }),
+                ],
+                observation: llm_core::TurnObservation {
+                    usage: Some(llm_core::Usage {
+                        input_tokens: Some(20),
+                        output_tokens: Some(10),
+                        cached_input_tokens: Some(0),
+                        ..Default::default()
+                    }),
+                    final_usage: true,
+                    ..llm_core::TurnObservation::new(self.binding.clone())
+                },
+            })
+        })
+    }
+}
+
+struct RefusalRun {
+    fixture: Fixture,
+    provider: Arc<RefusalProvider>,
+    report: control_plane_runtime::TickReport,
+}
+
+/// Plan once, then run the implementor through `turns` with the real Loom runtime,
+/// Commission, checks, independent review and publication. The primary repository gains
+/// a 3 MB text file and, in its last commit, a Latin-1 file.
+async fn native_refusal_run(turns: Vec<Turn>, local_eval: bool) -> RefusalRun {
+    let mut fixture = fixture(1).await;
+    let primary = fixture.root.join("repos/repo0");
+    std::fs::write(
+        primary.join("huge.txt"),
+        format!("{}\n", "a".repeat(99)).repeat(30_000),
+    )
+    .unwrap();
+    cmd(&primary, "git", &["add", "huge.txt"], &[]);
+    cmd(
+        &primary,
+        "git",
+        &["commit", "-m", "large context file"],
+        &[],
+    );
+    std::fs::write(primary.join("latin1.txt"), b"caf\xe9\n").unwrap();
+    cmd(&primary, "git", &["add", "latin1.txt"], &[]);
+    cmd(
+        &primary,
+        "git",
+        &["commit", "-m", "Latin-1 context file"],
+        &[],
+    );
+    cmd(&primary, "git", &["push", "origin", "HEAD:main"], &[]);
+    if local_eval {
+        fixture.config.local_eval_root = Some(fixture.root.canonicalize().unwrap());
+    }
+    let provider = Arc::new(RefusalProvider {
+        turns,
+        implementation_calls: AtomicUsize::new(0),
+        unseen: Mutex::new(Vec::new()),
+        inputs: Mutex::new(Vec::new()),
+        binding: serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),
+        caps: llm_core::Capabilities {
+            tools: true,
+            tool_choice: true,
+            temperature: false,
+            top_p: false,
+            reasoning_efforts: vec![],
+            // Large refused proposals (a 300 KiB write) must not trigger Loom compaction here.
+            context_window: 4_000_000,
+            max_output_tokens: 32000,
+        },
+    });
+    let sessions = tempfile::tempdir().unwrap();
+    let model = Arc::new(control_plane_runtime::CodexAgentModel::with_provider(
+        sessions.path().into(),
+        provider.clone(),
+    ));
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model,
+    );
+    assert_eq!(supervisor.tick().await.unwrap().queued, 1);
+    let report = supervisor.fleet_tick().await.unwrap();
+    RefusalRun {
+        fixture,
+        provider,
+        report,
+    }
+}
+
+const FIX: &str = "pub fn answer() -> u32 { 42 }\n";
+
+async fn assert_merged_after_every_refusal_was_seen(run: &RefusalRun) {
+    assert!(
+        run.provider.unseen.lock().unwrap().is_empty(),
+        "refusals that did not reach the next model turn: {:?}",
+        run.provider.unseen.lock().unwrap()
+    );
+    assert!(run.report.blockers.is_empty(), "{:?}", run.report);
+    assert_eq!(
+        run.fixture
+            .store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()[0]["state"],
+        "Merged"
+    );
+}
+
+#[tokio::test]
+async fn admission_refusals_reach_the_model() {
+    let read = |paths: Value| json!({"action":"read","paths":paths});
+    let write =
+        |path: &str, contents: String| json!({"action":"write","path":path,"contents":contents});
+    let admitted = (read(json!(["Cargo.toml"])), None);
+    let turns = vec![
+        // Loom refuses these two before the host sees them: the published schema bounds
+        // reads at 32 paths, and tool arguments are bounded at 65,536 bytes.
+        (
+            read(json!(vec!["Cargo.toml"; 33])),
+            Some("published schema"),
+        ),
+        (read(json!(["huge.txt"])), Some("read_too_large")),
+        (read(json!(["latin1.txt"])), Some("read_not_utf8")),
+        (
+            read(json!(["workspace:unregistered-directory/AGENTS.md"])),
+            Some("context_directory_unknown"),
+        ),
+        admitted.clone(),
+        (
+            write("tests/extra.rs", "#[test]\nfn extra() {}\n".into()),
+            Some("write_outside_scope"),
+        ),
+        (
+            write("src/tool.py", "print(1)\n".into()),
+            Some("write_language_policy"),
+        ),
+        (
+            write("src/huge.rs", "a".repeat(300 * 1024)),
+            Some("65536 byte bound"),
+        ),
+        (write("../escape.rs", FIX.into()), Some("write_path_syntax")),
+        admitted.clone(),
+        (
+            write(".engineering/planning/story/forged.md", "forged\n".into()),
+            Some("planning_store_host_owned"),
+        ),
+        (
+            json!({"action":"delete","path":"tests/acceptance.rs"}),
+            Some("write_outside_scope"),
+        ),
+        (
+            json!({"action":"delete","path":"src/missing.rs"}),
+            Some("delete_missing"),
+        ),
+        (
+            json!({"action":"run","program":"git","args":["push","origin","HEAD"]}),
+            Some("command_not_admitted"),
+        ),
+        admitted,
+        (
+            json!({"action":"run","program":"go","args":["run","main.go"]}),
+            Some("command_not_admitted"),
+        ),
+        (
+            json!({"action":"finish","summary":"  "}),
+            Some("finish_summary_missing"),
+        ),
+        (write("src/lib.rs", FIX.into()), None),
+        (
+            json!({"action":"finish","summary":"Return the requested answer"}),
+            None,
+        ),
+    ];
+    let run = native_refusal_run(turns, true).await;
+    assert_merged_after_every_refusal_was_seen(&run).await;
+    let worktrees = run.fixture.root.join("state");
+    for name in ["escape.rs", "forged.md", "extra.rs", "tool.py"] {
+        let found = Command::new("find")
+            .arg(&worktrees)
+            .arg(run.fixture.root.join("repos"))
+            .args(["-name", name])
+            .output()
+            .unwrap();
+        assert!(
+            found.stdout.is_empty(),
+            "refused write of {name} reached disk"
+        );
+    }
+}
+
+#[tokio::test]
+async fn execution_refusals_reach_the_model() {
+    let turns = vec![
+        (
+            json!({"action":"run","program":"rg","args":["a","huge.txt"]}),
+            Some("command_output_too_large"),
+        ),
+        (
+            json!({"action":"run","program":"git","args":["show","HEAD"]}),
+            Some("command_output_not_utf8"),
+        ),
+        (
+            json!({"action":"write","path":"src/lib.rs","contents":FIX}),
+            None,
+        ),
+        (
+            json!({"action":"finish","summary":"Return the requested answer"}),
+            None,
+        ),
+    ];
+    let run = native_refusal_run(turns, false).await;
+    assert_merged_after_every_refusal_was_seen(&run).await;
+}
+
+#[tokio::test]
+async fn fifth_consecutive_refusal_blocks_the_attempt() {
+    let refused = (
+        json!({"action":"write","path":"tests/extra.rs","contents":"#[test]\nfn extra() {}\n"}),
+        Some("write_outside_scope"),
+    );
+    let mut turns = vec![refused.clone(); 4];
+    turns.push((json!({"action":"read","paths":["Cargo.toml"]}), None));
+    turns.extend(vec![refused; 5]);
+    let run = native_refusal_run(turns, false).await;
+    // Without the reset after the admitted read, the fifth refusal overall (call 6) would block.
+    assert_eq!(run.provider.implementation_calls.load(Ordering::SeqCst), 10);
+    assert!(
+        run.report.blockers.iter().any(|reason| reason
+            .contains("refusal budget exhausted after 5 consecutive refused actions")
+            && reason.contains("write_outside_scope")),
+        "{:?}",
+        run.report
+    );
+    let store = run.fixture.store.lock().await;
+    assert_eq!(
+        store.query("AssignmentList").unwrap()[0]["state"],
+        "Blocked"
+    );
+    assert_eq!(store.query("PublicationIntentList").unwrap(), json!([]));
+}
+
+#[tokio::test]
+async fn host_failures_stay_fatal() {
+    let turns = vec![(json!({"action":"read","paths":[".git/config"]}), None)];
+    let run = native_refusal_run(turns, false).await;
+    assert_eq!(run.provider.implementation_calls.load(Ordering::SeqCst), 1);
+    assert!(
+        run.report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("Git administrative paths are not tool inputs")),
+        "{:?}",
+        run.report
+    );
+    assert_eq!(
+        run.fixture
+            .store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()[0]["state"],
+        "Blocked"
+    );
+}
+
+#[tokio::test]
+async fn round_six_gofmt_proposal_recovers() {
+    let turns = vec![
+        (
+            json!({"action":"run","program":"gofmt","args":["-w","cmd/server/main.go","internal/app/app.go","internal/app/app_test.go","web/assets.go"]}),
+            Some("command_not_admitted"),
+        ),
+        (
+            json!({"action":"write","path":"src/lib.rs","contents":FIX}),
+            None,
+        ),
+        (
+            json!({"action":"finish","summary":"Return the requested answer"}),
+            None,
+        ),
+    ];
+    let run = native_refusal_run(turns, false).await;
+    assert_merged_after_every_refusal_was_seen(&run).await;
+    assert!(
+        run.provider.inputs.lock().unwrap()[1].contains("Commands that write files"),
+        "the refusal did not carry the admitted command grammar"
     );
 }

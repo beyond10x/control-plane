@@ -1,5 +1,5 @@
 //! Bounded host-owned processes. No shell, inherited working directory or ignored exit status.
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use nix::{
     sys::signal::{Signal, killpg},
     unistd::Pid,
@@ -36,6 +36,42 @@ impl std::fmt::Display for ProcessExit {
 }
 
 impl std::error::Error for ProcessExit {}
+
+/// A process stopped at a host limit. Distinct from cancellation, which stays fatal.
+#[derive(Debug)]
+pub enum ProcessLimit {
+    TimedOut { program: String, seconds: u64 },
+    OutputTooLarge,
+    OutputNotUtf8,
+}
+
+impl ProcessLimit {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::TimedOut { .. } => "command_timed_out",
+            Self::OutputTooLarge => "command_output_too_large",
+            Self::OutputNotUtf8 => "command_output_not_utf8",
+        }
+    }
+}
+
+impl std::fmt::Display for ProcessLimit {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TimedOut { program, seconds } => {
+                write!(
+                    formatter,
+                    "{program} exceeded its {seconds} s process timeout and was killed"
+                )
+            }
+            Self::OutputTooLarge => formatter
+                .write_str("process output exceeded 2 MiB; refusing a truncated observation"),
+            Self::OutputNotUtf8 => formatter.write_str("process output is not UTF-8"),
+        }
+    }
+}
+
+impl std::error::Error for ProcessLimit {}
 
 /// Service variables a host-started process inherits: program lookup, user directories,
 /// locale and toolchain or build caches. Everything else is withheld, because test and
@@ -135,13 +171,15 @@ impl ProcessRunner {
             pipe.write_all(&input)
         });
         let started = Instant::now();
-        let mut interrupted = false;
+        let mut cancelled = false;
+        let mut timed_out = false;
         let status = loop {
             if let Some(status) = child.try_wait()? {
                 break status;
             }
-            if self.cancel.is_cancelled() || started.elapsed() >= self.timeout {
-                interrupted = true;
+            cancelled = self.cancel.is_cancelled();
+            timed_out = started.elapsed() >= self.timeout;
+            if cancelled || timed_out {
                 let _ = killpg(pid, Signal::SIGKILL);
                 break child.wait()?;
             }
@@ -158,10 +196,14 @@ impl ProcessRunner {
         let written = writer
             .join()
             .map_err(|_| anyhow::anyhow!("stdin writer panicked"))?;
-        ensure!(
-            !interrupted,
-            "{program} cancelled or exceeded process timeout"
-        );
+        ensure!(!cancelled, "{program} cancelled during execution");
+        if timed_out {
+            return Err(ProcessLimit::TimedOut {
+                program: program.to_owned(),
+                seconds: self.timeout.as_secs(),
+            }
+            .into());
+        }
         if !status.success() {
             return Err(ProcessExit {
                 program: program.to_owned(),
@@ -238,9 +280,9 @@ fn collect(mut input: impl Read) -> Result<String> {
         }
     }
     if oversized {
-        bail!("process output exceeded 2 MiB; refusing a truncated observation");
+        return Err(ProcessLimit::OutputTooLarge.into());
     }
-    String::from_utf8(bytes).context("process output is not UTF-8")
+    String::from_utf8(bytes).map_err(|_| ProcessLimit::OutputNotUtf8.into())
 }
 
 #[cfg(test)]
@@ -303,6 +345,58 @@ mod tests {
             ]
             .map(|(name, value)| (name.to_owned(), value.to_owned()))
         );
+    }
+
+    #[test]
+    fn execution_limits_are_typed_and_stop_the_process_group() {
+        let cwd = tempfile::tempdir().unwrap();
+        let runner = ProcessRunner {
+            environment: Vec::new(),
+            timeout: Duration::from_millis(300),
+            cancel: CancellationToken::new(),
+        };
+        let marker = cwd.path().join("background.pid");
+        let script = format!("sleep 30 & echo $! > {}; wait", marker.display());
+        let error = runner
+            .command(cwd.path(), "sh", &["-c", &script])
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<ProcessLimit>(),
+            Some(ProcessLimit::TimedOut { .. })
+        ));
+        let pid = std::fs::read_to_string(&marker).unwrap();
+        let status = format!("/proc/{}/status", pid.trim());
+        let stopped = (0..100).any(|_| {
+            let gone =
+                std::fs::read_to_string(&status).map_or(true, |state| state.contains("State:\tZ"));
+            if !gone {
+                thread::sleep(Duration::from_millis(10));
+            }
+            gone
+        });
+        assert!(stopped, "background process survived its group's timeout");
+
+        let runner = ProcessRunner {
+            timeout: Duration::from_secs(10),
+            ..runner
+        };
+        let large = runner
+            .command(cwd.path(), "head", &["-c", "3000000", "/dev/zero"])
+            .unwrap_err();
+        assert!(matches!(
+            large.downcast_ref::<ProcessLimit>(),
+            Some(ProcessLimit::OutputTooLarge)
+        ));
+        let encoded = runner
+            .command(cwd.path(), "printf", &["\\377"])
+            .unwrap_err();
+        assert!(matches!(
+            encoded.downcast_ref::<ProcessLimit>(),
+            Some(ProcessLimit::OutputNotUtf8)
+        ));
+        runner.cancel.cancel();
+        let cancelled = runner.command(cwd.path(), "true", &[]).unwrap_err();
+        assert!(cancelled.downcast_ref::<ProcessLimit>().is_none());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Trusted fleet effects; model proposals never construct validation or publication receipts.
 use crate::{
     AgentModel, ModelRequest, RuntimeConfig, SharedStore, TickReport, engine,
-    process::ProcessRunner,
+    process::ProcessRunner, refusal::InputRefusal,
 };
 use anyhow::{Context, Result, bail, ensure};
 use control_plane_core::Actor;
@@ -887,24 +887,47 @@ enum ImplementationAction {
     Run { program: String, args: Vec<String> },
     Finish { summary: String },
 }
+/// Admit a model write or delete target. `.git` stays a fatal confinement failure; every
+/// other rule here is a refusal the model can correct.
 fn scoped(path: &str, scope: &[String], allow_go: bool) -> Result<()> {
     let relative = Path::new(path);
+    if relative.as_os_str().is_empty()
+        || !relative
+            .components()
+            .all(|part| matches!(part, std::path::Component::Normal(_)))
+    {
+        return Err(InputRefusal::new(
+            "write_path_syntax",
+            format!("{path} is not a normalized worktree-relative path"),
+            "Write and delete paths are worktree-relative, without absolute paths or parent traversal.",
+        )
+        .into());
+    }
     ensure!(
-        !relative.as_os_str().is_empty()
-            && relative
-                .components()
-                .all(|part| matches!(part, std::path::Component::Normal(_))),
-        "path must be a normalized repository-relative path"
+        !relative.starts_with(".git"),
+        "Git administrative paths are host-owned"
     );
-    ensure!(
-        !relative.starts_with(".engineering") && !relative.starts_with(".git"),
-        "planning and Git metadata are host-owned"
-    );
-    ensure!(
-        scope.iter().any(|root| relative == Path::new(root)
-            || relative.starts_with(Path::new(root.trim_end_matches('/')))),
-        "write is outside accepted AEP scope: {path}"
-    );
+    if relative.starts_with(".engineering") {
+        return Err(InputRefusal::new(
+            "planning_store_host_owned",
+            format!("{path} is in the AEP store"),
+            "The host records tests, evidence and lifecycle in .engineering; change source files only.",
+        )
+        .into());
+    }
+    if !scope.iter().any(|root| {
+        relative == Path::new(root) || relative.starts_with(Path::new(root.trim_end_matches('/')))
+    }) {
+        return Err(InputRefusal::new(
+            "write_outside_scope",
+            format!(
+                "{path} is outside the accepted story scope ({})",
+                scope.join(", ")
+            ),
+            "Write and delete only beneath the accepted story scope paths.",
+        )
+        .into());
+    }
     let frontend = (relative.starts_with("frontend") || relative.starts_with("web"))
         && !relative.components().skip(1).any(|part| {
             matches!(
@@ -916,30 +939,35 @@ fn scoped(path: &str, scope: &[String], allow_go: bool) -> Result<()> {
             relative.extension().and_then(|e| e.to_str()),
             Some("js" | "jsx" | "ts" | "tsx" | "vue")
         );
-    ensure!(
-        frontend
-            || (allow_go
-                && relative
-                    .extension()
-                    .is_some_and(|extension| extension == "go"))
-            || !matches!(
-                relative.extension().and_then(|e| e.to_str()),
-                Some(
-                    "py" | "sh"
-                        | "bash"
-                        | "js"
-                        | "mjs"
-                        | "cjs"
-                        | "ts"
-                        | "tsx"
-                        | "jsx"
-                        | "vue"
-                        | "rb"
-                        | "go"
-                )
-            ),
-        "backend and tooling source must be Rust; JS/TS/Vue frontend assets require accepted frontend/ or web/ scope"
-    );
+    let admitted_language = frontend
+        || (allow_go
+            && relative
+                .extension()
+                .is_some_and(|extension| extension == "go"))
+        || !matches!(
+            relative.extension().and_then(|e| e.to_str()),
+            Some(
+                "py" | "sh"
+                    | "bash"
+                    | "js"
+                    | "mjs"
+                    | "cjs"
+                    | "ts"
+                    | "tsx"
+                    | "jsx"
+                    | "vue"
+                    | "rb"
+                    | "go"
+            )
+        );
+    if !admitted_language {
+        return Err(InputRefusal::new(
+            "write_language_policy",
+            format!("{path} is not admitted source in this repository"),
+            "Backend and tooling source must be Rust; JS/TS/Vue frontend assets require accepted frontend/ or web/ scope.",
+        )
+        .into());
+    }
     Ok(())
 }
 #[derive(Clone, Copy)]
@@ -990,7 +1018,7 @@ fn implementation(execution: &Execution<'_>, story: &Value, scope: &[String]) ->
         pending: std::sync::Mutex::new(None),
         finished: std::sync::atomic::AtomicBool::new(false),
         failure: std::sync::Mutex::new(None),
-        read_syntax_refusals: std::sync::Mutex::new(0),
+        refusals: Default::default(),
         allow_go: host.config.local_eval(path, &host.runner)?,
     };
     let executor = ImplementationExecutor {
@@ -1056,7 +1084,7 @@ struct ImplementationPhase<'a> {
     pending: std::sync::Mutex<Option<ImplementationAction>>,
     finished: std::sync::atomic::AtomicBool,
     failure: std::sync::Mutex<Option<String>>,
-    read_syntax_refusals: std::sync::Mutex<usize>,
+    refusals: crate::refusal::RefusalBudget,
     allow_go: bool,
 }
 struct ImplementationExecutor<'a> {
@@ -1101,7 +1129,7 @@ impl loom_sdk::ActionSelector for &ImplementationPhase<'_> {
             let continuation=json!({"observations":observations,"frontier":frontier}).to_string();
             let prompt=json!({"goal":crate::context::goal_brief(goal),"story":self.story,"scope":self.scope,"observations":observations,"frontier":frontier}).to_string();
             host.progress(assignment,"model.request","implementor",json!({"execution_context":run}))?;
-            let response=host.respond_continuing(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} {} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt.",crate::read_request::PATH_HELP),prompt,schema:implementation_schema(),timeout:host.remaining()?},path,assignment,Some(continuation))?;
+            let response=host.respond_continuing(&ModelRequest {role:"implementor".into(),execution_context:run.into(),model:text(goal,"implementor_model")?.into(),instructions:format!("Implement the accepted AEP story in this managed worktree. Follow AGENTS.md. {language} {} Only write within accepted scope. Preserve tests. You may inspect files, write/delete scoped files, and run bounded inspection/build commands. {COMMAND_GRAMMAR} A refused action changes nothing; correct it from the refusal. Tests, review, AEP lifecycle and publication are host-owned. Finish is a proposal, never a receipt.",crate::read_request::PATH_HELP),prompt,schema:implementation_schema(),timeout:host.remaining()?},path,assignment,Some(continuation))?;
             self.transcript.lock().map_err(|_|anyhow::anyhow!("implementation context poisoned"))?.clear();
             let action:ImplementationAction=serde_json::from_value(response)?;
             let name=implementation_protocol_action(&action).into();
@@ -1169,23 +1197,27 @@ impl EffectPort for ImplementationPhase<'_> {
             );
             self.perform(action)
         })();
-        // Commission distinguishes a refused request from an unavailable effect
-        // port. Only this typed input-syntax error is recoverable here.
+        // Commission distinguishes a refused request from an unavailable effect port.
+        // Only typed refusals of model input are recoverable here.
         let result = match result {
-            Err(error) if error.is::<crate::read_request::ReadPathSyntax>() => {
-                match self.read_syntax_feedback(error.downcast_ref().expect("checked error type")) {
+            Err(error) => match crate::refusal::refusal_of(&error) {
+                Some(refusal) => match self.refusal_feedback(&refusal) {
                     Ok(reason) => {
                         return Ok(EffectOutcome::Refused(EffectOutcomeRefused { reason }));
                     }
                     Err(error) => Err(error),
-                }
-            }
+                },
+                None => Err(error),
+            },
             result => result,
         };
         match result {
-            Ok(report) => Ok(EffectOutcome::Performed(EffectOutcomePerformed {
-                report: wire::Value::Text(report),
-            })),
+            Ok(report) => {
+                self.refusals.admitted();
+                Ok(EffectOutcome::Performed(EffectOutcomePerformed {
+                    report: wire::Value::Text(report),
+                }))
+            }
             Err(error) => {
                 let message = format!("{error:#}");
                 if let Ok(mut failure) = self.failure.lock() {
@@ -1197,10 +1229,7 @@ impl EffectPort for ImplementationPhase<'_> {
     }
 }
 impl ImplementationPhase<'_> {
-    fn read_syntax_feedback(
-        &self,
-        refusal: &crate::read_request::ReadPathSyntax,
-    ) -> Result<String> {
+    fn refusal_feedback(&self, refusal: &InputRefusal) -> Result<String> {
         let Execution {
             host,
             assignment,
@@ -1209,15 +1238,7 @@ impl ImplementationPhase<'_> {
             ..
         } = self.execution;
         host.guard(assignment, goal, repo, false)?;
-        let mut count = self
-            .read_syntax_refusals
-            .lock()
-            .map_err(|_| anyhow::anyhow!("read syntax counter poisoned"))?;
-        *count += 1;
-        ensure!(
-            *count < 3,
-            "read path syntax refusal budget exhausted after 3 malformed requests"
-        );
+        let count = self.refusals.refused(refusal)?;
         let observation = refusal.observation();
         self.transcript
             .lock()
@@ -1225,9 +1246,9 @@ impl ImplementationPhase<'_> {
             .push(observation.clone());
         host.progress(
             assignment,
-            "read.syntax_refused",
+            "input.refused",
             "implementor",
-            json!({"refusal":serde_json::from_str::<Value>(&observation)?,"count":*count}),
+            json!({"refusal":serde_json::from_str::<Value>(&observation)?,"count":count}),
         )?;
         Ok(observation)
     }
@@ -1253,28 +1274,62 @@ impl ImplementationPhase<'_> {
         );
         match action {
             ImplementationAction::Read { paths } => {
-                ensure!(paths.len() <= 32, "too many file reads");
+                if paths.len() > 32 {
+                    return Err(InputRefusal::new(
+                        "too_many_reads",
+                        format!("{} paths requested", paths.len()),
+                        "Read at most 32 files per request.",
+                    )
+                    .into());
+                }
                 for name in &paths {
                     crate::read_request::parse(name)?;
                 }
+                // Every file is checked before any content enters the transcript, so a
+                // refusal reports a request that read nothing.
+                let mut observations = Vec::new();
                 for name in paths {
                     let file = engine::context_path(path, &name, goal, true)?;
-                    match std::fs::metadata(&file) {
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => transcript
-                            .push(format!("File not found: {name}. Create it before reading.")),
-                        metadata => {
-                            ensure!(metadata?.len() <= 256 * 1024, "read exceeds budget");
-                            transcript.push(format!("{name}:\n{}", std::fs::read_to_string(file)?));
+                    let metadata = match std::fs::metadata(&file) {
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            observations
+                                .push(format!("File not found: {name}. Create it before reading."));
+                            continue;
                         }
+                        metadata => metadata?,
+                    };
+                    if metadata.len() > 256 * 1024 {
+                        return Err(InputRefusal::new(
+                            "read_too_large",
+                            format!("{name} has {} bytes", metadata.len()),
+                            "Files over 256 KiB cannot be read whole; search them with rg PATTERN path.",
+                        )
+                        .into());
                     }
+                    let contents = String::from_utf8(std::fs::read(file)?).map_err(|_| {
+                        InputRefusal::new(
+                            "read_not_utf8",
+                            format!("{name} is not UTF-8 text"),
+                            "Binary and non-UTF-8 files cannot be read.",
+                        )
+                    })?;
+                    observations.push(format!("{name}:\n{contents}"));
                 }
+                transcript.extend(observations);
             }
             ImplementationAction::Write {
                 path: name,
                 contents,
             } => {
                 scoped(&name, self.scope, self.allow_go)?;
-                ensure!(contents.len() <= 256 * 1024, "write exceeds budget");
+                if contents.len() > 256 * 1024 {
+                    return Err(InputRefusal::new(
+                        "write_too_large",
+                        format!("{name} would have {} bytes", contents.len()),
+                        "Write at most 256 KiB per file.",
+                    )
+                    .into());
+                }
                 let file = engine::confined(path, &name, true)?;
                 std::fs::create_dir_all(file.parent().context("write parent")?)?;
                 std::fs::write(file, contents)?;
@@ -1288,7 +1343,16 @@ impl ImplementationPhase<'_> {
             }
             ImplementationAction::Delete { path: name } => {
                 scoped(&name, self.scope, self.allow_go)?;
-                std::fs::remove_file(engine::confined(path, &name, false)?)?;
+                let file = engine::confined(path, &name, true)?;
+                if !file.is_file() {
+                    return Err(InputRefusal::new(
+                        "delete_missing",
+                        format!("{name} is not an existing file"),
+                        "Delete only existing files within scope.",
+                    )
+                    .into());
+                }
+                std::fs::remove_file(file)?;
                 transcript.push(format!("deleted {name}"));
                 host.progress(
                     assignment,
@@ -1299,13 +1363,18 @@ impl ImplementationPhase<'_> {
             }
             ImplementationAction::Run { program, args } => {
                 let args = if program == "go" && self.allow_go {
-                    ensure!(
-                        args == ["version"]
-                            || ["build", "test", "vet", "list"]
-                                .iter()
-                                .any(|verb| args == [*verb, "./..."]),
-                        "eval Go command must be version or build/test/vet/list ./..."
-                    );
+                    if !(args == ["version"]
+                        || ["build", "test", "vet", "list"]
+                            .iter()
+                            .any(|verb| args == [*verb, "./..."]))
+                    {
+                        return Err(InputRefusal::new(
+                            "command_not_admitted",
+                            format!("go {}", args.join(" ")),
+                            COMMAND_GRAMMAR,
+                        )
+                        .into());
+                    }
                     args
                 } else {
                     inspection_arguments(path, &program, &args)?
@@ -1339,14 +1408,31 @@ impl ImplementationPhase<'_> {
                 )?;
             }
             ImplementationAction::Finish { summary } => {
-                ensure!(!summary.trim().is_empty(), "implementation summary missing");
+                if summary.trim().is_empty() {
+                    return Err(InputRefusal::new(
+                        "finish_summary_missing",
+                        "the finish summary is empty",
+                        "Finish with a one-sentence summary of the change.",
+                    )
+                    .into());
+                }
                 for name in git(host, path, &["diff", "--name-only", "HEAD"])?
                     .lines()
                     .chain(
                         git(host, path, &["ls-files", "--others", "--exclude-standard"])?.lines(),
                     )
                 {
-                    scoped(name, self.scope, self.allow_go)?;
+                    if let Err(error) = scoped(name, self.scope, self.allow_go) {
+                        let Some(refusal) = error.downcast_ref::<InputRefusal>() else {
+                            return Err(error);
+                        };
+                        return Err(InputRefusal::new(
+                            "finish_outside_scope",
+                            format!("the candidate changes {name}: {}", refusal.reason),
+                            "Every changed or untracked file must be admitted source within scope before Finish.",
+                        )
+                        .into());
+                    }
                 }
                 self.finished
                     .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1383,7 +1469,46 @@ fn implementation_schema() -> Value {
 
 // Model-facing process arguments are a closed grammar. In particular, naming a
 // read-oriented executable is not proof that its options cannot write or execute.
+/// What the implementor may run, sent with every command refusal. The examples in
+/// `COMMAND_EXAMPLES` are checked against the grammar in a unit test.
+const COMMAND_GRAMMAR: &str = "Admitted commands: git status|diff|log|show|ls-files with read-only flags (--short, --porcelain, --branch, --stat, --name-only, --name-status, --cached, --staged, --oneline, --others, --exclude-standard, --stage) and revisions; cargo fmt --check; cargo test|check|clippy|build with --quiet, --locked, --offline, --workspace, --all-targets, --lib, --tests and selectors such as -p NAME or --test NAME; rg PATTERN [worktree-relative paths] or rg --files; ess specify validate; in eval repositories only, go version or go build|test|vet|list ./... . Commands that write files, such as gofmt -w or cargo fmt without --check, are not admitted: write the formatted file instead.";
+#[cfg(test)]
+const COMMAND_EXAMPLES: &[&[&str]] = &[
+    &["git", "status", "--short"],
+    &["git", "diff", "--stat"],
+    &["git", "log", "--oneline"],
+    &["git", "show", "--stat", "HEAD"],
+    &["git", "ls-files", "--others", "--exclude-standard"],
+    &["cargo", "fmt", "--check"],
+    &["cargo", "test", "--quiet", "--locked"],
+    &["cargo", "check", "-p", "demo"],
+    &["rg", "answer", "src"],
+    &["rg", "--files"],
+    &["ess", "specify", "validate"],
+];
+
+/// Admit a model command: a grammar violation is a refusal; a search path that fails
+/// confinement (symlink, `.git`, changed root) stays fatal.
 fn inspection_arguments(root: &Path, program: &str, args: &[String]) -> Result<Vec<String>> {
+    let mut search_paths = Vec::new();
+    let normalized = inspection_grammar(program, args, &mut search_paths).map_err(|error| {
+        InputRefusal::new(
+            "command_not_admitted",
+            format!("{program} {}: {error}", args.join(" ")),
+            COMMAND_GRAMMAR,
+        )
+    })?;
+    for relative in search_paths {
+        engine::confined(root, &relative, true)?;
+    }
+    Ok(normalized)
+}
+
+fn inspection_grammar(
+    program: &str,
+    args: &[String],
+    search_paths: &mut Vec<String>,
+) -> Result<Vec<String>> {
     ensure!(args.len() <= 128, "command argument limit");
     let verb = args
         .first()
@@ -1505,7 +1630,12 @@ fn inspection_arguments(root: &Path, program: &str, args: &[String]) -> Result<V
                     !relative.starts_with('-'),
                     "search options are not admitted"
                 );
-                engine::confined(root, relative, false)?;
+                ensure!(
+                    crate::read_request::parse(relative)
+                        .is_ok_and(|(directory, _)| directory.is_none()),
+                    "search paths are worktree-relative"
+                );
+                search_paths.push(relative.clone());
                 normalized.push(relative.clone());
             }
             Ok(normalized)
@@ -2188,6 +2318,48 @@ impl EffectPort for Publication<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_grammar_examples_are_admitted() {
+        for example in COMMAND_EXAMPLES {
+            let (program, args) = example.split_first().unwrap();
+            let args = args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+            assert!(
+                inspection_grammar(program, &args, &mut Vec::new()).is_ok(),
+                "COMMAND_GRAMMAR advertises a refused command: {example:?}"
+            );
+        }
+        let refused =
+            inspection_arguments(Path::new("/"), "gofmt", &["-w".into(), "main.go".into()])
+                .unwrap_err();
+        assert_eq!(
+            refused.downcast_ref::<InputRefusal>().unwrap().code,
+            "command_not_admitted"
+        );
+    }
+
+    #[test]
+    fn scope_rules_are_refusals_and_git_paths_stay_fatal() {
+        let scope = vec!["src/".to_owned()];
+        for (path, code) in [
+            ("../escape.rs", "write_path_syntax"),
+            (
+                ".engineering/planning/story/x.md",
+                "planning_store_host_owned",
+            ),
+            ("tests/acceptance.rs", "write_outside_scope"),
+            ("src/tool.py", "write_language_policy"),
+        ] {
+            let error = scoped(path, &scope, false).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<InputRefusal>().map(|r| r.code),
+                Some(code),
+                "{path}"
+            );
+        }
+        let git = scoped(".git/config", &scope, false).unwrap_err();
+        assert!(git.downcast_ref::<InputRefusal>().is_none());
+    }
 
     #[test]
     fn scoped_frontend_assets_allow_vue_without_allowing_javascript_backends() {
