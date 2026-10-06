@@ -4,19 +4,21 @@
 //! as a name is the one `story:acceptance-traceability` states: a token of three or more lower-case
 //! words joined by `_` or `-`, backticked or not. A backticked span that contains whitespace is a
 //! command and is skipped whole, and so is a fenced code block (opened by three or more backticks
-//! or tildes), whose lines never end the section; any other backticked span is split like plain
-//! text, so `` `name()` `` gives `name`. An artifact id (`<kind>:<slug>`) and a path (a token
-//! containing `/` or `.`) are single tokens that never match the name shape, so no part of them is
-//! a name either. A word is lower-case letters and digits; the first word starts with a letter, so
-//! a date such as `2026-10-06` is not a name.
+//! or tildes), whose lines never end the section; a checked story whose body ends inside an open
+//! fence is refused, since the fence can hide its Acceptance heading. Any other backticked span is
+//! split like plain text, so `` `name()` `` gives `name`. An artifact id (`<kind>:<slug>`) and a
+//! path (a token containing `/` or `.`) are single tokens that never match the name shape, so no
+//! part of them is a name either. A word is lower-case letters and digits; the first word starts
+//! with a letter, so a date such as `2026-10-06` is not a name.
 //!
 //! A name resolves when a Rust test function (`#[test]` or `#[tokio::test]`) anywhere under
 //! `crates/` has that name, with `_` in place of each `-`, or when a `test(...)` or `it(...)` call
 //! in a `frontend/src/**/*.test.js` file has that title. Resolution reads source text and never
-//! builds or lists the tests: it skips comments, string and regular-expression literals,
-//! `macro_rules!` bodies and whatever `#[cfg(any())]` or `#[cfg(false)]` switches off, and
-//! evaluates no other `cfg`, so a test switched off by a feature, a target or a `mod` declaration
-//! in another file still resolves.
+//! builds or lists the tests: it skips comments, string and regular-expression literals, the body
+//! of a `macro_rules!` macro its file never invokes and whatever `#[cfg(any())]` or `#[cfg(false)]`
+//! switches off, and evaluates no other `cfg`, so a test switched off by a feature, a target or a
+//! `mod` declaration in another file still resolves, and one in a macro invoked only from another
+//! file does not.
 use anyhow::{Context, Result, bail};
 use std::{
     collections::BTreeSet,
@@ -90,6 +92,12 @@ pub fn stories(dir: &Path) -> Result<Vec<Story>> {
         let (id, status, body) = story_parts(&text)
             .with_context(|| format!("{} has no story header", path.display()))?;
         if CHECKED.contains(&status) {
+            if ends_in_fence(body) {
+                bail!(
+                    "{id}: {} ends inside an open code fence, which can hide its Acceptance section",
+                    path.display()
+                );
+            }
             stories.push(Story {
                 id: id.to_owned(),
                 names: acceptance(body)
@@ -129,36 +137,65 @@ pub fn acceptance(body: &str) -> Option<String> {
     Some(section.join("\n"))
 }
 
+/// Whether `body` ends inside a fenced code block, whose opening line can hide any heading after
+/// it.
+fn ends_in_fence(body: &str) -> bool {
+    let mut fence = Fence::default();
+    for line in body.lines() {
+        fence.code(line);
+    }
+    fence.0.is_some()
+}
+
 /// Which lines of Markdown belong to a fenced code block: one opened by a line starting with
-/// three or more backticks or tildes and closed by a line of at least as many of the same.
+/// three or more backticks or tildes and closed by a line of at least as many of the same. A block
+/// whose opening line is indented, as in a list item, also ends where the item does: at the first
+/// line that is not blank and is indented less.
 #[derive(Default)]
-struct Fence(Option<(char, usize)>);
+struct Fence(Option<Open>);
+
+/// The opening line of a fenced block: its marker, how many of it, and its indentation.
+#[derive(Clone, Copy)]
+struct Open {
+    marker: char,
+    length: usize,
+    indent: usize,
+}
 
 impl Fence {
     /// Whether `line`, the next line of the text, opens, lies in or closes a fenced block.
     fn code(&mut self, line: &str) -> bool {
-        let line = line.trim_start();
-        let marker = line
+        let text = line.trim_start();
+        let indent = line.len() - text.len();
+        let marker = text
             .chars()
             .next()
             .filter(|first| matches!(first, '`' | '~'));
         let length = marker.map_or(0, |marker| {
-            line.chars().take_while(|c| *c == marker).count()
+            text.chars().take_while(|c| *c == marker).count()
         });
-        let rest = &line[length..];
-        match (self.0, marker) {
-            // A backtick line with another backtick after the run is inline code, not a fence.
-            (None, Some(marker)) if length >= 3 && !(marker == '`' && rest.contains('`')) => {
-                self.0 = Some((marker, length));
-                true
-            }
-            (None, _) => false,
-            (Some((open, opened)), marker) => {
-                if marker == Some(open) && length >= opened && rest.trim().is_empty() {
+        let rest = &text[length..];
+        if let Some(open) = self.0 {
+            if open.indent == 0 || text.is_empty() || indent >= open.indent {
+                if marker == Some(open.marker) && length >= open.length && rest.trim().is_empty() {
                     self.0 = None;
                 }
+                return true;
+            }
+            // The list item has ended, and the block with it; the line is read afresh.
+            self.0 = None;
+        }
+        match marker {
+            // A backtick line with another backtick after the run is inline code, not a fence.
+            Some(marker) if length >= 3 && !(marker == '`' && rest.contains('`')) => {
+                self.0 = Some(Open {
+                    marker,
+                    length,
+                    indent,
+                });
                 true
             }
+            _ => false,
         }
     }
 }
@@ -274,9 +311,10 @@ enum Token<'a> {
 }
 
 /// The names of the functions an attribute `#[test]` or `#[tokio::test]` (with or without
-/// arguments) marks. Comments, string and character literals and `macro_rules!` bodies are
-/// skipped, and so is an item under `#[cfg(any())]` or `#[cfg(false)]` and the rest of a module or
-/// file that such an inner attribute (`#![cfg(any())]`) opens; no other `cfg` is evaluated.
+/// arguments) marks. Comments, string and character literals and the body of a `macro_rules!`
+/// macro that `source` invokes nowhere outside it are skipped, and so is an item under
+/// `#[cfg(any())]` or `#[cfg(false)]` and the rest of a module or file that such an inner
+/// attribute (`#![cfg(any())]`) opens; no other `cfg` is evaluated.
 pub fn rust_test_names(source: &str) -> Vec<String> {
     let tokens = rust_tokens(source);
     let mut names = Vec::new();
@@ -300,8 +338,19 @@ pub fn rust_test_names(source: &str) -> Vec<String> {
                 None => index + 1,
             },
             Token::Ident("macro_rules") if tokens.get(index + 1) == Some(&Token::Punct('!')) => {
-                marked = false;
-                item_end(&tokens, index + 2)
+                let end = item_end(&tokens, index + 2);
+                match tokens.get(index + 2) {
+                    // An invoked macro expands to its body, so the body is read like other code.
+                    Some(Token::Ident(name))
+                        if invoked(&tokens[..index], name) || invoked(&tokens[end..], name) =>
+                    {
+                        index + 1
+                    }
+                    _ => {
+                        marked = false;
+                        end
+                    }
+                }
             }
             Token::Ident("fn") if marked => {
                 if let Some(Token::Ident(name)) = tokens.get(index + 1) {
@@ -318,6 +367,16 @@ pub fn rust_test_names(source: &str) -> Vec<String> {
         };
     }
     names
+}
+
+/// Whether `tokens` invoke the macro `name`: `name!` and the delimiter that opens its input.
+fn invoked(tokens: &[Token], name: &str) -> bool {
+    tokens.windows(3).any(|window| {
+        matches!(
+            window,
+            [Token::Ident(ident), Token::Punct('!'), Token::Punct('(' | '[' | '{')] if *ident == name
+        )
+    })
 }
 
 /// The attribute whose `#` is at `at`: whether it is an inner one (`#![…]`), the tokens between

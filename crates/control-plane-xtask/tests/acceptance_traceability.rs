@@ -109,7 +109,8 @@ fn unresolved_name_fails_gate() -> Result<()> {
                  - `commented_out_scenario`: a test inside a comment.\n\
                  - `scenario_in_a_string`: a test inside a string literal.\n\
                  - `false_cfg_scenario`: a test the compiler never builds.\n\
-                 - `inner_cfg_scenario`: a test in a module an inner attribute switches off.";
+                 - `inner_cfg_scenario`: a test in a module an inner attribute switches off.\n\
+                 - `uninvoked_macro_scenario`: a test in a macro only its own body and a `!=` name.";
     let source = r##"pub fn helper_is_not_a_test() {}
 
 #[cfg(test)]
@@ -135,6 +136,18 @@ mod tests {
     // fn commented_out_scenario() {}
 
     const SOURCE: &str = r#"#[test] fn scenario_in_a_string() {}"#;
+
+    macro_rules! only_itself {
+        () => {
+            #[test]
+            fn uninvoked_macro_scenario() {}
+            only_itself!();
+        };
+    }
+
+    fn compare(only_itself: u8) -> bool {
+        only_itself != 2
+    }
 }
 "##;
     let integration = "#[test]\nfn present_integration_scenario() {}\n";
@@ -168,16 +181,20 @@ mod tests {
             "story:demo: scenario_in_a_string",
             "story:demo: false_cfg_scenario",
             "story:demo: inner_cfg_scenario",
+            "story:demo: uninvoked_macro_scenario",
         ],
         "{stderr}"
     );
 
+    // A fence left open can hide the Acceptance heading, so a checked story ending inside one is
+    // refused by id; a draft is not checked, so its open fence is not.
     let resolved = "- `present_unit_scenario`\n- `present_async_scenario`\n\
                     - present-integration-scenario";
+    let open_fence = "- `draft_only_scenario`\n\n```console\ntask check";
     let dir = repository(
         &[
             ("story:demo", "implemented", resolved),
-            ("story:draft-demo", "draft", "- `draft_only_scenario`"),
+            ("story:draft-demo", "draft", open_fence),
         ],
         &files,
     )?;
@@ -191,6 +208,21 @@ mod tests {
     assert_eq!(
         stdout.trim(),
         "3 scenario names in 1 active and implemented stories resolve to tests"
+    );
+
+    let dir = repository(
+        &[
+            ("story:demo", "implemented", resolved),
+            ("story:fenced", "active", open_fence),
+        ],
+        &files,
+    )?;
+    let output = run(dir.path())?;
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(!output.status.success(), "the gate passed: {stderr}");
+    assert!(
+        stderr.contains("story:fenced: ") && stderr.contains("ends inside an open code fence"),
+        "{stderr}"
     );
     Ok(())
 }
