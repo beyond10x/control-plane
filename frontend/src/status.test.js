@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App.vue'
-import { deriveGoalState } from './goalState.js'
+import { acceptanceStep, deriveGoalState } from './goalState.js'
+import { plainReason } from './status.js'
 // One projection frame in the shape `compact` sends (crates/control-plane-app/src/live.rs): a
 // Running goal in phase Queued whose assignment in `alpha` is Implementing with no open model
 // call, a queued assignment in `beta`, the planner's last entry at 09:50 and a newer worker entry
@@ -245,4 +246,85 @@ test('satisfied_goal_shows_acceptance_recorded', async () => {
   expect(card('Add a status endpoint').text()).toMatch(/acceptance recorded/i)
   expect(card('Document the status endpoint').text()).not.toMatch(/acceptance recorded/i)
   expect(card('Retire the old endpoint').text()).not.toMatch(/acceptance recorded/i)
+})
+
+// Correction round 2 (adversary pass 2, findings 1 and 2): the goal's acceptance is decided by
+// the newest fleet entry of its current assignments.
+test('goal_acceptance_step_is_named_in_the_header', async () => {
+  const stream = await open()
+  const merged = () => {
+    const view = frame()
+    Object.assign(assignment(view, alpha), { state: 'Merged', merged_at: '2026-10-06T09:57:00Z' })
+    Object.assign(assignment(view, beta), { state: 'Merged', merged_at: '2026-10-06T09:58:00Z' })
+    return view
+  }
+  const checks = merged()
+  goalOf(checks).fleet = { [alpha]: entry('2026-10-06T09:58:30Z', 'merge.observed', 'host', 'merged'), [beta]: entry('2026-10-06T09:59:00Z', 'goal.checks', 'host', 'cargo test --locked') }
+  await deliver(stream, checks)
+  expect(text('#system-status')).toBe('Working')
+  expect(text('#system-detail')).toBe('acceptance checks in beta')
+  expect(card('Add a status endpoint').get('.badge').text()).toBe('Executing')
+
+  // The goal review step without an open call (its call opens next, or did not outlive a restart).
+  const review = merged()
+  goalOf(review).fleet = { [alpha]: entry('2026-10-06T09:59:40Z', 'goal.review', 'goal_reviewer', ''), [beta]: entry('2026-10-06T09:59:00Z', 'goal.checks', 'host', 'cargo test --locked') }
+  await deliver(stream, review)
+  expect(text('#system-status')).toBe('Working')
+  expect(text('#system-detail')).toBe('goal review in alpha')
+  expect(rows()).toHaveLength(0)
+})
+
+test('rejected_goal_review_outranks_an_older_acceptance_step', async () => {
+  const view = frame()
+  const goal = goalOf(view)
+  goal.planning_reason = 'No ready story selected; goal acceptance and verified merge evidence remain outstanding'
+  Object.assign(assignment(view, alpha), { state: 'Merged', merged_at: '2026-10-06T09:57:00Z' })
+  Object.assign(assignment(view, beta), { state: 'Merged', merged_at: '2026-10-06T09:58:00Z' })
+  // Checks ran in beta first; the review latched its rejection on alpha afterwards.
+  const rejected = { ...entry('2026-10-06T09:59:30Z', 'blocked', 'goal_reviewer', 'Goal acceptance blocked: final goal review rejected: GET /status answers 500'), status: 'failed' }
+  goal.fleet = { [alpha]: rejected, [beta]: entry('2026-10-06T09:58:30Z', 'goal.checks', 'host', 'cargo test --locked') }
+  await show(view)
+  expect(card('Add a status endpoint').get('.badge').text()).toBe('Stalled')
+  expect(rows()).toHaveLength(1)
+  expect(rows()[0].get('.attention-reason').text()).toBe('Goal acceptance blocked: final goal review rejected: GET /status answers 500')
+  expect(rows()[0].get('.attention-age').text()).toBe('30 s ago')
+  expect(text('#system-status')).toBe('Blocked')
+})
+
+test('acceptance_step_needs_merged_current_work_and_a_running_entry', () => {
+  const goal = { goal_id: 'g', state: 'Running', planning_phase: 'Queued', revision: 2 }
+  const work = (id, state, goal_revision = 2) => ({ assignment_id: id, goal_id: 'g', goal_revision, state })
+  const step = (action, status = 'running', goal_revision = 2, at = '2026-10-06T09:59:00Z') => ({ action, at, detail: '', goal_revision, id: `${action}-${at}`, role: 'host', status, worktree: '' })
+  const with_ = fleet => ({ ...goal, fleet })
+  // A Cancelled sibling does not hold acceptance back (fleet.rs `satisfy_goals`).
+  expect(deriveGoalState(with_({ a: step('goal.checks') }), [work('a', 'Merged'), work('b', 'Cancelled')])).toBe('executing')
+  expect(acceptanceStep(with_({ a: step('goal.checks') }), [work('a', 'Merged')])?.assignment.assignment_id).toBe('a')
+  // Only Cancelled current work, a finished step, a step of an older revision or a step on an
+  // older revision's assignment is not acceptance in progress.
+  expect(deriveGoalState(with_({ a: step('goal.checks') }), [work('a', 'Cancelled')])).toBe('stalled')
+  expect(deriveGoalState(with_({ a: step('goal.acceptance.completed', 'completed') }), [work('a', 'Merged')])).toBe('stalled')
+  expect(deriveGoalState(with_({ a: step('goal.checks', 'running', 1) }), [work('a', 'Merged')])).toBe('stalled')
+  expect(deriveGoalState(with_({ old: step('goal.checks', 'running', 1) }), [work('a', 'Merged'), work('old', 'Merged', 1)])).toBe('stalled')
+  // Blocked current work stays blocked.
+  expect(deriveGoalState(with_({ a: step('goal.checks') }), [work('a', 'Merged'), work('b', 'Blocked')])).toBe('blocked')
+  // A step whose time does not parse loses to one whose time does.
+  expect(deriveGoalState(with_({ a: step('goal.checks', 'running', 2, 'later'), b: { ...step('blocked', 'failed'), role: 'goal_reviewer' } }), [work('a', 'Merged'), work('b', 'Merged')])).toBe('stalled')
+})
+
+// Correction round 2 (findings 3 to 6): the class of each finding, beyond the adversary's cases.
+test('loom_json_values_read_as_the_values_they_hold', () => {
+  expect(plainReason('step budget spent: Budget(Object([("max_steps", Number("8"))]))')).toBe('Step budget spent: budget (max steps 8)')
+  expect(plainReason('tools refused: Refused(Array([Text("read_bytes"), Text("write")]))')).toBe('Tools refused: refused: read bytes, write')
+  expect(plainReason('stopped: Limits { turns: Number("40"), deadline_ms: Null }')).toBe('Stopped: limits (turns 40)')
+  expect(plainReason('Loom stopped: Deadline { limit_ms: Number("600000") }')).toBe('Loom stopped: deadline (limit 600 s)')
+  expect(plainReason('budgets exceeded: Stops([MaxTurns { limit: 1 }, MaxTurns { limit: 2 }, Deadline { limit_ms: 900 }])')).toBe('Budgets exceeded: stops (max turns (limit 1), max turns (limit 2), deadline (limit 900 ms))')
+})
+
+test('only_a_whole_reason_link_is_read_as_a_value', () => {
+  // A value that ends a link but does not start it is prose.
+  expect(plainReason('the count returns Some(0)')).toBe('The count returns Some(0)')
+  // A value with no words of its own stays as written.
+  expect(plainReason('push failed: Ok(())')).toBe('Push failed: Ok(())')
+  // A link may end before `:` and a line break (process.rs `exited {:?}:\nstdout`).
+  expect(plainReason('git exited: ExitCode(Number("2")):\nstderr: fatal')).toBe('Git exited: exit code (2): stderr: fatal')
 })

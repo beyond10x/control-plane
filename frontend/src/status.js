@@ -1,14 +1,10 @@
 // What the header and the attention strip say, derived from one projection frame (the fields
 // `compact` in crates/control-plane-app/src/live.rs documents). Nothing here reads the browser
 // clock: ages take `now`, the server clock the caller derives from the frame's `server_time`.
-import { deriveGoalState } from './goalState.js'
+import { acceptanceRejection, acceptanceStep, deriveGoalState } from './goalState.js'
+import { parseTime } from './time.js'
 
-/** Milliseconds since the epoch of an RFC 3339 time, or null. Digits past milliseconds are cut. */
-export function parseTime(text) {
-  if (typeof text !== 'string' || !text) return null
-  const value = Date.parse(text.replace(/(\.\d{3})\d+/, '$1'))
-  return Number.isFinite(value) ? value : null
-}
+export { parseTime }
 
 /** An elapsed time in words: `45 s ago`, `5 min ago`, `1 h 7 min ago`, `3 d ago`. */
 export function formatAge(milliseconds) {
@@ -27,10 +23,12 @@ export function ageSince(at, now) {
   return then === null || typeof now !== 'number' ? '' : formatAge(now - then)
 }
 
-// Runtime reasons are anyhow error chains, and some links are Rust `{:?}` output of a value:
-// `ExternalAvailability(Text("…"))`, Loom's `NoAdmissibleAction(Unit(true))` (engine.rs) or
-// `MaxTurns { limit: 1 }` (loom_model.rs). Such a value is parsed strictly (text that is not
-// Debug syntax stays as written) and rendered as words.
+// Runtime reasons are anyhow error chains (links joined by `: `), and some links are Rust `{:?}`
+// output of a value: `ExternalAvailability(Text("…"))`, Loom's `NoAdmissibleAction(Unit(true))`
+// (engine.rs) or `MaxTurns { limit: 1 }` (loom_model.rs). Every runtime site that formats a
+// value with `{:?}` puts it as a whole link (`Loom stopped: {:?}`, `… proposal: {:?}`,
+// `{e:?}`). Such a value is parsed strictly (text that is not Debug syntax stays as written) and
+// rendered as words; text inside it, such as Loom's outage message, is rendered the same way.
 
 const unescape = body => body.replace(/\\(?:u\{([0-9a-fA-F]{1,6})\}|(.))/gs, (_, hex, character) => hex ? String.fromCodePoint(parseInt(hex, 16)) : ({ n: '\n', r: '\r', t: '\t', 0: '' })[character] ?? character)
 /** An identifier as words: `NoAdmissibleAction` → `no admissible action`, `asked_again` → `asked again`. */
@@ -119,6 +117,23 @@ const transparent = new Set(['', 'Some', 'Ok', 'Err', 'Box', 'Rc', 'Arc', 'Strin
 const anonymous = new Set(['', 'Object', 'Map', 'HashMap', 'BTreeMap', 'IndexMap', 'Os', 'Custom', 'Simple', 'SimpleMessage'])
 const duration = milliseconds => milliseconds >= 1000 ? `${Number((milliseconds / 1000).toFixed(1))} s` : `${milliseconds} ms`
 
+/**
+ * Loom's JSON value (`json::Value`: `Null`, `Bool(bool)`, `Number(String)`, `Text(String)`,
+ * `Array(Vec<Value>)`, `Object(Vec<(String, Value)>)`) as the value it holds: `Object([("key",
+ * value)])` is a map, `Array([…])` a list, `Number("8")` a number and `Null` nothing. `Bool` and
+ * `Text` are plain wrappers already (`transparent`). Any other node is returned as it is.
+ */
+function plain(node) {
+  if (node.kind === 'unit' && node.name === 'Null') return { kind: 'unit', name: 'None' }
+  if (node.kind !== 'tuple' || node.items.length !== 1) return node
+  const [item] = node.items
+  if (node.name === 'Array' && item.kind === 'list') return item
+  if (node.name === 'Number' && item.kind === 'string' && /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(item.value)) return { kind: 'number', value: item.value }
+  const pair = entry => entry.kind === 'tuple' && !entry.name && entry.items.length === 2 && entry.items[0].kind === 'string'
+  if (node.name === 'Object' && item.kind === 'list' && item.items.every(pair)) return { kind: 'struct', name: '', fields: item.items.map(entry => [entry.items[0].value, entry.items[1]]) }
+  return node
+}
+
 /** A struct field as words; units carried by the field name (`_ms`, `_micro_usd`) are applied.
  * A field with nothing to say (`None`, an empty list) is left out. */
 function fieldWords(key, node, shown) {
@@ -134,8 +149,10 @@ function fieldWords(key, node, shown) {
  * value carries (its strings); `detail` when it holds data worth naming beside a name (numbers,
  * fields), not only names and flags. Rendering:
  *
- * - a string is its text, and a string that is one identifier (`"max_output_tokens"`) its words;
- *   a bool says nothing beside a name; `None` is empty;
+ * - Loom's JSON values are first read as the value they hold (see `plain`);
+ * - a string is its text, with the Debug values in it rendered too (see `words`), and a string
+ *   that is one identifier (`"max_output_tokens"`) its words; a bool says nothing beside a name;
+ *   `None` is empty;
  * - a tuple variant carrying strings is `name: strings` (`Text` and other plain wrappers add no
  *   name); otherwise its name in words, followed by its details: `NoAdmissibleAction(Unit(true))`
  *   is `no admissible action`;
@@ -144,23 +161,29 @@ function fieldWords(key, node, shown) {
  *   message: "No such file" }` is `No such file`) or the only item of a tuple variant, which
  *   already names it; otherwise its name in words and its fields: `MaxTurns { limit: 1 }` is
  *   `max turns (limit 1)` and `Deadline { limit_ms: 600000 }` is `deadline (limit 600 s)`.
+ *
+ * `options.unnamed` is the only-item-of-a-tuple case. It is an option, not a positional flag, so
+ * an array method's index can never be read as it.
  */
-function render(node, unnamed = false) {
+function render(node, options = {}) {
+  const unnamed = options?.unnamed === true
+  node = plain(node)
   if (node.kind === 'string') {
-    const token = /^(?:[a-z][a-z0-9]*(?:_[a-z0-9]+)+|[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)$/.test(node.value.trim())
-    return { text: token ? nameWords(node.value.trim()) : node.value, carried: node.value.trim() !== '', detail: node.value.trim() !== '' }
+    const value = node.value.trim()
+    const token = /^(?:[a-z][a-z0-9]*(?:_[a-z0-9]+)+|[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)$/.test(value)
+    return { text: token ? nameWords(value) : words(node.value), carried: value !== '', detail: value !== '' }
   }
   if (node.kind === 'number') return { text: node.value, carried: false, detail: true }
   if (node.kind === 'bool') return { text: node.value ? 'yes' : 'no', carried: false, detail: false }
   if (node.kind === 'unit') return { text: node.name === 'None' ? '' : nameWords(node.name), carried: false, detail: false }
   if (node.kind === 'list') {
-    const items = node.items.map(render), carried = items.filter(item => item.carried)
+    const items = node.items.map(item => render(item)), carried = items.filter(item => item.carried)
     if (carried.length) return { text: carried.map(item => item.text).join(', '), carried: true, detail: true }
     const shown = items.filter(item => item.text)
     return { text: shown.map(item => item.text).join(', '), carried: false, detail: shown.some(item => item.detail) }
   }
   if (node.kind === 'tuple') {
-    const items = node.items.map(item => render(item, node.items.length === 1 && !transparent.has(node.name)))
+    const items = node.items.map(item => render(item, { unnamed: node.items.length === 1 && !transparent.has(node.name) }))
     if (transparent.has(node.name) && items.length === 1) return items[0]
     const carried = items.filter(item => item.carried)
     if (carried.length) return { text: [nameWords(node.name), ...carried.map(item => item.text)].filter(Boolean).join(': '), carried: true, detail: true }
@@ -168,23 +191,32 @@ function render(node, unnamed = false) {
     if (!node.name) return { text: shown.join(', '), carried: false, detail: shown.length > 0 }
     return { text: shown.length ? `${nameWords(node.name)} (${shown.join(', ')})` : nameWords(node.name), carried: false, detail: shown.length > 0 }
   }
-  const values = node.fields.map(([key, value]) => [key, value, render(value)]), carried = values.filter(([, , shown]) => shown.carried)
+  const values = node.fields.map(([key, value]) => [key, plain(value), render(value)]), carried = values.filter(([, , shown]) => shown.carried)
   const name = unnamed || anonymous.has(node.name) ? '' : nameWords(node.name)
   if (carried.length) return { text: [name, ...carried.map(([, , shown]) => shown.text)].filter(Boolean).join(': '), carried: true, detail: true }
-  const shown = values.map(([key, value, words]) => fieldWords(key, value, words)).filter(Boolean), inner = shown.join(', ')
+  const shown = values.map(([key, value, rendered]) => fieldWords(key, value, rendered)).filter(Boolean), inner = shown.join(', ')
   return { text: name && inner ? `${name} (${inner})` : name || inner, carried: false, detail: shown.length > 0 }
 }
 
+// A reason link starts at the start of the text or after `:` and white space, and ends at the
+// end of the text or before them.
+const startsLink = (text, at) => /(?:^|:\s)\s*$/.test(text.slice(0, at))
+const endsLink = (text, at) => /^\s*(?::\s|:?$)/.test(text.slice(at))
+
 /** Replace each Debug value in a reason by its words. A value starts at an upper-case name that
- * is not all capitals (`HTTP(S)` is prose) followed by `(`, `{` or ` [`. */
+ * is not all capitals (`HTTP(S)` is prose) followed by `(`, `{` or ` [`, and is replaced only
+ * when it is a whole reason link and renders as some words: prose that quotes code (`returns
+ * Ok(()) even when`, `returns Some(0)`) stays as written. */
 function words(text) {
   const start = /\b[A-Z][A-Za-z0-9_]*/g
   let result = '', at = 0, match
   while ((match = start.exec(text))) {
     if (!/[a-z]/.test(match[0]) || !/^\s*[({]|^ \[/.test(text.slice(match.index + match[0].length))) continue
     const value = parseValue(text, match.index)
-    if (!value || value.node.kind === 'unit') continue
-    result += text.slice(at, match.index) + render(value.node).text
+    if (!value || value.node.kind === 'unit' || !startsLink(text, match.index) || !endsLink(text, value.end)) continue
+    const shown = render(value.node).text
+    if (!shown.trim()) continue
+    result += text.slice(at, match.index) + shown
     at = value.end
     start.lastIndex = value.end
   }
@@ -228,7 +260,9 @@ const controlsOf = goal => ({ control: 'Open goal controls', href: `/workspaces/
  * - a goal Running in planning phase Blocked, or whose derived state is `stalled` (Running in
  *   phase Queued with no current work, see goalState.js), with its planning reason, aged from
  *   its newest planner entry, resolved through the goal's controls (a goal held only by blocked
- *   assignments derives `blocked` but gets no row: the assignments' rows carry the reasons);
+ *   assignments derives `blocked` but gets no row: the assignments' rows carry the reasons); a
+ *   stalled goal whose final goal review rejected it (`acceptanceRejection`) states that
+ *   rejection instead, aged from it;
  * - a Blocked assignment of a Running or Paused goal at that goal's revision (an older
  *   revision's assignment is retired by the fleet, not by the operator), aged from the
  *   assignment's newest entry, resolved through its goal's controls;
@@ -243,7 +277,9 @@ export function attentionItems(view) {
     // A goal blocked only by its blocked assignments gets no row of its own: their rows say why.
     const stalled = derived === 'stalled'
     if (!stalled && !(derived === 'blocked' && goal.planning_phase === 'Blocked')) continue
-    items.push({ key: `goal:${goal.goal_id}`, kind: stalled ? 'Stalled goal' : 'Blocked goal', goal: shortGoal(goal), repository: rows.repository(goal.planning_repository), reason: plainReason(goal.planning_reason) || (stalled ? 'The plan is queued, but no assignment of this goal is queued or running.' : 'Planning stopped without a recorded reason.'), at: (goal.planner_activity || goal.last_activity)?.at, ...controlsOf(goal) })
+    // A rejected goal review is newer than the plan it followed and is why the goal stopped.
+    const rejection = stalled ? acceptanceRejection(goal) : null, rejected = rejection ? plainReason(rejection.detail) : ''
+    items.push({ key: `goal:${goal.goal_id}`, kind: stalled ? 'Stalled goal' : 'Blocked goal', goal: shortGoal(goal), repository: rows.repository(goal.planning_repository), reason: rejected || plainReason(goal.planning_reason) || (stalled ? 'The plan is queued, but no assignment of this goal is queued or running.' : 'Planning stopped without a recorded reason.'), at: (rejected ? rejection : goal.planner_activity || goal.last_activity)?.at, ...controlsOf(goal) })
   }
   for (const assignment of rows.assignments) {
     const goal = rows.goal(assignment.goal_id)
@@ -277,7 +313,7 @@ const listed = lanes => lanes.length > 2 ? `${lanes[0]} and ${lanes.length - 1} 
  * | `connecting` | no frame has arrived on the current connection |
  * | `blocked` | the runtime stopped (`runtime_error`) |
  * | `waiting` | a model call is open anywhere (`waiting` on a Running goal or on an assignment of its current revision); the label names the model of the oldest open call |
- * | `working` | no call is open and a lane of a Running goal is busy: the planner while the goal is planning, an assignment of its current revision while Implementing, Reviewing or Merging |
+ * | `working` | no call is open and a lane of a Running goal is busy: the planner while the goal is planning, the goal's acceptance checks or goal review while they run (`acceptanceStep`), an assignment of its current revision while Implementing, Reviewing or Merging |
  * | `paused` | no goal is Running and at least one is Paused |
  * | `blocked` | an item needs the operator ({@link attentionItems}) |
  * | `idle` | otherwise |
@@ -295,6 +331,12 @@ export function systemStatus(view, link) {
     if (goal.state !== 'Running') continue
     if (goal.waiting) waiting.push({ ...goal.waiting, lane: `${waitingRoles[goal.waiting.role] || goal.waiting.role} in ${where(goal, goal.planning_repository)}` })
     else if (deriveGoalState(goal, rows.assignments) === 'planning') working.push(`planner in ${where(goal, goal.planning_repository)}`)
+    else {
+      // The checks run in the repository whose assignment carries the step; the goal review,
+      // like its open call above, belongs to the goal.
+      const step = acceptanceStep(goal, rows.assignments)
+      if (step) working.push(step.entry.action === 'goal.checks' ? `acceptance checks in ${where(goal, step.assignment.repository_id)}` : `goal review in ${where(goal, goal.planning_repository)}`)
+    }
   }
   for (const assignment of rows.assignments) {
     const goal = rows.goal(assignment.goal_id)
