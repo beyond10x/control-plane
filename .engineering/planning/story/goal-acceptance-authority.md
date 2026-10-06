@@ -2,25 +2,42 @@
 format: aep.planning-md/3
 id: story:goal-acceptance-authority
 kind: story
-status: active
+status: implemented
 title: Goal acceptance satisfies only the revision it checked
 relations:
 - decomposes: epic:unattended-operation
 - serves: vision:autonomous-engineering
 - informed_by: review-result:adversary-terminal-goal-edits-pass-1
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-core/src/guards.rs
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-core/src/tests.rs
-- confidence: inferred
+- confidence: cited
+  path: crates/control-plane-core/tests/fixtures/recorded-history.db
+- confidence: cited
+  path: crates/control-plane-core/tests/fixtures/recorded-history.views.json
+- confidence: cited
+  path: crates/control-plane-core/tests/goal_acceptance_authority_attack.rs
+- confidence: cited
+  path: crates/control-plane-core/tests/terminal_goal_edits_attack.rs
+- confidence: cited
+  path: crates/control-plane-core/tests/terminal_goal_edits_pass2_attack.rs
+- confidence: cited
   path: crates/control-plane-runtime/src/fleet.rs
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-runtime/tests/fleet.rs
-revision: 7
+- confidence: cited
+  path: crates/control-plane-runtime/tests/goal_acceptance_authority_attack.rs
+- confidence: cited
+  path: crates/control-plane-runtime/tests/goal_acceptance_authority_pass2_attack.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/history.rs
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 6, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 7, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-06T20:24:22Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -37,4 +54,6 @@ review-result:adversary-terminal-goal-edits-pass-1, finding at crates/control-pl
 
 ## Scope
 
-Inferred: the fix is a host admission check, not a specification change. The SatisfyGoal guard in crates/control-plane-core/src/guards.rs (lines 187-199 at e238d48) runs inside `Store::execute`, so it compares the receipt's `goal_revision` with the goal's stored revision in the same step that applies the command; a mismatch is refused and the goal stays Running. crates/control-plane-runtime/src/fleet.rs (goal acceptance, 2060-2130) keeps its pre-check and handles the refusal; crates/control-plane-core/src/tests.rs and crates/control-plane-runtime/tests/fleet.rs carry the tests. No ess/, generated/ or ess/spec-acknowledgements.json change, so this story stays disjoint from story:precise-outcome-acknowledgements, which rewrites the acknowledgement file. Declaring the rule in ESS belongs to story:spec-owned-admission, which lists every host-only rule with its reason.
+Cited (wave 3, `git diff --name-only 9691f41 control-plane/impl/goal-acceptance-authority`): crates/control-plane-core/src/guards.rs (SatisfyGoal receipt must name the stored revision), crates/control-plane-core/src/tests.rs, crates/control-plane-runtime/src/fleet.rs (goal acceptance: locked final comparison and SatisfyGoal, `interrupted` versus latching `failed`, skip an edited goal), crates/control-plane-runtime/tests/fleet.rs, crates/control-plane-xtask/src/history.rs (JSON receipts), the recorded-history fixtures (re-recorded, 98 decisions), and the attack files crates/control-plane-core/tests/{goal_acceptance_authority_attack,terminal_goal_edits_attack,terminal_goal_edits_pass2_attack}.rs and crates/control-plane-runtime/tests/goal_acceptance_authority_{,pass2_}attack.rs.
+
+Corrections to the earlier inferred scope: the fix needed no ESS, generated or acknowledgement change, as decided; it did need crates/control-plane-xtask/src/history.rs and the recorded-history fixtures, which the inferred scope did not list. Two adversary passes widened it from the UpdateGoal window to configuration changes, pauses, edits of another goal and transient observation failures, all in fleet.rs goal acceptance.

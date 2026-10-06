@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-projection
 kind: story
-status: active
+status: implemented
 title: The SSE projection carries planner activity, waits, clock and recorded outcomes
 relations:
 - decomposes: epic:console-clarity
@@ -13,10 +13,19 @@ relations:
 scope:
 - confidence: cited
   path: crates/control-plane-app/src/live.rs
-revision: 8
+- confidence: cited
+  path: crates/control-plane-app/tests/console_projection_attack.rs
+- confidence: cited
+  path: crates/control-plane-app/tests/console_projection_pass2_attack.rs
+- confidence: cited
+  path: crates/control-plane-core/src/lib.rs
+- confidence: cited
+  path: crates/control-plane-core/src/memory.rs
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":7}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T09:13:30Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":7}}, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-06T20:24:22Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":9,"verification":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -45,4 +54,6 @@ story:console-status-and-attention reads the planner activity, `waiting`, the se
 
 ## Scope
 
-Cited: crates/control-plane-app/src/live.rs (`compact` and its test module). No runtime file changes; ordered after story:bounded-progress-records, which also edits live.rs, and story:acceptance-traceability, which may rename tests in crates/control-plane-app.
+Cited (wave 3, `git diff --name-only 9691f41 control-plane/impl/console-projection`): crates/control-plane-app/src/live.rs (`compact` and its test module; the new fields are documented in its doc comment), crates/control-plane-core/src/memory.rs (journal slot for the newest planner entry and a step per lane with its record number), crates/control-plane-core/src/lib.rs (`Store::replayed_progress`, the replay boundary), and the attack files crates/control-plane-app/tests/console_projection_{,pass2_}attack.rs. The wave-3 integration commit d32a94d changed one receipt in live.rs's test module to name the goal revision.
+
+Corrections to the earlier scope ("live.rs only, no runtime change"): keeping planner activity and each wait's start time past the 64 retained entries needed the core journal (memory.rs) and the store's replay boundary (lib.rs). Still no runtime change: worker model waits are derived from the assignment's next non-loom.event entry.
