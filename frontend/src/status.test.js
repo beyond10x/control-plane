@@ -124,7 +124,10 @@ test('last_activity_age_is_shown', async () => {
 
 test('derived_goal_state_combines_lifecycle_and_phase', () => {
   const phases = ['Idle', 'Provisioning', 'Planning', 'Validated', 'Queued', 'Blocked']
-  const derived = state => phases.map(planning_phase => deriveGoalState({ state, planning_phase }))
+  // One current Queued assignment, so Running in phase Queued has work (without it: stalled, see
+  // queued_goal_without_current_work_is_stalled).
+  const queued = [{ assignment_id: 'a', goal_id: 'g', goal_revision: 1, state: 'Queued' }]
+  const derived = state => phases.map(planning_phase => deriveGoalState({ goal_id: 'g', revision: 1, state, planning_phase }, queued))
   expect(deriveGoalState({ state: 'Running', planning_phase: 'Blocked' })).toBe('blocked')
   expect(deriveGoalState({ state: 'Running', planning_phase: 'Planning' })).toBe('planning')
   expect(derived('Cancelled')).toEqual(phases.map(() => 'cancelled'))
@@ -193,6 +196,41 @@ test('planner_status_uses_planner_activity', async () => {
   const planner = card('Add a status endpoint')
   expect(planner.text()).toContain('Planning phase: Queued')
   expect(planner.text()).not.toContain('cargo test')
+})
+
+// Coordinator decision (correction round 1, F5): Running in phase Queued with no assignment of
+// the goal's revision Queued, Implementing, Reviewing, ReadyToMerge or Merging derives `stalled`;
+// when the only current work is Blocked it derives `blocked` (attention_lists_each_blocked_item:
+// two blocked assignments give their own rows, not a third for the goal).
+test('queued_goal_without_current_work_is_stalled', async () => {
+  const goal = { goal_id: 'g', state: 'Running', planning_phase: 'Queued', revision: 2 }
+  const work = (state, goal_revision = 2, goal_id = 'g') => ({ assignment_id: `${goal_id}-${state}-${goal_revision}`, goal_id, goal_revision, state })
+  for (const state of ['Queued', 'Implementing', 'Reviewing', 'ReadyToMerge', 'Merging']) expect(deriveGoalState(goal, [work(state)])).toBe('executing')
+  expect(deriveGoalState(goal, [])).toBe('stalled')
+  expect(deriveGoalState(goal)).toBe('stalled')
+  expect(deriveGoalState(goal, [work('Merged'), work('Cancelled'), work('Implementing', 1), work('Blocked', 1), work('Queued', 2, 'other')])).toBe('stalled')
+  // Current work that is only Blocked holds the goal: blocked, not stalled (its rows say why).
+  expect(deriveGoalState(goal, [work('Merged'), work('Blocked')])).toBe('blocked')
+  expect(deriveGoalState(goal, [work('Blocked'), work('Reviewing')])).toBe('executing')
+  // An open goal-level model call (the final goal review) is work in progress, not a stall.
+  expect(deriveGoalState({ ...goal, waiting: { role: 'goal_reviewer', model: 'fixture-reviewer', since: '2026-10-06T09:59:00Z' } }, [work('Merged')])).toBe('executing')
+  expect(deriveGoalState({ ...goal, state: 'Paused' }, [])).toBe('paused')
+
+  const view = frame()
+  goalOf(view).planning_reason = 'No ready story selected; goal acceptance and verified merge evidence remain outstanding'
+  Object.assign(assignment(view, alpha), { state: 'Merged', merged_at: '2026-10-06T09:40:00Z' })
+  // An older revision's work is not the goal's current work.
+  Object.assign(assignment(view, beta), { state: 'Implementing', goal_revision: 0 })
+  await show(view)
+  const badge = card('Add a status endpoint').get('.badge')
+  expect(badge.text()).toBe('Stalled')
+  expect(badge.classes()).not.toContain('active')
+  expect(rows()).toHaveLength(1)
+  expect(rows()[0].get('.attention-subject').text()).toContain('Add a status endpoint')
+  expect(rows()[0].get('.attention-reason').text()).toBe('No ready story selected; goal acceptance and verified merge evidence remain outstanding')
+  expect(rows()[0].get('.attention-age').text()).toBe('10 min ago')
+  expect(rows()[0].get('a.resolve').attributes('href')).toBe('/workspaces/6f1d2c3b-0000-4000-8000-000000000001#goal-6f1d2c3b-0000-4000-8000-0000000000c1')
+  expect(text('#system-status')).toBe('Blocked')
 })
 
 test('satisfied_goal_shows_acceptance_recorded', async () => {

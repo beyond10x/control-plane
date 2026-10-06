@@ -4,7 +4,7 @@ import { ageSince, formatAge } from './status.js'
 // `status` comes from systemStatus; `now` is the server clock (null while unknown); `newest` the
 // newest recorded activity time; `planner` from plannerLine.
 const props = defineProps({ status: Object, connection: String, live: Boolean, now: Number, newest: Number, planner: Object })
-const detail = computed(() => { const since = ageSince(props.status.since, props.now); return since ? `${props.status.detail} · asked ${since}` : props.status.detail })
+const detail = computed(() => { const since = ageSince(props.status.since, props.now); return [props.status.detail, since && `asked ${since}`, props.status.also].filter(Boolean).join(' · ') })
 const activity = computed(() => props.newest === null || props.newest === undefined ? 'No activity recorded' : `Last activity ${formatAge(props.now - props.newest)}`)
 </script>
 <template><header class="status-header" :class="status.state" aria-label="System status">
