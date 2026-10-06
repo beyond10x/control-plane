@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
-// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
+// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
+// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -3259,6 +3259,34 @@ pub fn encode_outcome_controlplane_host_update_goal(value: &crate::host::UpdateG
             encode_event_controlplane_host_update_goal_applied(update_goal_applied, out);
             out.push('}');
             out.push(']');
+        }
+        crate::host::UpdateGoalOutcome::Satisfied { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "satisfied");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
+        crate::host::UpdateGoalOutcome::Cancelled { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "cancelled");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
         }
         crate::host::UpdateGoalOutcome::NotFound { error } => {
             json::member(out, "outcome");

@@ -133,10 +133,10 @@ affected decision.
 `crates/control-plane-core/tests/fixtures/recorded-history.db`, and compares every view with
 `recorded-history.views.json`. The history must apply every generated command at least once. It
 must also answer every declared refusal outcome of every command at least once, outcome by
-outcome: each `not-found` and `wrong-state`, and `DeleteGoal`'s `paused`, `running` and
-`satisfied`. The test reads those outcomes from the generated OpenAPI contract. A second test
-changes one stored `applied` outcome in a copy and requires `Store::open` to refuse it. No test
-or gate writes the fixture. Re-record it only on purpose:
+outcome: each `not-found` and `wrong-state`, `DeleteGoal`'s `paused`, `running` and `satisfied`,
+and `UpdateGoal`'s `satisfied` and `cancelled`. The test reads those outcomes from the generated
+OpenAPI contract. A second test changes one stored `applied` outcome in a copy and requires
+`Store::open` to refuse it. No test or gate writes the fixture. Re-record it only on purpose:
 
 ```console
 cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/control-plane-history

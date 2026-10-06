@@ -3,8 +3,9 @@
 //! A scripted operator and supervisor drive real repositories through the public
 //! `control_plane_core::Store::execute`, so the fixture holds exactly what the Store writes. The
 //! script applies every generated command at least once and answers every declared refusal
-//! outcome of every command: `not-found` for each, `wrong-state` where declared, and `DeleteGoal`'s
-//! `paused`, `running` and `satisfied`. `crates/control-plane-core/tests/recorded_history.rs`
+//! outcome of every command: `not-found` for each, `wrong-state` where declared, `DeleteGoal`'s
+//! `paused`, `running` and `satisfied`, and `UpdateGoal`'s `satisfied` and `cancelled`.
+//! `crates/control-plane-core/tests/recorded_history.rs`
 //! checks that coverage, outcome by outcome, against the generated contract. No gate runs this command: the committed fixture is evidence
 //! about stored history, and refreshing it after a replay failure would discard that evidence.
 use anyhow::{Context, Result, bail, ensure};
@@ -593,6 +594,15 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
     }
     run.expect("CancelGoal", subject, Operator, "wrong-state")
         .await?;
+    // A satisfied or cancelled goal keeps what it was: an edit is refused.
+    let edit = |goal: &str| {
+        json!({"goal_id": goal, "objective": "Edited after it finished",
+            "acceptance": "Refused", "max_workers": 1, "max_attempts": 1, "max_minutes": 10,
+            "planner_model": "scripted-planner", "implementor_model": "scripted-implementor",
+            "reviewer_model": "scripted-reviewer", "merge_authority": false})
+    };
+    run.expect("UpdateGoal", edit(&goal), Operator, "satisfied")
+        .await?;
 
     let abandoned = identity(
         &run.expect(
@@ -608,14 +618,19 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?,
         "goal_id",
     )?;
-    for (command, outcome) in [
-        ("DeleteGoal", "paused"),
-        ("CancelGoal", "applied"),
-        ("DeleteGoal", "applied"),
-    ] {
+    for (command, outcome) in [("DeleteGoal", "paused"), ("CancelGoal", "applied")] {
         run.expect(command, json!({"goal_id": abandoned}), Operator, outcome)
             .await?;
     }
+    run.expect("UpdateGoal", edit(&abandoned), Operator, "cancelled")
+        .await?;
+    run.expect(
+        "DeleteGoal",
+        json!({"goal_id": abandoned}),
+        Operator,
+        "applied",
+    )
+    .await?;
     // A goal without assignments refuses deletion while running and once satisfied.
     let probe = identity(
         &run.expect(

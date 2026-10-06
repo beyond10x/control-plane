@@ -418,6 +418,108 @@ async fn changed_goal_revokes_existing_assignments() {
     assert_eq!(store.query("GoalList").unwrap()[0]["revision"], 2);
 }
 
+/// story:terminal-goal-edits probe sequence: create, plan, finish the goal, then edit it.
+/// The edit is refused with the declared outcome named `refusal`, and the goal row, including
+/// objective, acceptance receipt and revision, stays as it was, also after replay.
+async fn finished_goal_refuses_edit(finish: (&str, Value, Actor), refusal: &str) -> Value {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    store.execute("RecordPlanningProgress",json!({"goal_id":goal,"planning_revision":1,"planning_fingerprint":"plan","planning_repository":"","planning_worktree_id":"tree","planning_worktree_path":"tree","planning_phase":"Planning","planning_reason":"","planning_receipt":"{}"}),Actor::Supervisor).await.unwrap();
+    let (command, mut body, actor) = finish;
+    body["goal_id"] = json!(goal);
+    let finished = store.execute(command, body, actor).await.unwrap();
+    assert_eq!(finished["outcome"], "applied", "{finished}");
+    let before = store.query("GoalList").unwrap()[0].clone();
+
+    let mut edit = goal_body(&ws);
+    edit.as_object_mut().unwrap().remove("workspace_id");
+    edit["goal_id"] = json!(goal);
+    edit["objective"] = json!("a different objective");
+    edit["acceptance"] = json!("a different acceptance");
+    let refused = store
+        .execute("UpdateGoal", edit.clone(), Actor::Operator)
+        .await
+        .unwrap();
+    assert_eq!(refused["outcome"], refusal, "{refused}");
+    // An edit the field checks would refuse still takes the declared refusal.
+    for (field, value) in [("max_workers", json!(0)), ("objective", json!(" "))] {
+        let mut invalid = edit.clone();
+        invalid[field] = value;
+        let refused = store
+            .execute("UpdateGoal", invalid, Actor::Operator)
+            .await
+            .unwrap();
+        assert_eq!(refused["outcome"], refusal, "{refused}");
+        assert_eq!(refused["error"], "controlplane.host.GoalStateConflict");
+    }
+    let after = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(after["objective"], "deliver change");
+    assert_eq!(after["revision"], 1);
+    assert_eq!(after, before);
+    drop(store);
+    let reopened = Store::open(&db).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap()[0], before);
+    after
+}
+
+#[tokio::test]
+async fn satisfied_goal_refuses_edit() {
+    let satisfy = json!({"satisfaction_receipt":"acceptance-verified"});
+    let goal =
+        finished_goal_refuses_edit(("SatisfyGoal", satisfy, Actor::Supervisor), "satisfied").await;
+    assert_eq!(goal["state"], "Satisfied");
+    assert_eq!(goal["satisfaction_receipt"], "acceptance-verified");
+}
+
+#[tokio::test]
+async fn cancelled_goal_refuses_edit() {
+    let cancel = ("CancelGoal", json!({}), Actor::Operator);
+    let goal = finished_goal_refuses_edit(cancel, "cancelled").await;
+    assert_eq!(goal["state"], "Cancelled");
+}
+
+/// Edits of a goal that can still change keep the host's field checks: a Paused and then a
+/// Running goal refuse a non-positive limit and a blank objective, and stay unchanged.
+#[tokio::test]
+async fn open_goal_edit_keeps_field_checks() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    for state in ["Paused", "Running"] {
+        if state == "Running" {
+            store
+                .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap();
+        }
+        let before = store.query("GoalList").unwrap()[0].clone();
+        assert_eq!(before["state"], state);
+        for (field, value, message) in [
+            ("max_workers", json!(0), "max_workers must be positive"),
+            ("objective", json!(" "), "goal objective is empty"),
+        ] {
+            let mut edit = goal_body(&ws);
+            edit.as_object_mut().unwrap().remove("workspace_id");
+            edit["goal_id"] = json!(goal);
+            edit[field] = value;
+            let error = store
+                .execute("UpdateGoal", edit, Actor::Operator)
+                .await
+                .unwrap_err();
+            assert_eq!(format!("{error:#}"), message, "{state}");
+            assert_eq!(store.query("GoalList").unwrap()[0], before);
+        }
+    }
+}
+
 #[tokio::test]
 async fn durable_contract_retains_generated_semantics_below_operational_admission() {
     let temp = scratch();

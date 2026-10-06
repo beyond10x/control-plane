@@ -101,7 +101,14 @@ impl Store {
                 .context("workspace not registered")?;
             ensure!(workspace.state == W::Registered, "workspace is archived");
         }
-        if matches!(command, "CreateGoal" | "UpdateGoal") {
+        // A finished goal's edit takes the declared `satisfied` or `cancelled` refusal, whatever
+        // the edit carries, so the field checks guard only goals that can still be edited.
+        let finished = command == "UpdateGoal"
+            && body["goal_id"]
+                .as_str()
+                .and_then(|id| self.memory.goals.get(id))
+                .is_some_and(|goal| matches!(goal.state, G::Satisfied | G::Cancelled));
+        if matches!(command, "CreateGoal" | "UpdateGoal") && !finished {
             for field in ["max_workers", "max_attempts", "max_minutes"] {
                 ensure!(
                     body[field].as_i64().is_some_and(|n| n > 0),

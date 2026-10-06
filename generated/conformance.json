@@ -4,7 +4,7 @@
     "authored_sources": {},
     "counts": {
       "authored": 0,
-      "generated": 167,
+      "generated": 171,
       "outside": 0,
       "refused": 0
     },
@@ -109,6 +109,7 @@
       "controlplane.host.Goal/state/Cancelled/refuses/controlplane.host.PauseGoal",
       "controlplane.host.Goal/state/Cancelled/refuses/controlplane.host.SatisfyGoal",
       "controlplane.host.Goal/state/Cancelled/refuses/controlplane.host.StartGoal",
+      "controlplane.host.Goal/state/Cancelled/refuses/controlplane.host.UpdateGoal",
       "controlplane.host.Goal/state/Paused/refuses/controlplane.host.DeleteGoal",
       "controlplane.host.Goal/state/Paused/refuses/controlplane.host.PauseGoal",
       "controlplane.host.Goal/state/Paused/refuses/controlplane.host.SatisfyGoal",
@@ -119,6 +120,7 @@
       "controlplane.host.Goal/state/Satisfied/refuses/controlplane.host.PauseGoal",
       "controlplane.host.Goal/state/Satisfied/refuses/controlplane.host.SatisfyGoal",
       "controlplane.host.Goal/state/Satisfied/refuses/controlplane.host.StartGoal",
+      "controlplane.host.Goal/state/Satisfied/refuses/controlplane.host.UpdateGoal",
       "controlplane.host.Goal/transition/cancel/by/controlplane.host.CancelGoal/applied",
       "controlplane.host.Goal/transition/pause/by/controlplane.host.PauseGoal/applied",
       "controlplane.host.Goal/transition/satisfy/by/controlplane.host.SatisfyGoal/applied",
@@ -171,7 +173,9 @@
       "controlplane.host.StartGoal/outcome/not-found",
       "controlplane.host.UpdateGoal/grant/denied",
       "controlplane.host.UpdateGoal/outcome/applied",
+      "controlplane.host.UpdateGoal/outcome/cancelled",
       "controlplane.host.UpdateGoal/outcome/not-found",
+      "controlplane.host.UpdateGoal/outcome/satisfied",
       "controlplane.host.Workspace/state/Archived/refuses/controlplane.host.ArchiveWorkspace",
       "controlplane.host.Workspace/transition/archive/by/controlplane.host.ArchiveWorkspace/applied",
       "controlplane.host.WorkspaceDirectory/state/Removed/refuses/controlplane.host.RemoveWorkspaceDirectory",
@@ -191,9 +195,9 @@
     }
   },
   "provenance": {
-    "contract_digest": "9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2",
+    "contract_digest": "c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca",
     "scenario_initial_state": "empty",
-    "spec_digest": "ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548",
+    "spec_digest": "5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba",
     "specification_version": "v1",
     "suite_version": "ess-conformance/35",
     "system": "controlplane"
@@ -63997,6 +64001,400 @@
         }
       ]
     },
+    "controlplane.host.Goal/state/Cancelled/refuses/controlplane.host.UpdateGoal": {
+      "purpose": "`controlplane.host.UpdateGoal` refuses in held state `Cancelled` without effects",
+      "source": [
+        {
+          "kind": "command",
+          "name": "controlplane.host.CancelGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CancelGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "cancelled"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CancelGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CancelGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Cancelled"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "shape": {
+            "declarations": {
+              "controlplane.host.Goal.State": {
+                "kind": "enum",
+                "variants": [
+                  "Cancelled",
+                  "Paused",
+                  "Running",
+                  "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
+                ]
+              }
+            },
+            "fields": [
+              {
+                "name": "goal_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "workspace_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "objective",
+                "type": "String"
+              },
+              {
+                "name": "acceptance",
+                "type": "String"
+              },
+              {
+                "name": "max_workers",
+                "type": "Integer"
+              },
+              {
+                "name": "max_attempts",
+                "type": "Integer"
+              },
+              {
+                "name": "max_minutes",
+                "type": "Integer"
+              },
+              {
+                "name": "planner_model",
+                "type": "String"
+              },
+              {
+                "name": "implementor_model",
+                "type": "String"
+              },
+              {
+                "name": "reviewer_model",
+                "type": "String"
+              },
+              {
+                "name": "merge_authority",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              },
+              {
+                "name": "satisfaction_receipt",
+                "type": "String"
+              },
+              {
+                "name": "state",
+                "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
+              }
+            ],
+            "identity_field": "goal_id"
+          },
+          "step": "snapshot_complete_subject",
+          "subject": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "cancelled"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "error": "controlplane.host.GoalStateConflict",
+          "step": "expect_error"
+        }
+      ]
+    },
     "controlplane.host.Goal/state/Paused/refuses/controlplane.host.DeleteGoal": {
       "purpose": "`controlplane.host.DeleteGoal` refuses in held state `Paused` without effects",
       "source": [
@@ -69935,6 +70333,433 @@
         {
           "step": "expect_complete_subject_unchanged",
           "view": "controlplane.host.GoalList"
+        }
+      ]
+    },
+    "controlplane.host.Goal/state/Satisfied/refuses/controlplane.host.UpdateGoal": {
+      "purpose": "`controlplane.host.UpdateGoal` refuses in held state `Satisfied` without effects",
+      "source": [
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.SatisfyGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.StartGoal"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.SatisfyGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "satisfied"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.StartGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.SatisfyGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "satisfaction_receipt": {
+              "kind": "literal",
+              "value": "satisfaction_receipt"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.SatisfyGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Satisfied"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "shape": {
+            "declarations": {
+              "controlplane.host.Goal.State": {
+                "kind": "enum",
+                "variants": [
+                  "Cancelled",
+                  "Paused",
+                  "Running",
+                  "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
+                ]
+              }
+            },
+            "fields": [
+              {
+                "name": "goal_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "workspace_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "objective",
+                "type": "String"
+              },
+              {
+                "name": "acceptance",
+                "type": "String"
+              },
+              {
+                "name": "max_workers",
+                "type": "Integer"
+              },
+              {
+                "name": "max_attempts",
+                "type": "Integer"
+              },
+              {
+                "name": "max_minutes",
+                "type": "Integer"
+              },
+              {
+                "name": "planner_model",
+                "type": "String"
+              },
+              {
+                "name": "implementor_model",
+                "type": "String"
+              },
+              {
+                "name": "reviewer_model",
+                "type": "String"
+              },
+              {
+                "name": "merge_authority",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              },
+              {
+                "name": "satisfaction_receipt",
+                "type": "String"
+              },
+              {
+                "name": "state",
+                "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
+              }
+            ],
+            "identity_field": "goal_id"
+          },
+          "step": "snapshot_complete_subject",
+          "subject": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "satisfied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "error": "controlplane.host.GoalStateConflict",
+          "step": "expect_error"
         }
       ]
     },
@@ -94900,7 +95725,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.StartGoal",
           "input": {
             "goal_id": {
@@ -96793,12 +97618,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Supervisor"
+          "name": "controlplane.host.Operator"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.StartGoal",
           "input": {
             "goal_id": {
@@ -96954,6 +97779,10 @@
         },
         {
           "kind": "command",
+          "name": "controlplane.host.StartGoal"
+        },
+        {
+          "kind": "command",
           "name": "controlplane.host.UpdateGoal"
         },
         {
@@ -96968,6 +97797,13 @@
           "name": {
             "command": "controlplane.host.RegisterWorkspace",
             "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
           }
         },
         {
@@ -97198,348 +98034,25 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
-          "command": "controlplane.host.UpdateGoal",
-          "input": {
-            "acceptance": {
-              "kind": "literal",
-              "value": "acceptance-1"
-            },
-            "goal_id": {
-              "instance": "goal",
-              "kind": "instance"
-            },
-            "implementor_model": {
-              "kind": "literal",
-              "value": "implementor_model-1"
-            },
-            "max_attempts": {
-              "kind": "literal",
-              "value": 2.0
-            },
-            "max_minutes": {
-              "kind": "literal",
-              "value": 3.0
-            },
-            "max_workers": {
-              "kind": "literal",
-              "value": 4.0
-            },
-            "merge_authority": {
-              "kind": "literal",
-              "value": false
-            },
-            "objective": {
-              "kind": "literal",
-              "value": "objective-1"
-            },
-            "planner_model": {
-              "kind": "literal",
-              "value": "planner_model-1"
-            },
-            "reviewer_model": {
-              "kind": "literal",
-              "value": "reviewer_model-1"
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              }
             }
           },
-          "step": "execute_command"
-        },
-        {
-          "actor": "controlplane.host.Supervisor",
-          "step": "expect_not_granted",
-          "unpublished": [
-            "controlplane.host.ArchiveWorkspaceApplied",
-            "controlplane.host.AssignmentCreated",
-            "controlplane.host.BlockAssignmentApplied",
-            "controlplane.host.CancelAssignmentApplied",
-            "controlplane.host.CancelGoalApplied",
-            "controlplane.host.ClaimAssignmentApplied",
-            "controlplane.host.CompleteAssignmentApplied",
-            "controlplane.host.ConfigureRepositoryApplied",
-            "controlplane.host.ConfirmPublicationApplied",
-            "controlplane.host.DisableRepositoryRegistrationApplied",
-            "controlplane.host.EnableRepositoryRegistrationApplied",
-            "controlplane.host.GoalCreated",
-            "controlplane.host.GoalDeleted",
-            "controlplane.host.MarkPublicationUncertainApplied",
-            "controlplane.host.MergeAssignmentApplied",
-            "controlplane.host.PauseGoalApplied",
-            "controlplane.host.PlanningProgressRecorded",
-            "controlplane.host.PublicationIntentCreated",
-            "controlplane.host.ReadyAssignmentApplied",
-            "controlplane.host.ReconcileAssignmentApplied",
-            "controlplane.host.RepairAssignmentApplied",
-            "controlplane.host.RepositoryRegistrationCreated",
-            "controlplane.host.ReviewAssignmentApplied",
-            "controlplane.host.SatisfyGoalApplied",
-            "controlplane.host.StartGoalApplied",
-            "controlplane.host.UpdateGoalApplied",
-            "controlplane.host.WorkspaceCreated",
-            "controlplane.host.WorkspaceDirectoryCreated",
-            "controlplane.host.WorkspaceDirectoryRemoved"
-          ]
-        }
-      ]
-    },
-    "controlplane.host.UpdateGoal/outcome/applied": {
-      "purpose": "`controlplane.host.UpdateGoal` answers `applied` for an input no other branch's guard claims",
-      "source": [
-        {
-          "kind": "entity",
-          "name": "controlplane.host.Goal"
-        },
-        {
-          "kind": "command",
-          "name": "controlplane.host.CreateGoal"
-        },
-        {
-          "kind": "command",
-          "name": "controlplane.host.RegisterWorkspace"
-        },
-        {
-          "kind": "command",
-          "name": "controlplane.host.UpdateGoal"
-        },
-        {
-          "kind": "outcome",
-          "name": {
-            "command": "controlplane.host.CreateGoal",
-            "outcome": "created"
-          }
-        },
-        {
-          "kind": "outcome",
-          "name": {
-            "command": "controlplane.host.RegisterWorkspace",
-            "outcome": "created"
-          }
-        },
-        {
-          "kind": "outcome",
-          "name": {
-            "command": "controlplane.host.UpdateGoal",
-            "outcome": "applied"
-          }
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ArchiveWorkspaceApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.AssignmentCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.BlockAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.CancelAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.CancelGoalApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ClaimAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.CompleteAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ConfigureRepositoryApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ConfirmPublicationApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.GoalCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.GoalDeleted"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.MarkPublicationUncertainApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.MergeAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.PauseGoalApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.PlanningProgressRecorded"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.PublicationIntentCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ReadyAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ReconcileAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.RepairAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.RepositoryRegistrationCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.ReviewAssignmentApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.SatisfyGoalApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.StartGoalApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.UpdateGoalApplied"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.WorkspaceCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.WorkspaceDirectoryCreated"
-        },
-        {
-          "kind": "event",
-          "name": "controlplane.host.WorkspaceDirectoryRemoved"
-        },
-        {
-          "kind": "view",
-          "name": "controlplane.host.GoalList"
-        },
-        {
-          "kind": "actor",
-          "name": "controlplane.host.Operator"
-        },
-        {
-          "kind": "actor",
-          "name": "controlplane.host.Supervisor"
-        }
-      ],
-      "steps": [
-        {
-          "actor": "controlplane.host.Supervisor",
-          "command": "controlplane.host.RegisterWorkspace",
-          "input": {
-            "name": {
-              "kind": "literal",
-              "value": "name"
-            },
-            "path": {
-              "kind": "literal",
-              "value": "path"
-            }
-          },
-          "step": "execute_command"
-        },
-        {
-          "outcome": {
-            "command": "controlplane.host.RegisterWorkspace",
-            "outcome": "created"
-          },
-          "step": "expect_outcome"
-        },
-        {
-          "entity": "controlplane.host.Workspace",
-          "event": "controlplane.host.WorkspaceCreated",
-          "field": "workspace_id",
-          "instance": "workspace",
-          "step": "capture_instance"
-        },
-        {
-          "actor": "controlplane.host.Supervisor",
-          "command": "controlplane.host.CreateGoal",
-          "input": {
-            "acceptance": {
-              "kind": "literal",
-              "value": "acceptance"
-            },
-            "implementor_model": {
-              "kind": "literal",
-              "value": "implementor_model"
-            },
-            "max_attempts": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "max_minutes": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "max_workers": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "merge_authority": {
-              "kind": "literal",
-              "value": true
-            },
-            "objective": {
-              "kind": "literal",
-              "value": "objective"
-            },
-            "planner_model": {
-              "kind": "literal",
-              "value": "planner_model"
-            },
-            "reviewer_model": {
-              "kind": "literal",
-              "value": "reviewer_model"
-            },
-            "workspace_id": {
-              "instance": "workspace",
-              "kind": "instance"
-            }
-          },
-          "step": "execute_command"
-        },
-        {
-          "outcome": {
-            "command": "controlplane.host.CreateGoal",
-            "outcome": "created"
-          },
-          "step": "expect_outcome"
-        },
-        {
-          "entity": "controlplane.host.Goal",
-          "event": "controlplane.host.GoalCreated",
-          "field": "goal_id",
-          "instance": "goal",
-          "step": "capture_instance"
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
         },
         {
           "actor": "controlplane.host.Operator",
@@ -97594,6 +98107,27 @@
             "outcome": "applied"
           },
           "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
         },
         {
           "event": "controlplane.host.UpdateGoalApplied",
@@ -97895,6 +98429,2022 @@
           },
           "step": "expect_view",
           "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name-6"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path-6"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace-7",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-6"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-6"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-6"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-6"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-6"
+            },
+            "workspace_id": {
+              "instance": "workspace-7",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal-7",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.StartGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal-7",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal-7",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Running"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-6"
+            },
+            "goal_id": {
+              "instance": "goal-7",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-6"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-6"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-6"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-6"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "step": "expect_not_granted",
+          "unpublished": [
+            "controlplane.host.ArchiveWorkspaceApplied",
+            "controlplane.host.AssignmentCreated",
+            "controlplane.host.BlockAssignmentApplied",
+            "controlplane.host.CancelAssignmentApplied",
+            "controlplane.host.CancelGoalApplied",
+            "controlplane.host.ClaimAssignmentApplied",
+            "controlplane.host.CompleteAssignmentApplied",
+            "controlplane.host.ConfigureRepositoryApplied",
+            "controlplane.host.ConfirmPublicationApplied",
+            "controlplane.host.DisableRepositoryRegistrationApplied",
+            "controlplane.host.EnableRepositoryRegistrationApplied",
+            "controlplane.host.GoalCreated",
+            "controlplane.host.GoalDeleted",
+            "controlplane.host.MarkPublicationUncertainApplied",
+            "controlplane.host.MergeAssignmentApplied",
+            "controlplane.host.PauseGoalApplied",
+            "controlplane.host.PlanningProgressRecorded",
+            "controlplane.host.PublicationIntentCreated",
+            "controlplane.host.ReadyAssignmentApplied",
+            "controlplane.host.ReconcileAssignmentApplied",
+            "controlplane.host.RepairAssignmentApplied",
+            "controlplane.host.RepositoryRegistrationCreated",
+            "controlplane.host.ReviewAssignmentApplied",
+            "controlplane.host.SatisfyGoalApplied",
+            "controlplane.host.StartGoalApplied",
+            "controlplane.host.UpdateGoalApplied",
+            "controlplane.host.WorkspaceCreated",
+            "controlplane.host.WorkspaceDirectoryCreated",
+            "controlplane.host.WorkspaceDirectoryRemoved"
+          ]
+        }
+      ]
+    },
+    "controlplane.host.UpdateGoal/outcome/applied": {
+      "purpose": "`controlplane.host.UpdateGoal` answers `applied` for an input selecting the branch in its established subject state",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Goal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.StartGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.UpdateGoal"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalDeleted"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryRemoved"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-1"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-1"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 4.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": false
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-1"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-1"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "payload": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-1"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-1"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 4.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": false
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-1"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-1"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-1"
+            }
+          },
+          "shape": {
+            "acceptance": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "goal_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "implementor_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "max_attempts": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "max_minutes": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "max_workers": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "merge_authority": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "objective": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planner_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "reviewer_model": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "acceptance": {
+                "kind": "literal",
+                "value": "acceptance-1"
+              },
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "implementor_model": {
+                "kind": "literal",
+                "value": "implementor_model-1"
+              },
+              "max_attempts": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "max_minutes": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "max_workers": {
+                "kind": "literal",
+                "value": 4.0
+              },
+              "merge_authority": {
+                "kind": "literal",
+                "value": false
+              },
+              "objective": {
+                "kind": "literal",
+                "value": "objective-1"
+              },
+              "planner_model": {
+                "kind": "literal",
+                "value": "planner_model-1"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reviewer_model": {
+                "kind": "literal",
+                "value": "reviewer_model-1"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "satisfaction_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Paused"
+              },
+              "workspace_id": {
+                "instance": "workspace",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name-6"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path-6"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace-7",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-6"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-6"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-6"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-6"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-6"
+            },
+            "workspace_id": {
+              "instance": "workspace-7",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal-7",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.StartGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal-7",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal-7",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Running"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-6"
+            },
+            "goal_id": {
+              "instance": "goal-7",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-6"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-6"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-6"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-6"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal-7",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Running"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "payload": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-6"
+            },
+            "goal_id": {
+              "instance": "goal-7",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-6"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-6"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-6"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-6"
+            }
+          },
+          "shape": {
+            "acceptance": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "goal_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "implementor_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "max_attempts": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "max_minutes": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "max_workers": {
+              "holds": "primitive",
+              "kind": "integer"
+            },
+            "merge_authority": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "objective": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "planner_model": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "reviewer_model": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "acceptance": {
+                "kind": "literal",
+                "value": "acceptance-6"
+              },
+              "goal_id": {
+                "instance": "goal-7",
+                "kind": "instance"
+              },
+              "implementor_model": {
+                "kind": "literal",
+                "value": "implementor_model-6"
+              },
+              "max_attempts": {
+                "kind": "literal",
+                "value": 7.0
+              },
+              "max_minutes": {
+                "kind": "literal",
+                "value": 7.0
+              },
+              "max_workers": {
+                "kind": "literal",
+                "value": 7.0
+              },
+              "merge_authority": {
+                "kind": "literal",
+                "value": true
+              },
+              "objective": {
+                "kind": "literal",
+                "value": "objective-6"
+              },
+              "planner_model": {
+                "kind": "literal",
+                "value": "planner_model-6"
+              },
+              "planning_fingerprint": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_phase": {
+                "kind": "literal",
+                "value": "Idle"
+              },
+              "planning_reason": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_repository": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "planning_worktree_id": {
+                "kind": "literal",
+                "value": ""
+              },
+              "planning_worktree_path": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reviewer_model": {
+                "kind": "literal",
+                "value": "reviewer_model-6"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "satisfaction_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Running"
+              },
+              "workspace_id": {
+                "instance": "workspace-7",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        }
+      ]
+    },
+    "controlplane.host.UpdateGoal/outcome/cancelled": {
+      "purpose": "`controlplane.host.UpdateGoal` answers `cancelled` for an input selecting the branch in its established subject state",
+      "source": [
+        {
+          "kind": "type",
+          "name": "controlplane.host.Goal.State"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CancelGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.UpdateGoal"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CancelGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "cancelled"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalDeleted"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryRemoved"
+        },
+        {
+          "kind": "error",
+          "name": "controlplane.host.GoalStateConflict"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CancelGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CancelGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Cancelled"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "shape": {
+            "declarations": {
+              "controlplane.host.Goal.State": {
+                "kind": "enum",
+                "variants": [
+                  "Cancelled",
+                  "Paused",
+                  "Running",
+                  "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
+                ]
+              }
+            },
+            "fields": [
+              {
+                "name": "goal_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "workspace_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "objective",
+                "type": "String"
+              },
+              {
+                "name": "acceptance",
+                "type": "String"
+              },
+              {
+                "name": "max_workers",
+                "type": "Integer"
+              },
+              {
+                "name": "max_attempts",
+                "type": "Integer"
+              },
+              {
+                "name": "max_minutes",
+                "type": "Integer"
+              },
+              {
+                "name": "planner_model",
+                "type": "String"
+              },
+              {
+                "name": "implementor_model",
+                "type": "String"
+              },
+              {
+                "name": "reviewer_model",
+                "type": "String"
+              },
+              {
+                "name": "merge_authority",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              },
+              {
+                "name": "satisfaction_receipt",
+                "type": "String"
+              },
+              {
+                "name": "state",
+                "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
+              }
+            ],
+            "identity_field": "goal_id"
+          },
+          "step": "snapshot_complete_subject",
+          "subject": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "cancelled"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "error": "controlplane.host.GoalStateConflict",
+          "step": "expect_error"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
         }
       ]
     },
@@ -98098,6 +100648,669 @@
         },
         {
           "error": "controlplane.host.GoalNotFound",
+          "step": "expect_error"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "controlplane.host.UpdateGoal/outcome/satisfied": {
+      "purpose": "`controlplane.host.UpdateGoal` answers `satisfied` for an input selecting the branch in its established subject state",
+      "source": [
+        {
+          "kind": "type",
+          "name": "controlplane.host.Goal.State"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.SatisfyGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.StartGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.UpdateGoal"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.SatisfyGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "satisfied"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalDeleted"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryRemoved"
+        },
+        {
+          "kind": "error",
+          "name": "controlplane.host.GoalStateConflict"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.GoalList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.StartGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.StartGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.SatisfyGoal",
+          "input": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "satisfaction_receipt": {
+              "kind": "literal",
+              "value": "satisfaction_receipt"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.SatisfyGoal",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Satisfied"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "shape": {
+            "declarations": {
+              "controlplane.host.Goal.State": {
+                "kind": "enum",
+                "variants": [
+                  "Cancelled",
+                  "Paused",
+                  "Running",
+                  "Satisfied"
+                ]
+              },
+              "controlplane.host.PlanningPhase": {
+                "kind": "enum",
+                "variants": [
+                  "Idle",
+                  "Provisioning",
+                  "Planning",
+                  "Validated",
+                  "Queued",
+                  "Blocked"
+                ]
+              }
+            },
+            "fields": [
+              {
+                "name": "goal_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "workspace_id",
+                "type": "Uuid"
+              },
+              {
+                "name": "objective",
+                "type": "String"
+              },
+              {
+                "name": "acceptance",
+                "type": "String"
+              },
+              {
+                "name": "max_workers",
+                "type": "Integer"
+              },
+              {
+                "name": "max_attempts",
+                "type": "Integer"
+              },
+              {
+                "name": "max_minutes",
+                "type": "Integer"
+              },
+              {
+                "name": "planner_model",
+                "type": "String"
+              },
+              {
+                "name": "implementor_model",
+                "type": "String"
+              },
+              {
+                "name": "reviewer_model",
+                "type": "String"
+              },
+              {
+                "name": "merge_authority",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              },
+              {
+                "name": "satisfaction_receipt",
+                "type": "String"
+              },
+              {
+                "name": "state",
+                "type": "controlplane.host.Goal.State"
+              },
+              {
+                "name": "planning_revision",
+                "type": "Integer"
+              },
+              {
+                "name": "planning_fingerprint",
+                "type": "String"
+              },
+              {
+                "name": "planning_repository",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_id",
+                "type": "String"
+              },
+              {
+                "name": "planning_worktree_path",
+                "type": "String"
+              },
+              {
+                "name": "planning_reason",
+                "type": "String"
+              },
+              {
+                "name": "planning_receipt",
+                "type": "String"
+              },
+              {
+                "name": "planning_phase",
+                "type": "controlplane.host.PlanningPhase"
+              }
+            ],
+            "identity_field": "goal_id"
+          },
+          "step": "snapshot_complete_subject",
+          "subject": {
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            }
+          },
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.UpdateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.UpdateGoal",
+            "outcome": "satisfied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "controlplane.host.GoalList"
+        },
+        {
+          "error": "controlplane.host.GoalStateConflict",
           "step": "expect_error"
         },
         {

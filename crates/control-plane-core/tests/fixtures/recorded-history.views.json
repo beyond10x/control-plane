@@ -1,36 +1,17 @@
 {
   "AssignmentList": [
     {
-      "assignment_id": "09285b8d-f884-4362-bcec-67e7119ac9e7",
-      "attempt": 2,
-      "base_revision": "base-first",
-      "candidate": "candidate-first-2",
-      "case_id": "story:first/case",
-      "goal_id": "dc4ef148-a07b-4eb7-ac1b-c0762cbfd805",
-      "goal_revision": 2,
-      "implementor_run": "implementor-first-2",
-      "merge_receipt": "merge-receipt-first",
-      "reason": "review requested changes",
-      "repository_id": "19beca1b-f6e9-4563-9940-86d03c7b725b",
-      "review_revision": "candidate-first-2",
-      "reviewer_run": "reviewer-first",
-      "state": "Merged",
-      "story_id": "story:first",
-      "test_revision": "candidate-first-2",
-      "worktree_id": "tree-first"
-    },
-    {
-      "assignment_id": "37018580-abe3-49ce-8f95-7ec4dacb98ce",
+      "assignment_id": "2eb1fdd4-8dbd-49e7-a0f2-22504780f273",
       "attempt": 2,
       "base_revision": "base-second",
       "candidate": "candidate-second",
       "case_id": "story:second/case",
-      "goal_id": "dc4ef148-a07b-4eb7-ac1b-c0762cbfd805",
+      "goal_id": "eeeb09b8-f8d3-444c-8ee9-6e4e9563daa0",
       "goal_revision": 2,
       "implementor_run": "implementor-second-2",
       "merge_receipt": "merge-receipt-second",
       "reason": "publication outcome uncertain",
-      "repository_id": "2de8e78b-4c85-4090-b8a0-70701be21573",
+      "repository_id": "25668cbb-a982-4530-89a5-b06cd1f7ed2e",
       "review_revision": "candidate-second",
       "reviewer_run": "reviewer-second",
       "state": "Merged",
@@ -39,53 +20,48 @@
       "worktree_id": "tree-second"
     },
     {
-      "assignment_id": "45d911d8-ae8f-4c24-96e9-4c817cee941e",
+      "assignment_id": "37fd1c9f-0638-4aeb-b830-415d6a40b876",
       "attempt": 0,
       "base_revision": "",
       "candidate": "",
       "case_id": "story:third/case",
-      "goal_id": "dc4ef148-a07b-4eb7-ac1b-c0762cbfd805",
+      "goal_id": "eeeb09b8-f8d3-444c-8ee9-6e4e9563daa0",
       "goal_revision": 2,
       "implementor_run": "",
       "merge_receipt": "",
       "reason": "",
-      "repository_id": "8c55dc49-ecad-41d1-ab91-61fa87f1754e",
+      "repository_id": "31a46af7-6e5e-4329-9903-c19597fb25ff",
       "review_revision": "",
       "reviewer_run": "",
       "state": "Cancelled",
       "story_id": "story:third",
       "test_revision": "",
       "worktree_id": ""
+    },
+    {
+      "assignment_id": "8919a9a0-8675-4238-ae51-4f6fde33336d",
+      "attempt": 2,
+      "base_revision": "base-first",
+      "candidate": "candidate-first-2",
+      "case_id": "story:first/case",
+      "goal_id": "eeeb09b8-f8d3-444c-8ee9-6e4e9563daa0",
+      "goal_revision": 2,
+      "implementor_run": "implementor-first-2",
+      "merge_receipt": "merge-receipt-first",
+      "reason": "review requested changes",
+      "repository_id": "c7f9e0d5-95de-4191-a2c7-945fa362edb1",
+      "review_revision": "candidate-first-2",
+      "reviewer_run": "reviewer-first",
+      "state": "Merged",
+      "story_id": "story:first",
+      "test_revision": "candidate-first-2",
+      "worktree_id": "tree-first"
     }
   ],
   "GoalList": [
     {
-      "acceptance": "Tests and an independent review pass",
-      "goal_id": "dc4ef148-a07b-4eb7-ac1b-c0762cbfd805",
-      "implementor_model": "scripted-implementor",
-      "max_attempts": 3,
-      "max_minutes": 90,
-      "max_workers": 2,
-      "merge_authority": true,
-      "objective": "Deliver the recorded change",
-      "planner_model": "scripted-planner",
-      "planning_fingerprint": "plan-fingerprint",
-      "planning_phase": "Queued",
-      "planning_reason": "",
-      "planning_receipt": "plan-receipt",
-      "planning_repository": "19beca1b-f6e9-4563-9940-86d03c7b725b",
-      "planning_revision": 2,
-      "planning_worktree_id": "planning-tree",
-      "planning_worktree_path": "/dev/shm/control-plane-history/planning",
-      "reviewer_model": "scripted-reviewer",
-      "revision": 2,
-      "satisfaction_receipt": "acceptance-verified",
-      "state": "Satisfied",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
-    },
-    {
       "acceptance": "Satisfied without assignments",
-      "goal_id": "e1619d35-8510-4672-8454-e856af83c5f3",
+      "goal_id": "001a3c10-9a43-4a4f-a9b7-39ebee8006c4",
       "implementor_model": "scripted-implementor",
       "max_attempts": 1,
       "max_minutes": 10,
@@ -105,25 +81,49 @@
       "revision": 1,
       "satisfaction_receipt": "probe-accepted",
       "state": "Satisfied",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
+    },
+    {
+      "acceptance": "Tests and an independent review pass",
+      "goal_id": "eeeb09b8-f8d3-444c-8ee9-6e4e9563daa0",
+      "implementor_model": "scripted-implementor",
+      "max_attempts": 3,
+      "max_minutes": 90,
+      "max_workers": 2,
+      "merge_authority": true,
+      "objective": "Deliver the recorded change",
+      "planner_model": "scripted-planner",
+      "planning_fingerprint": "plan-fingerprint",
+      "planning_phase": "Queued",
+      "planning_reason": "",
+      "planning_receipt": "plan-receipt",
+      "planning_repository": "c7f9e0d5-95de-4191-a2c7-945fa362edb1",
+      "planning_revision": 2,
+      "planning_worktree_id": "planning-tree",
+      "planning_worktree_path": "/dev/shm/control-plane-history/planning",
+      "reviewer_model": "scripted-reviewer",
+      "revision": 2,
+      "satisfaction_receipt": "acceptance-verified",
+      "state": "Satisfied",
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     }
   ],
   "PublicationIntentList": [
     {
-      "assignment_id": "09285b8d-f884-4362-bcec-67e7119ac9e7",
-      "candidate": "candidate-first-2",
-      "expected_base": "base-first",
-      "publication_id": "2e272c48-eed2-4723-bdc5-372eb1182ca4",
-      "receipt": "merge-receipt-first",
+      "assignment_id": "2eb1fdd4-8dbd-49e7-a0f2-22504780f273",
+      "candidate": "candidate-second",
+      "expected_base": "base-second",
+      "publication_id": "4cc29892-8f10-4372-b0dc-2b2d7eaef406",
+      "receipt": "merge-receipt-second",
       "state": "Confirmed",
       "target": "main"
     },
     {
-      "assignment_id": "37018580-abe3-49ce-8f95-7ec4dacb98ce",
-      "candidate": "candidate-second",
-      "expected_base": "base-second",
-      "publication_id": "72c3db87-dd64-44c5-ab88-8cd898673e79",
-      "receipt": "merge-receipt-second",
+      "assignment_id": "8919a9a0-8675-4238-ae51-4f6fde33336d",
+      "candidate": "candidate-first-2",
+      "expected_base": "base-first",
+      "publication_id": "6990e4e3-5815-4dc9-914a-a905a3b24091",
+      "receipt": "merge-receipt-first",
       "state": "Confirmed",
       "target": "main"
     }
@@ -131,25 +131,14 @@
   "RepositoryRegistrationList": [
     {
       "base_branch": "main",
-      "common_dir": "/dev/shm/control-plane-history/workspace/alpha/.git",
-      "name": "alpha",
-      "path": "/dev/shm/control-plane-history/workspace/alpha",
-      "publish_command": "publish-helper",
-      "repository_id": "19beca1b-f6e9-4563-9940-86d03c7b725b",
-      "state": "Disabled",
-      "test_command": "task check",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
-    },
-    {
-      "base_branch": "main",
       "common_dir": "/dev/shm/control-plane-history/workspace/beta/.git",
       "name": "beta",
       "path": "/dev/shm/control-plane-history/workspace/beta",
       "publish_command": "",
-      "repository_id": "2de8e78b-4c85-4090-b8a0-70701be21573",
+      "repository_id": "25668cbb-a982-4530-89a5-b06cd1f7ed2e",
       "state": "Disabled",
       "test_command": "task check",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     },
     {
       "base_branch": "main",
@@ -157,23 +146,34 @@
       "name": "manual",
       "path": "/dev/shm/control-plane-history/manual",
       "publish_command": "publish-helper",
-      "repository_id": "8c55dc49-ecad-41d1-ab91-61fa87f1754e",
+      "repository_id": "31a46af7-6e5e-4329-9903-c19597fb25ff",
       "state": "Registered",
       "test_command": "cargo test",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
+    },
+    {
+      "base_branch": "main",
+      "common_dir": "/dev/shm/control-plane-history/workspace/alpha/.git",
+      "name": "alpha",
+      "path": "/dev/shm/control-plane-history/workspace/alpha",
+      "publish_command": "publish-helper",
+      "repository_id": "c7f9e0d5-95de-4191-a2c7-945fa362edb1",
+      "state": "Disabled",
+      "test_command": "task check",
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     }
   ],
   "WorkspaceDirectoryList": [
     {
-      "directory_id": "ddbb86de-6bc8-408f-a278-f1b3834ecfa6",
+      "directory_id": "59b574f5-791f-40f8-8f97-818f59def8ba",
       "managed_common_dirs": [],
       "path": "/dev/shm/control-plane-history/context",
       "repository_common_dirs": [],
       "state": "Registered",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     },
     {
-      "directory_id": "fe4b2d15-8381-4714-813b-3693d7c7122f",
+      "directory_id": "842b802e-062c-4763-a0bb-636492722f3c",
       "managed_common_dirs": [
         "/dev/shm/control-plane-history/workspace/alpha/.git",
         "/dev/shm/control-plane-history/workspace/beta/.git"
@@ -184,7 +184,7 @@
         "/dev/shm/control-plane-history/workspace/beta/.git"
       ],
       "state": "Removed",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     }
   ],
   "WorkspaceList": [
@@ -192,7 +192,7 @@
       "name": "recorded",
       "path": "/dev/shm/control-plane-history/workspace",
       "state": "Archived",
-      "workspace_id": "4f977fae-93a2-4409-8283-c60934b5f36c"
+      "workspace_id": "0f212440-4ade-4168-952b-4722312c28e5"
     }
   ]
 }
