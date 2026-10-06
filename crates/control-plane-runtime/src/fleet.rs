@@ -2115,6 +2115,9 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 );
             }
             let receipt=json!({"kind":"goal_acceptance","goal_revision":goal["revision"],"observations":observations,"review_context":reviewer,"review":review}).to_string();
+            // The store is released between the check above and this command. Admission refuses
+            // a receipt whose `goal_revision` is no longer the goal's; an edit in between then
+            // leaves the goal Running, and the error arm below leaves it to the edit's planning.
             host.execute(
                 "SatisfyGoal",
                 json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),

@@ -586,7 +586,7 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
     for outcome in ["applied", "wrong-state"] {
         run.expect(
             "SatisfyGoal",
-            json!({"goal_id": goal, "satisfaction_receipt": "acceptance-verified"}),
+            json!({"goal_id": goal, "satisfaction_receipt": acceptance_receipt(2)}),
             Supervisor,
             outcome,
         )
@@ -652,7 +652,7 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
     run.expect("DeleteGoal", probe.clone(), Operator, "running")
         .await?;
     let mut satisfied = probe.clone();
-    satisfied["satisfaction_receipt"] = json!("probe-accepted");
+    satisfied["satisfaction_receipt"] = json!(acceptance_receipt(1));
     run.expect("SatisfyGoal", satisfied, Supervisor, "applied")
         .await?;
     run.expect("DeleteGoal", probe, Operator, "satisfied")
@@ -738,7 +738,7 @@ async fn unknown_instances(run: &mut Script<'_>) -> Result<()> {
         ("UpdateGoal", goal, Operator),
         (
             "SatisfyGoal",
-            json!({"goal_id": unknown, "satisfaction_receipt": "unknown"}),
+            json!({"goal_id": unknown, "satisfaction_receipt": acceptance_receipt(1)}),
             Supervisor,
         ),
         ("RecordPlanningProgress", planning, Supervisor),
@@ -802,6 +802,12 @@ async fn unknown_instances(run: &mut Script<'_>) -> Result<()> {
 fn with(assignment: &str, mut body: Value) -> Value {
     body["assignment_id"] = json!(assignment);
     body
+}
+
+/// A goal acceptance receipt in the fleet's form: admission satisfies a goal only at the
+/// revision its receipt names.
+fn acceptance_receipt(goal_revision: i64) -> String {
+    json!({"kind": "goal_acceptance", "goal_revision": goal_revision}).to_string()
 }
 
 #[cfg(test)]
