@@ -69,24 +69,37 @@ async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
 /// |---|---|---|
 /// | `server_time` (top level) | string: RFC 3339, UTC, three fractional digits | On every SSE frame and every `/api/console` answer: the server clock as it was sent ([`clocked`]). |
 /// | `id` on every activity object (goal `last_activity`, `planner_activity`, `activity[]` and `fleet{}`) | string | Always. The id recorded with the entry; an entry recorded without one gets `entry-` and 16 hex digits hashing its goal and content ([`Entries`]). The same entry has the same id wherever it appears, in every projection of one store state, and after later entries are appended. |
-/// | goal `planner_activity` | activity object, or null | The newest entry recorded by the planner's progress path: one without an `assignment_id`, so roles `planner` and `critic`. Worker entries always carry their assignment and appear under `fleet`. Null when no planner entry is among the goal's retained history (its newest 64 entries). `last_activity` stays the newest entry of any role. |
-/// | goal `waiting` | `{role, model, since}`, or null | While the goal is Running and a planner model call is open at the goal's revision ([`waiting`]): `role` of the call, `model` the goal's model for that role, `since` the `at` of its `model.requested` entry, or null once streamed events have pushed that entry out of the retained history. Null otherwise, and for every worker call. |
+/// | goal `planner_activity` | activity object, or null | The newest entry recorded without an `assignment_id`: the planner's own, roles `planner` and `critic`. Worker entries always carry their assignment and appear under `fleet`. The store's progress journal keeps this entry however much worker activity follows (its `planner_activity`, rebuilt from the recorded entries on replay). Null when the goal has none. `last_activity` stays the newest entry of any role. |
+/// | goal `waiting` | `{role, model, since}`, or null | A goal-level model call that is open while the goal is Running, at the goal's revision: the planner's or plan critic's call ([`planner_wait`]), else the final goal review's (role `goal_reviewer`, [`assignment_wait`]). Null otherwise. |
+/// | assignment `waiting` | `{role, model, since}`, or null | The assignment's open implementor call (while Implementing) or reviewer call (while Reviewing), while its goal is Running at the assignment's revision ([`assignment_wait`]). Null otherwise. |
 /// | goal `acceptance_recorded` | bool | Always: true when the goal is Satisfied with a recorded satisfaction receipt. |
 /// | assignment `merged_at` | string, or null | The `observed_at` of a Merged assignment's merge receipt (`fleet.rs` `observe_merge`); null otherwise. |
+///
+/// In both `waiting` objects, `role` is the call's role, `model` the goal's model field for
+/// that role (`planner` → `planner_model`; `implementor` → `implementor_model`; `critic`,
+/// `reviewer` and `goal_reviewer` → `reviewer_model`, which is what the runtime sends each of
+/// them), and `since` the `at` of the entry that requested the call, or null once streamed
+/// `loom.event` entries have pushed that entry out of the goal's retained history (its newest
+/// 64 entries) while the call is still open.
 fn compact(mut view: Value) -> Value {
     view.as_object_mut().unwrap().remove("server_observed_at");
     view.as_object_mut().unwrap().remove("committed_version");
-    let assignment_owners: std::collections::HashMap<_, _> = view["assignments"]
+    // Each assignment's goal and state, in a stable order.
+    let assignments: std::collections::BTreeMap<_, _> = view["assignments"]
         .as_array()
         .into_iter()
         .flatten()
         .map(|assignment| {
             (
                 field(assignment, "assignment_id").to_owned(),
-                field(assignment, "goal_id").to_owned(),
+                (
+                    field(assignment, "goal_id").to_owned(),
+                    field(assignment, "state").to_owned(),
+                ),
             )
         })
         .collect();
+    let mut assignment_waits = std::collections::BTreeMap::new();
     for goal in view["goals"].as_array_mut().into_iter().flatten() {
         // Only the fields shown are materialized; planner evidence is skipped unparsed. The
         // history (with planner evidence) stays behind the evidence endpoint.
@@ -99,6 +112,7 @@ fn compact(mut view: Value) -> Value {
         {
             receipt.activity = history["activity"].clone();
             receipt.fleet = history["fleet"].clone();
+            receipt.planner_activity = history["planner_activity"].clone();
         }
         let goal_id = field(goal, "goal_id").to_owned();
         let entries = Entries::new(&goal_id, &receipt.activity);
@@ -112,20 +126,49 @@ fn compact(mut view: Value) -> Value {
                 .map(|(event, id)| observation(event, id))
                 .collect(),
         );
-        // Newest first; `last_activity` is the newest entry and normally also the last listed.
+        // The planner's entries, newest first. `last_activity` is the newest entry of all and
+        // the journal's `planner_activity` the newest planner entry, so whichever of them is
+        // the planner's comes before every listed planner entry.
         let planner = || {
             std::iter::once(&receipt.last_activity)
+                .chain(std::iter::once(&receipt.planner_activity))
                 .chain(entries.listed.iter().rev().map(|(event, _)| *event))
-                .filter(|event| event.is_object() && field(event, "assignment_id").is_empty())
+                .filter(|event| planner_entry(event))
         };
         let planner_activity = planner()
             .next()
             .map_or(Value::Null, |event| entries.observe(event));
-        let wait = waiting(goal, planner());
+        let mut wait = None;
+        if field(goal, "state") == "Running" {
+            wait = planner_wait(goal, planner());
+            let owned = assignments
+                .iter()
+                .filter(|(_, (owner, _))| *owner == goal_id);
+            for (id, (_, state)) in owned {
+                // Newest first: `fleet` keeps the assignment's newest entry past the history.
+                let lane = receipt.fleet.get(id).into_iter().chain(
+                    entries
+                        .listed
+                        .iter()
+                        .rev()
+                        .map(|(event, _)| *event)
+                        .filter(|event| event["assignment_id"] == id.as_str()),
+                );
+                match assignment_wait(goal, state, lane) {
+                    Some(call) if call["role"] == "goal_reviewer" => {
+                        wait.get_or_insert(call);
+                    }
+                    Some(call) => {
+                        assignment_waits.insert(id.clone(), call);
+                    }
+                    None => {}
+                }
+            }
+        }
         let accepted =
             field(goal, "state") == "Satisfied" && !field(goal, "satisfaction_receipt").is_empty();
         goal["planner_activity"] = planner_activity;
-        goal["waiting"] = wait;
+        goal["waiting"] = wait.unwrap_or(Value::Null);
         goal["acceptance_recorded"] = json!(accepted);
         let fleet = receipt
             .fleet
@@ -134,9 +177,9 @@ fn compact(mut view: Value) -> Value {
                 fleet
                     .iter()
                     .filter(|(id, _)| {
-                        assignment_owners
+                        assignments
                             .get(*id)
-                            .is_some_and(|owner| *owner == goal_id)
+                            .is_some_and(|(owner, _)| *owner == goal_id)
                     })
                     .map(|(id, event)| (id.clone(), entries.observe(event)))
                     .collect()
@@ -146,7 +189,11 @@ fn compact(mut view: Value) -> Value {
     }
     for assignment in view["assignments"].as_array_mut().into_iter().flatten() {
         let merged = merged_at(assignment);
+        let wait = assignment_waits
+            .remove(field(assignment, "assignment_id"))
+            .unwrap_or(Value::Null);
         assignment["merged_at"] = merged;
+        assignment["waiting"] = wait;
     }
     for kind in ["goals", "assignments", "publications"] {
         for row in view[kind].as_array_mut().into_iter().flatten() {
@@ -165,6 +212,15 @@ struct Shown {
     last_activity: Value,
     activity: Value,
     fleet: Value,
+    /// Taken from the store's history only, never from a receipt.
+    #[serde(skip)]
+    planner_activity: Value,
+}
+
+/// Whether an entry is the planner's own: the fleet records every worker entry with its
+/// `assignment_id`, and the planner's progress path never does. The journal uses this rule.
+fn planner_entry(event: &Value) -> bool {
+    event.is_object() && event.get("assignment_id").and_then(Value::as_str).is_none()
 }
 
 /// A goal's retained activity, oldest first, each entry with the id it is projected under.
@@ -224,49 +280,90 @@ fn entry_id(goal: &str, event: &Value) -> String {
     format!("entry-{hash:016x}")
 }
 
-/// The planner's open model call, from its entries newest first, as `{role, model, since}`.
-///
-/// engine.rs `Planning::respond` records `model.requested` before each planner or plan-critic
-/// call, `loom.event` entries while the call streams, and `model.completed` or `model.failed`
-/// after it. A call is open while the newest planner entry other than `loom.event` is its
-/// `model.requested`, the goal is Running and the entry is at the goal's revision. When only
-/// `loom.event` entries of the call remain retained, it is still open and `since` is null. The
-/// model is the goal's model for the call's role: `planner_model` for `planner`,
-/// `reviewer_model` for `critic`, null for any other role. Worker calls are not derived: the
-/// fleet records `model.request`, `review.request` and `goal.review` but no completion.
-fn waiting<'a>(goal: &Value, mut planner: impl Iterator<Item = &'a Value>) -> Value {
-    if field(goal, "state") != "Running" {
-        return Value::Null;
-    }
+/// One lane's open model call, read from the lane's entries newest first.
+enum Call<'a> {
+    /// The newest entry other than `loom.event` is this request.
+    Requested(&'a Value),
+    /// Only `loom.event` entries are retained, and this is the newest. The runtime records
+    /// them only while a model call streams, so the call is open; its request has left the
+    /// retained history.
+    Streaming(&'a Value),
+}
+
+/// A call opens with one of `requests`, streams `loom.event` entries while the model answers,
+/// and ends with the lane's next entry of any other action.
+fn open_call<'a>(lane: impl Iterator<Item = &'a Value>, requests: &[&str]) -> Option<Call<'a>> {
     let mut streamed = None;
-    let (call, since) = loop {
-        match planner.next() {
-            Some(event) if field(event, "action") == "loom.event" => {
-                streamed.get_or_insert(event);
-            }
-            Some(event) if field(event, "action") == "model.requested" => {
-                break (
-                    event,
-                    json!(field(event, "at").chars().take(240).collect::<String>()),
-                );
-            }
-            Some(_) => return Value::Null,
-            None => match streamed {
-                Some(event) => break (event, Value::Null),
-                None => return Value::Null,
-            },
+    for event in lane {
+        let action = field(event, "action");
+        if action == "loom.event" {
+            streamed.get_or_insert(event);
+        } else if requests.contains(&action) {
+            return Some(Call::Requested(event));
+        } else {
+            return None;
         }
-    };
-    if goal["revision"].is_null() || call["goal_revision"] != goal["revision"] {
-        return Value::Null;
     }
-    let role: String = field(call, "role").chars().take(240).collect();
-    let model = match role.as_str() {
+    streamed.map(Call::Streaming)
+}
+
+/// `{role, model, since}` of an open call, if `call` was recorded at the goal's revision.
+/// The model is the goal's field for the role, as the runtime sends it (see [`compact`]).
+fn wait(goal: &Value, role: &str, call: &Value, since: Value) -> Option<Value> {
+    if goal["revision"].is_null() || call["goal_revision"] != goal["revision"] {
+        return None;
+    }
+    let model = match role {
         "planner" => goal["planner_model"].clone(),
-        "critic" => goal["reviewer_model"].clone(),
+        "implementor" => goal["implementor_model"].clone(),
+        "critic" | "reviewer" | "goal_reviewer" => goal["reviewer_model"].clone(),
         _ => Value::Null,
     };
-    json!({"role":role,"model":model,"since":since})
+    let role: String = role.chars().take(240).collect();
+    Some(json!({"role":role,"model":model,"since":since}))
+}
+
+fn requested_since(call: &Value) -> Value {
+    json!(field(call, "at").chars().take(240).collect::<String>())
+}
+
+/// The planner's open call, from its entries newest first. engine.rs `Planning::respond`
+/// records `model.requested` before each planner or plan-critic call, `loom.event` entries
+/// with the call's role while it streams, and `model.completed` or `model.failed` after it.
+/// The caller checks that the goal is Running.
+fn planner_wait<'a>(goal: &Value, planner: impl Iterator<Item = &'a Value>) -> Option<Value> {
+    match open_call(planner, &["model.requested"])? {
+        Call::Requested(call) => wait(goal, field(call, "role"), call, requested_since(call)),
+        Call::Streaming(call) => wait(goal, field(call, "role"), call, Value::Null),
+    }
+}
+
+/// An assignment's open call, from the assignment's entries newest first. fleet.rs records
+/// `model.request` (role `implementor`) before each implementor call while Implementing,
+/// `review.request` (`reviewer`) before the review while Reviewing, and `goal.review`
+/// (`goal_reviewer`) on a Merged assignment before the final goal review; while the model
+/// streams it records `loom.event` entries with role `runtime`. It records no completion: the
+/// assignment's next entry of any other action ends the call, and so does the assignment
+/// leaving the state its call belongs to. A call whose request has left the retained history
+/// takes its role from that state. The caller checks that the goal is Running.
+fn assignment_wait<'a>(
+    goal: &Value,
+    state: &str,
+    lane: impl Iterator<Item = &'a Value>,
+) -> Option<Value> {
+    let role = match state {
+        "Implementing" => "implementor",
+        "Reviewing" => "reviewer",
+        "Merged" => "goal_reviewer",
+        _ => return None,
+    };
+    match open_call(lane, &["model.request", "review.request", "goal.review"])? {
+        Call::Requested(call) if field(call, "role") == role => {
+            wait(goal, role, call, requested_since(call))
+        }
+        Call::Requested(_) => None,
+        Call::Streaming(call) => wait(goal, role, call, Value::Null),
+    }
 }
 
 /// When a Merged assignment's merge receipt observed the merge. Only `observed_at` is read.
@@ -1203,5 +1300,179 @@ mod tests {
         let after = ids(row(&three, "goals", "goal_id", &goal));
         assert_eq!(after.len(), 6);
         assert_eq!(after[1..], before[..]);
+    }
+
+    /// The browser's `/api/console` projection.
+    async fn console_view(state: &AppState) -> Value {
+        let response = subscribe(state, "/api/console", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+    /// The `at` of the newest projected entry with `action`.
+    fn requested_at(goal: &Value, action: &str) -> Value {
+        goal["activity"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["action"] == action)
+            .unwrap_or_else(|| panic!("no {action} listed"))["at"]
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn planner_activity_survives_worker_activity_and_restart_replay() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "replayed").await;
+        let repo = repository(&state, &temp.path().join("replayed"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:replayed").await;
+        let planner = planner_event(
+            &state,
+            &goal,
+            &revision,
+            "planning.Queued",
+            "2026-10-06T10:00:00Z",
+        )
+        .await;
+        // More worker entries than the goal's retained history (64) holds.
+        for _ in 0..70 {
+            worker_event(&state, &goal, &revision, &assignment).await;
+        }
+        let check = |view: Value| {
+            let shown = row(&view, "goals", "goal_id", &goal);
+            assert!(
+                shown["activity"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|entry| entry["id"] != planner["id"])
+            );
+            assert_eq!(shown["planner_activity"]["id"], planner["id"]);
+            assert_eq!(shown["planner_activity"]["action"], "planning.Queued");
+        };
+        check(console_view(&state).await);
+        drop(state);
+        // Reopening replays the recorded decisions; nothing else is stored.
+        let reopened = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+        let state = AppState::new(
+            Arc::new(Mutex::new(reopened)),
+            "127.0.0.1:8787".parse().unwrap(),
+            Arc::new(Notify::new()),
+        );
+        check(console_view(&state).await);
+    }
+
+    #[tokio::test]
+    async fn assignment_model_waits_are_projected() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "assignment-wait").await;
+        let repo = repository(&state, &temp.path().join("assignment-wait"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:waits").await;
+        let with = |mut body: Value| {
+            body["assignment_id"] = json!(assignment);
+            body
+        };
+        supervise(&state, "ClaimAssignment", with(json!({"worktree_id":"tree","implementor_run":"implementor-run","base_revision":"base"}))).await;
+        let fleet = supervisor(&state);
+        let worker = json!({"goal_id":goal,"assignment_id":assignment,"goal_revision":revision,"worktree_id":"tree"});
+        // The fleet's own progress path, with the actions and roles fleet.rs records.
+        let record = async |action: &str, role: &str| {
+            fleet
+                .record_progress(&worker, action, role, json!({"execution_context":"run"}))
+                .await
+                .unwrap();
+        };
+        let waits = async || {
+            let view = console_view(&state).await;
+            let shown = row(&view, "goals", "goal_id", &goal).clone();
+            let waiting =
+                row(&view, "assignments", "assignment_id", &assignment)["waiting"].clone();
+            (shown, waiting)
+        };
+        record("model.request", "implementor").await;
+        record("loom.event", "runtime").await;
+        let (shown, waiting) = waits().await;
+        assert_eq!(
+            waiting,
+            json!({"role":"implementor","model":"implementor-model","since":requested_at(&shown, "model.request")})
+        );
+        // A worker call is the assignment's wait, not the goal's.
+        assert_eq!(shown["waiting"], Value::Null);
+        // The next entry of the assignment that is not a stream event ends the call.
+        record("tool.run", "implementor").await;
+        assert_eq!(waits().await.1, Value::Null);
+        // A call whose request streamed out of the retained history is still open.
+        record("model.request", "implementor").await;
+        for _ in 0..70 {
+            record("loom.event", "runtime").await;
+        }
+        assert_eq!(
+            waits().await.1,
+            json!({"role":"implementor","model":"implementor-model","since":null})
+        );
+        record("checks.run", "host").await;
+        assert_eq!(waits().await.1, Value::Null);
+        supervise(
+            &state,
+            "ReviewAssignment",
+            with(json!({"candidate":"candidate","test_revision":"candidate"})),
+        )
+        .await;
+        record("review.request", "reviewer").await;
+        let (shown, waiting) = waits().await;
+        assert_eq!(
+            waiting,
+            json!({"role":"reviewer","model":"reviewer-model","since":requested_at(&shown, "review.request")})
+        );
+        // Leaving the state the call belongs to ends it, even before another entry.
+        supervise(
+            &state,
+            "ReadyAssignment",
+            with(json!({"reviewer_run":"reviewer-run","review_revision":"candidate"})),
+        )
+        .await;
+        assert_eq!(waits().await.1, Value::Null);
+    }
+
+    #[tokio::test]
+    async fn model_wait_ends_when_the_goal_revision_changes() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "revised").await;
+        let repo = repository(&state, &temp.path().join("revised"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:revised").await;
+        supervise(&state, "ClaimAssignment", json!({"assignment_id":assignment,"worktree_id":"tree","implementor_run":"implementor-run","base_revision":"base"})).await;
+        record_planner(&state, &goal, &revision, json!({"id":"request","action":"model.requested","role":"planner","detail":"Waiting for planner response from planner-model","status":"running","at":"2026-10-06T10:00:00Z","worktree":"tree","goal_revision":revision})).await;
+        supervisor(&state)
+            .record_progress(
+                &json!({"goal_id":goal,"assignment_id":assignment,"goal_revision":revision,"worktree_id":"tree"}),
+                "model.request",
+                "implementor",
+                json!({"execution_context":"run"}),
+            )
+            .await
+            .unwrap();
+        let view = console_view(&state).await;
+        assert_eq!(
+            row(&view, "goals", "goal_id", &goal)["waiting"],
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
+        );
+        assert_eq!(
+            row(&view, "assignments", "assignment_id", &assignment)["waiting"]["role"],
+            "implementor"
+        );
+        // An operator edit bumps the revision while both calls are open.
+        state.command("UpdateGoal", json!({"goal_id":goal,"objective":"projection goal","acceptance":"verified","max_workers":2,"max_attempts":2,"max_minutes":20,"planner_model":"planner-model","implementor_model":"implementor-model","reviewer_model":"reviewer-model","merge_authority":true})).await.unwrap();
+        let view = console_view(&state).await;
+        let shown = row(&view, "goals", "goal_id", &goal);
+        assert_eq!(shown["state"], "Running");
+        assert_ne!(shown["revision"], revision);
+        assert_eq!(shown["waiting"], Value::Null);
+        assert_eq!(
+            row(&view, "assignments", "assignment_id", &assignment)["waiting"],
+            Value::Null
+        );
     }
 }

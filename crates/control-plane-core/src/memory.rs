@@ -84,15 +84,25 @@ const BOUNDED: &str = "_bounded";
 /// A bounded receipt (`"receipt_format": 2`) stores its newest activity and, only when they
 /// change, the planner evidence and the acceptance record. Replaying those decisions rebuilds
 /// what older receipts repeated in every decision: the newest activities, each assignment's
-/// newest activity and the newest planner evidence and acceptance record. Nothing here is
-/// stored on its own; `Store::activity_history` reads it.
+/// newest activity and the newest planner evidence and acceptance record. It also keeps the
+/// newest activity without an `assignment_id` (the planner's own), which worker activity can
+/// push out of the newest activities. Nothing here is stored on its own; replay derives it
+/// from the recorded activities, and `Store::activity_history` reads it.
 #[derive(Clone, Default)]
 pub(crate) struct Journal {
     /// The stored receipt this journal belongs to; for any other receipt it is stale.
     receipt: Arc<str>,
     activity: VecDeque<Arc<Value>>,
     fleet: BTreeMap<String, Arc<Value>>,
+    /// The newest activity without an `assignment_id`, as `fleet` keeps each assignment's.
+    planner_activity: Option<Arc<Value>>,
     latest: [Option<Arc<Value>>; 2],
+}
+
+/// Whether an activity is the planner's own: the fleet records every worker activity with
+/// its `assignment_id`, and the planner's progress path never does.
+fn planner_activity(event: &Value) -> bool {
+    event.is_object() && event.get("assignment_id").and_then(Value::as_str).is_none()
 }
 
 impl Journal {
@@ -111,6 +121,11 @@ impl Journal {
                 .iter()
                 .map(|event| Arc::new(bounded_activity(event)))
                 .collect();
+            journal.planner_activity = history
+                .iter()
+                .rev()
+                .find(|event| planner_activity(event))
+                .map(|event| Arc::new(bounded_activity(event)));
         }
         if let Some(fleet) = fields.get("fleet").and_then(Value::as_object) {
             journal.fleet = fleet
@@ -154,6 +169,8 @@ impl Journal {
             let event = Arc::new(activity.clone());
             if let Some(assignment) = activity.get("assignment_id").and_then(Value::as_str) {
                 self.fleet.insert(assignment.to_owned(), event.clone());
+            } else {
+                self.planner_activity = Some(event.clone());
             }
             self.activity.push_back(event);
             while self.activity.len() > HISTORY {
@@ -169,7 +186,8 @@ impl Journal {
     }
 
     /// The history as readers see it: activities oldest first, each assignment's newest
-    /// activity, and the newest planner evidence and acceptance record.
+    /// activity, the newest activity without an assignment (`planner_activity`, or null), and
+    /// the newest planner evidence and acceptance record.
     pub fn history(&self) -> Value {
         let mut history = Map::new();
         history.insert(
@@ -189,6 +207,13 @@ impl Journal {
                     .map(|(id, event)| (id.clone(), (**event).clone()))
                     .collect(),
             ),
+        );
+        history.insert(
+            "planner_activity".into(),
+            self.planner_activity
+                .as_deref()
+                .cloned()
+                .unwrap_or(Value::Null),
         );
         for (index, key) in LATEST.iter().enumerate() {
             history.insert(
@@ -443,5 +468,52 @@ impl TryContext for Ports {
         };
         memory.cursor += 1;
         Ok(Uuid(id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Record `activity` as the newest activity of a bounded receipt.
+    fn record(journal: &mut Journal, activity: &Value) {
+        let receipt =
+            json!({"last_activity":activity,"receipt_format":BOUNDED_RECEIPT}).to_string();
+        let fields = bounded_receipt(&receipt).expect("bounded receipt");
+        journal.record(&receipt, &fields);
+    }
+
+    #[test]
+    fn journal_keeps_the_newest_planner_activity_past_its_history() {
+        let planner = json!({"id":"plan","action":"planning.Queued","role":"planner","status":"waiting","at":"2026-10-06T10:00:00Z","goal_revision":1,"detail":"Planning phase: Queued"});
+        let worker = |index: usize| json!({"id":format!("stream-{index}"),"assignment_id":"assignment","action":"loom.event","role":"runtime","status":"running","at":"2026-10-06T10:01:00Z","goal_revision":1,"detail":format!("Receiving model response ({index} streamed events)")});
+        let mut journal = Journal::default();
+        record(&mut journal, &planner);
+        for index in 0..HISTORY + 6 {
+            record(&mut journal, &worker(index));
+        }
+        let history = journal.history();
+        // The planner entry has left the retained activities; its own slot keeps it, the way
+        // `fleet` keeps each assignment's newest activity.
+        assert!(
+            history["activity"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|event| event["id"] != "plan")
+        );
+        assert_eq!(history["fleet"]["assignment"], worker(HISTORY + 5));
+        assert_eq!(history["planner_activity"], planner);
+        let newer = json!({"id":"plan-2","action":"planner.intent","role":"planner","status":"running","at":"2026-10-06T10:02:00Z","goal_revision":1,"detail":"Reading the repository"});
+        record(&mut journal, &newer);
+        record(&mut journal, &worker(HISTORY + 6));
+        assert_eq!(journal.history()["planner_activity"], newer);
+        // A receipt recorded before bounding carries its own history, and seeds the slot.
+        let seeded = Journal::seed(&json!({"activity":[planner,worker(1),worker(2)]}).to_string());
+        assert_eq!(seeded.history()["planner_activity"], planner);
+        assert_eq!(
+            Journal::default().history()["planner_activity"],
+            Value::Null
+        );
     }
 }

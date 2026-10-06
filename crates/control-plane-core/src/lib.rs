@@ -417,9 +417,10 @@ impl Store {
     }
 
     /// A goal's progress history, which bounded receipts no longer repeat: the newest 64
-    /// activities (oldest first), each assignment's newest activity, and the newest planner
-    /// evidence and acceptance record. For a receipt recorded before bounding, these are the
-    /// receipt's own fields.
+    /// activities (oldest first), each assignment's newest activity, the newest activity
+    /// without an assignment (`planner_activity`), and the newest planner evidence and
+    /// acceptance record. For a receipt recorded before bounding, these are the receipt's own
+    /// fields.
     pub fn activity_history(&self, goal_id: &str) -> Result<Value> {
         let goal = self
             .memory
