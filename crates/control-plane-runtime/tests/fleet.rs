@@ -1068,6 +1068,104 @@ async fn shutdown_during_goal_review_does_not_latch_acceptance() {
     assert_eq!(goal_reviews, 2);
 }
 
+/// Makes the reviewed repository's `origin` unreachable during the first goal review, the way
+/// a network outage starts while the reviewer runs. The test restores it.
+struct OriginOutageDuringGoalReview {
+    inner: Scripted,
+    broken: Mutex<Option<(PathBuf, String)>>,
+}
+impl AgentModel for OriginOutageDuringGoalReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        self.inner.respond(request)
+    }
+    fn respond_in(
+        &self,
+        request: &ModelRequest,
+        environment: &control_plane_runtime::ModelEnvironment,
+    ) -> Result<Value> {
+        let mut broken = self.broken.lock().unwrap();
+        if request.role == "goal_reviewer" && broken.is_none() {
+            let path = environment.workspace.clone();
+            let url = cmd(&path, "git", &["remote", "get-url", "origin"], &[])
+                .trim()
+                .to_owned();
+            let unreachable = format!("{url}-unreachable");
+            cmd(
+                &path,
+                "git",
+                &["remote", "set-url", "origin", &unreachable],
+                &[],
+            );
+            *broken = Some((path, url));
+        }
+        drop(broken);
+        self.respond(request)
+    }
+}
+
+/// The cost of an outage of `origin` that starts during the goal review. The post-review
+/// observation of the target fails, and the acceptance is recorded as interrupted, not latched.
+/// While `origin` stays unreachable, each later acceptance stops at its first observation of the
+/// target, before any check or review, so no goal review is paid for. Once `origin` answers,
+/// acceptance runs once more and satisfies the unchanged goal.
+#[tokio::test]
+async fn origin_outage_after_goal_review_costs_one_review_after_recovery() {
+    let fixture = fixture(1).await;
+    let model = Arc::new(OriginOutageDuringGoalReview {
+        inner: Scripted::new(),
+        broken: Mutex::new(None),
+    });
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    let reviews = || {
+        model
+            .inner
+            .contexts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(role, _)| role == "goal_reviewer")
+            .count()
+    };
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 1);
+    let (path, url) = model
+        .broken
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("goal acceptance reached its review");
+    let acceptance = history(&fixture.store).await["acceptance"].clone();
+    assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    assert!(
+        acceptance["reason"].as_str().unwrap().contains("ls-remote"),
+        "{acceptance}"
+    );
+    for round in 0..3 {
+        supervisor.tick().await.unwrap();
+        let report = supervisor.fleet_tick().await.unwrap();
+        assert_eq!(reviews(), 1, "outage round {round}: {report:?}");
+        let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+        assert_eq!(goal["state"], "Running", "{goal}");
+        let acceptance = history(&fixture.store).await["acceptance"].clone();
+        assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    }
+    cmd(&path, "git", &["remote", "set-url", "origin", &url], &[]);
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 2);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Satisfied", "{goal}");
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(reviews(), 2);
+}
+
 #[tokio::test]
 async fn pause_and_limits_stop_dispatch() {
     let mut fixture = fixture(1).await;
