@@ -109,12 +109,18 @@ fn component_tests_run_in_the_gate() -> Result<()> {
 }
 
 const UNRUN: &str = include_str!("fixtures/frontend/unrun.test.js");
-const UNRUN_TITLES: [&str; 5] = [
-    "fixture skipped suite > fixture test in a skipped suite",
-    "fixture skipped test",
-    "fixture skipIf test",
-    "fixture todo test",
-    "fixture test that skips itself",
+const UNRUN_TITLES: [&str; 11] = [
+    "fixture skipped suite (skipped)",
+    "fixture skipped suite > fixture test in a skipped suite (skipped)",
+    "fixture empty skipped suite (skipped)",
+    "fixture todo suite (todo)",
+    "fixture skipped test (skipped)",
+    "fixture skipIf test (skipped)",
+    "fixture todo test (todo)",
+    "fixture test that skips itself (skipped)",
+    "fixture expected-fail test (expected fail)",
+    "fixture expected-fail option (expected fail)",
+    "fixture aliased expected-fail test (expected fail)",
 ];
 
 #[test]
@@ -171,6 +177,41 @@ fn every_conventional_test_file_runs_in_the_gate() -> Result<()> {
     ensure!(
         message.contains("Vue component tests failed") && skipped.is_empty(),
         "the gate must run every file Vitest's default pattern names; not run: {skipped:?}\n{message}"
+    );
+    Ok(())
+}
+
+/// `dangerouslyIgnoreUnhandledErrors` makes Vitest exit 0 after an unhandled rejection; the gate
+/// must still refuse the run and name the error.
+#[test]
+fn unhandled_errors_fail_the_gate() -> Result<()> {
+    let (_temporary, root) = frontend_copy()?;
+    let config = root.join("frontend/vitest.config.js");
+    let text = fs::read_to_string(&config)?;
+    ensure!(
+        text.contains("allowOnly: false"),
+        "vitest.config.js no longer sets allowOnly"
+    );
+    fs::write(
+        &config,
+        text.replacen(
+            "allowOnly: false",
+            "allowOnly: false, dangerouslyIgnoreUnhandledErrors: true",
+            1,
+        ),
+    )?;
+    fs::write(
+        root.join("frontend/src/unhandled.test.js"),
+        "import { test } from 'vitest'\ntest('fixture test leaving an unhandled rejection', () => { Promise.reject(new Error('fixture unhandled rejection')) })\n",
+    )?;
+    let message = format!(
+        "{:#}",
+        frontend::run(&root, false).err().context("gate passed")?
+    );
+    ensure!(
+        message.contains("Vue component tests failed")
+            && message.contains("unhandled error (fixture unhandled rejection)"),
+        "the gate must refuse a run with an unhandled error and name it:\n{message}"
     );
     Ok(())
 }
