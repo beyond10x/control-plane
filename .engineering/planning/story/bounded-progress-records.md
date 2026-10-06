@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:bounded-progress-records
 kind: story
-status: draft
+status: active
 title: Progress records stay bounded and restart replay stays fast
 relations:
 - decomposes: epic:unattended-operation
@@ -20,7 +20,10 @@ scope:
   path: crates/control-plane-runtime/src/fleet.rs
 - confidence: cited
   path: crates/control-plane-runtime/src/supervisor.rs
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":5}}, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":5}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 

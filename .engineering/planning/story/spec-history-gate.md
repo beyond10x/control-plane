@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spec-history-gate
 kind: story
-status: draft
+status: active
 title: Specification changes that could break stored history fail the gate
 relations:
 - decomposes: epic:unattended-operation
@@ -17,7 +17,10 @@ scope:
   path: crates/control-plane-xtask/src
 - confidence: inferred
   path: ess
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
