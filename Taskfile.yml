@@ -6,6 +6,7 @@ tasks:
     cmds:
       - ess specify validate --path ess --strict-requires
       - aep plan artifact validate
+      - cargo run --locked -p control-plane-xtask -- spec-history-check
       - npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
       - cargo run --locked -p control-plane-xtask -- frontend-check
       - cargo fmt -p control-plane-core -p control-plane-protocol -p control-plane-runtime -p control-plane-app -p control-plane-xtask --check

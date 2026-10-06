@@ -3,11 +3,13 @@ mod eval;
 mod foundation;
 mod frontend;
 mod generation;
+mod history;
+mod spec_history;
 mod target;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(about = "Control-plane generated contract and durable conformance gates")]
@@ -34,6 +36,15 @@ enum Action {
     FrontendBuild,
     /// Rebuild Vue in scratch and refuse drift in the embedded assets.
     FrontendCheck,
+    /// Refuse unacknowledged specification changes that could break stored history.
+    SpecHistoryCheck,
+    /// Deliberately re-record the host history fixture that `Store::open` must replay.
+    RecordHistory {
+        /// A new directory outside every home directory and Git work tree; recorded paths are
+        /// committed with the fixture.
+        #[arg(long)]
+        work_dir: PathBuf,
+    },
 }
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -49,5 +60,7 @@ fn main() -> Result<()> {
         Action::FoundationCheck => foundation::run(root),
         Action::FrontendBuild => frontend::run(root, true),
         Action::FrontendCheck => frontend::run(root, false),
+        Action::SpecHistoryCheck => spec_history::run(root),
+        Action::RecordHistory { work_dir } => history::run(root, &work_dir),
     }
 }
