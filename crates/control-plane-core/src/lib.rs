@@ -40,6 +40,8 @@ pub struct Store {
     committed: tokio::sync::watch::Sender<u64>,
     memory: Memory,
     appended: u64,
+    /// See [`Store::replayed_progress`].
+    replayed_progress: u64,
     _lock: File,
 }
 
@@ -185,6 +187,7 @@ impl Store {
             committed: tokio::sync::watch::channel(0).0,
             memory: Memory::default(),
             appended: 0,
+            replayed_progress: 0,
             _lock: lock,
         };
         loop {
@@ -228,8 +231,18 @@ impl Store {
                 break;
             }
         }
+        // The replay boundary: progress recorded up to here was recorded by earlier processes.
+        store.replayed_progress = store.memory.progress_records;
         store.committed.send_replace(store.version);
         Ok(store)
+    }
+
+    /// The sequence number of the newest progress record replayed when this store opened
+    /// (0 for a new store). A journal step whose `recorded` is at most this was recorded by
+    /// an earlier process, so no model call it opened is still running: a process's runtime
+    /// holds its model calls, and the runtime opens fresh cases when it starts.
+    pub fn replayed_progress(&self) -> u64 {
+        self.replayed_progress
     }
 
     /// Subscribe to successfully committed host decisions, coalescing slow observers to
@@ -418,9 +431,11 @@ impl Store {
 
     /// A goal's progress history, which bounded receipts no longer repeat: the newest 64
     /// activities (oldest first), each assignment's newest activity, the newest activity
-    /// without an assignment (`planner_activity`), and the newest planner evidence and
-    /// acceptance record. For a receipt recorded before bounding, these are the receipt's own
-    /// fields.
+    /// without an assignment (`planner_activity`), each lane's newest activity other than a
+    /// streamed `loom.event` with its progress record number (`planner_step`, `fleet_steps`;
+    /// compare [`Store::replayed_progress`]), and the newest planner evidence and acceptance
+    /// record. For a receipt recorded before bounding, these are the receipt's own fields, and
+    /// it has no steps.
     pub fn activity_history(&self, goal_id: &str) -> Result<Value> {
         let goal = self
             .memory
@@ -584,7 +599,8 @@ fn advance_journal(next: &mut Memory, goal: &str, previous: &str) {
     match memory::bounded_receipt(&receipt) {
         Some(fields) => {
             let mut journal = Journal::take(next, goal, previous);
-            journal.record(&receipt, &fields);
+            next.progress_records += 1;
+            journal.record(&receipt, &fields, next.progress_records);
             next.journals.insert(goal.to_owned(), journal);
         }
         None => {

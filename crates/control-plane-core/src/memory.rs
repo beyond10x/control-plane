@@ -18,6 +18,9 @@ pub(crate) struct Memory {
     pub directories: BTreeMap<String, WorkspaceDirectorySnapshot>,
     /// Progress journals of goals with bounded receipts, rebuilt from recorded decisions.
     pub journals: BTreeMap<String, Journal>,
+    /// Bounded progress records journaled so far, counted again by every replay: the
+    /// sequence number of the newest one.
+    pub progress_records: u64,
     pub ids: Vec<String>,
     pub replay: bool,
     pub cursor: usize,
@@ -86,8 +89,9 @@ const BOUNDED: &str = "_bounded";
 /// what older receipts repeated in every decision: the newest activities, each assignment's
 /// newest activity and the newest planner evidence and acceptance record. It also keeps the
 /// newest activity without an `assignment_id` (the planner's own), which worker activity can
-/// push out of the newest activities. Nothing here is stored on its own; replay derives it
-/// from the recorded activities, and `Store::activity_history` reads it.
+/// push out of the newest activities, and each lane's newest [`Step`]. Nothing here is stored
+/// on its own; replay derives it from the recorded activities, and `Store::activity_history`
+/// reads it.
 #[derive(Clone, Default)]
 pub(crate) struct Journal {
     /// The stored receipt this journal belongs to; for any other receipt it is stale.
@@ -96,7 +100,27 @@ pub(crate) struct Journal {
     fleet: BTreeMap<String, Arc<Value>>,
     /// The newest activity without an `assignment_id`, as `fleet` keeps each assignment's.
     planner_activity: Option<Arc<Value>>,
+    /// The planner lane's newest step: activities without an `assignment_id`.
+    planner_step: Option<Step>,
+    /// Each assignment's newest step.
+    fleet_steps: BTreeMap<String, Step>,
     latest: [Option<Arc<Value>>; 2],
+}
+
+/// A lane's newest activity other than a streamed `loom.event`, kept however many stream
+/// events follow, with the number of the progress record that recorded it
+/// (`Memory::progress_records`). A model call opens with such an activity and ends with the
+/// lane's next one; the stream events between them only show it is running.
+#[derive(Clone)]
+struct Step {
+    recorded: u64,
+    entry: Arc<Value>,
+}
+
+impl Step {
+    fn shown(&self) -> Value {
+        json!({"recorded":self.recorded,"entry":*self.entry})
+    }
 }
 
 /// Whether an activity is the planner's own: the fleet records every worker activity with
@@ -108,6 +132,7 @@ fn planner_activity(event: &Value) -> bool {
 impl Journal {
     /// The journal a receipt implies when it was not recorded bounded: an older receipt
     /// that repeats its own history, an empty one, or one recorded through another path.
+    /// It has no steps: such a receipt was written before bounding, by an earlier process.
     pub fn seed(receipt: &str) -> Self {
         let mut journal = Self {
             receipt: receipt.into(),
@@ -159,18 +184,31 @@ impl Journal {
         self.latest[index].as_deref()
     }
 
-    /// Advance to a newly recorded bounded receipt.
-    pub fn record(&mut self, receipt: &str, fields: &Map<String, Value>) {
+    /// Advance to a newly recorded bounded receipt, progress record number `recorded`.
+    pub fn record(&mut self, receipt: &str, fields: &Map<String, Value>, recorded: u64) {
         if let Some(activity) = fields
             .get("last_activity")
             .filter(|event| event.is_object())
             && self.activity.back().map(|event| &**event) != Some(activity)
         {
             let event = Arc::new(activity.clone());
+            let step =
+                (activity.get("action").and_then(Value::as_str) != Some("loom.event")).then(|| {
+                    Step {
+                        recorded,
+                        entry: event.clone(),
+                    }
+                });
             if let Some(assignment) = activity.get("assignment_id").and_then(Value::as_str) {
                 self.fleet.insert(assignment.to_owned(), event.clone());
+                if let Some(step) = step {
+                    self.fleet_steps.insert(assignment.to_owned(), step);
+                }
             } else {
                 self.planner_activity = Some(event.clone());
+                if step.is_some() {
+                    self.planner_step = step;
+                }
             }
             self.activity.push_back(event);
             while self.activity.len() > HISTORY {
@@ -186,8 +224,9 @@ impl Journal {
     }
 
     /// The history as readers see it: activities oldest first, each assignment's newest
-    /// activity, the newest activity without an assignment (`planner_activity`, or null), and
-    /// the newest planner evidence and acceptance record.
+    /// activity, the newest activity without an assignment (`planner_activity`, or null), each
+    /// lane's newest step as `{recorded, entry}` (`planner_step`, or null, and `fleet_steps`
+    /// by assignment), and the newest planner evidence and acceptance record.
     pub fn history(&self) -> Value {
         let mut history = Map::new();
         history.insert(
@@ -214,6 +253,19 @@ impl Journal {
                 .as_deref()
                 .cloned()
                 .unwrap_or(Value::Null),
+        );
+        history.insert(
+            "planner_step".into(),
+            self.planner_step.as_ref().map_or(Value::Null, Step::shown),
+        );
+        history.insert(
+            "fleet_steps".into(),
+            Value::Object(
+                self.fleet_steps
+                    .iter()
+                    .map(|(id, step)| (id.clone(), step.shown()))
+                    .collect(),
+            ),
         );
         for (index, key) in LATEST.iter().enumerate() {
             history.insert(
@@ -475,12 +527,16 @@ impl TryContext for Ports {
 mod tests {
     use super::*;
 
-    /// Record `activity` as the newest activity of a bounded receipt.
-    fn record(journal: &mut Journal, activity: &Value) {
+    /// Record `activity` as the newest activity of a bounded receipt, as progress record
+    /// number `recorded`.
+    fn record_as(journal: &mut Journal, activity: &Value, recorded: u64) {
         let receipt =
             json!({"last_activity":activity,"receipt_format":BOUNDED_RECEIPT}).to_string();
         let fields = bounded_receipt(&receipt).expect("bounded receipt");
-        journal.record(&receipt, &fields);
+        journal.record(&receipt, &fields, recorded);
+    }
+    fn record(journal: &mut Journal, activity: &Value) {
+        record_as(journal, activity, 1);
     }
 
     #[test]
@@ -515,5 +571,63 @@ mod tests {
             Journal::default().history()["planner_activity"],
             Value::Null
         );
+    }
+
+    #[test]
+    fn journal_keeps_each_lanes_newest_step_with_its_record_number() {
+        let entry = |id: &str, assignment: Option<&str>, action: &str| {
+            let mut entry = json!({"id":id,"action":action,"role":"planner","status":"running","at":"2026-10-06T10:00:00Z","goal_revision":1,"detail":id});
+            if let Some(assignment) = assignment {
+                entry["assignment_id"] = json!(assignment);
+                entry["role"] = json!("implementor");
+            }
+            entry
+        };
+        let planner_request = entry("planner-request", None, "model.requested");
+        let worker_request = entry("worker-request", Some("assignment"), "model.request");
+        let mut journal = Journal::default();
+        let mut recorded = 0;
+        let mut next = |journal: &mut Journal, activity: &Value| {
+            recorded += 1;
+            record_as(journal, activity, recorded);
+        };
+        next(&mut journal, &planner_request);
+        next(&mut journal, &worker_request);
+        // Both calls stream longer than the retained activities reach back.
+        for index in 0..HISTORY + 6 {
+            let stream = |assignment| entry(&format!("stream-{index}"), assignment, "loom.event");
+            next(&mut journal, &stream(Some("assignment")));
+            next(&mut journal, &stream(None));
+        }
+        let history = journal.history();
+        assert!(
+            history["activity"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|event| event["action"] == "loom.event")
+        );
+        // A lane's step is its newest entry that is not a stream event, with its record number.
+        assert_eq!(
+            history["planner_step"],
+            json!({"recorded":1,"entry":planner_request})
+        );
+        assert_eq!(
+            history["fleet_steps"],
+            json!({"assignment":{"recorded":2,"entry":worker_request}})
+        );
+        let ran = entry("tool-run", Some("assignment"), "tool.run");
+        next(&mut journal, &ran);
+        let recorded_ran = 2 + 2 * (HISTORY as u64 + 6) + 1;
+        assert_eq!(
+            journal.history()["fleet_steps"]["assignment"],
+            json!({"recorded":recorded_ran,"entry":ran})
+        );
+        assert_eq!(journal.history()["planner_step"]["entry"], planner_request);
+        // A receipt recorded before bounding comes from an earlier process: it opens no step.
+        let seeded =
+            Journal::seed(&json!({"activity":[planner_request,worker_request]}).to_string());
+        assert_eq!(seeded.history()["planner_step"], Value::Null);
+        assert_eq!(seeded.history()["fleet_steps"], json!({}));
     }
 }

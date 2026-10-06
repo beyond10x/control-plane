@@ -54,8 +54,12 @@ fn clocked(mut view: Value) -> Value {
 }
 
 /// The goals' activity history comes from the store; bounded receipts do not repeat it.
+/// `replayed_progress` is the store's replay boundary, which [`compact`] reads and removes; it
+/// is fixed for the life of the store, so reading it under a later lock than the view is exact.
 async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
-    dashboard::attach_history(&*state.store.lock().await, &mut view["goals"])?;
+    let store = state.store.lock().await;
+    dashboard::attach_history(&store, &mut view["goals"])?;
+    view["replayed_progress"] = json!(store.replayed_progress());
     Ok(view)
 }
 
@@ -70,20 +74,34 @@ async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
 /// | `server_time` (top level) | string: RFC 3339, UTC, three fractional digits | On every SSE frame and every `/api/console` answer: the server clock as it was sent ([`clocked`]). |
 /// | `id` on every activity object (goal `last_activity`, `planner_activity`, `activity[]` and `fleet{}`) | string | Always. The id recorded with the entry; an entry recorded without one gets `entry-` and 16 hex digits hashing its goal and content ([`Entries`]). The same entry has the same id wherever it appears, in every projection of one store state, and after later entries are appended. |
 /// | goal `planner_activity` | activity object, or null | The newest entry recorded without an `assignment_id`: the planner's own, roles `planner` and `critic`. Worker entries always carry their assignment and appear under `fleet`. The store's progress journal keeps this entry however much worker activity follows (its `planner_activity`, rebuilt from the recorded entries on replay). Null when the goal has none. `last_activity` stays the newest entry of any role. |
-/// | goal `waiting` | `{role, model, since}`, or null | A goal-level model call that is open while the goal is Running, at the goal's revision: the planner's or plan critic's call ([`planner_wait`]), else the final goal review's (role `goal_reviewer`, [`assignment_wait`]). Null otherwise. |
-/// | assignment `waiting` | `{role, model, since}`, or null | The assignment's open implementor call (while Implementing) or reviewer call (while Reviewing), while its goal is Running at the assignment's revision ([`assignment_wait`]). Null otherwise. |
+/// | goal `waiting` | `{role, model, since}`, or null | A goal-level model call that is open: the planner's or plan critic's ([`planner_wait`]), else the final goal review's (role `goal_reviewer`, [`assignment_wait`]). Null otherwise. |
+/// | assignment `waiting` | `{role, model, since}`, or null | The assignment's open implementor call (while Implementing) or reviewer call (while Reviewing) ([`assignment_wait`]). Null otherwise. |
 /// | goal `acceptance_recorded` | bool | Always: true when the goal is Satisfied with a recorded satisfaction receipt. |
 /// | assignment `merged_at` | string, or null | The `observed_at` of a Merged assignment's merge receipt (`fleet.rs` `observe_merge`); null otherwise. |
+///
+/// A model call is open while all of these hold: the goal is Running; the runtime has not
+/// stopped (`runtime_error` is not set); the newest step of the call's lane (the planner's, or
+/// the assignment's) is the call's request, where a step is the lane's newest entry other than
+/// a streamed `loom.event` and the store's journal keeps it however many stream events follow;
+/// the request was recorded at the goal's revision; and it was recorded since the store last
+/// opened (its record number is above `Store::replayed_progress`), because a call does not
+/// outlive the process whose runtime holds it.
 ///
 /// In both `waiting` objects, `role` is the call's role, `model` the goal's model field for
 /// that role (`planner` → `planner_model`; `implementor` → `implementor_model`; `critic`,
 /// `reviewer` and `goal_reviewer` → `reviewer_model`, which is what the runtime sends each of
-/// them), and `since` the `at` of the entry that requested the call, or null once streamed
-/// `loom.event` entries have pushed that entry out of the goal's retained history (its newest
-/// 64 entries) while the call is still open.
+/// them), and `since` the `at` of the call's request.
 fn compact(mut view: Value) -> Value {
     view.as_object_mut().unwrap().remove("server_observed_at");
     view.as_object_mut().unwrap().remove("committed_version");
+    let replayed = view
+        .as_object_mut()
+        .unwrap()
+        .remove("replayed_progress")
+        .and_then(|replayed| replayed.as_u64())
+        .unwrap_or(0);
+    // A stopped runtime holds no model call.
+    let runtime_holds_calls = !view["runtime_error"].is_string();
     // Each assignment's goal and state, in a stable order.
     let assignments: std::collections::BTreeMap<_, _> = view["assignments"]
         .as_array()
@@ -113,6 +131,8 @@ fn compact(mut view: Value) -> Value {
             receipt.activity = history["activity"].clone();
             receipt.fleet = history["fleet"].clone();
             receipt.planner_activity = history["planner_activity"].clone();
+            receipt.planner_step = history["planner_step"].clone();
+            receipt.fleet_steps = history["fleet_steps"].clone();
         }
         let goal_id = field(goal, "goal_id").to_owned();
         let entries = Entries::new(&goal_id, &receipt.activity);
@@ -139,22 +159,14 @@ fn compact(mut view: Value) -> Value {
             .next()
             .map_or(Value::Null, |event| entries.observe(event));
         let mut wait = None;
-        if field(goal, "state") == "Running" {
-            wait = planner_wait(goal, planner());
+        if runtime_holds_calls && field(goal, "state") == "Running" {
+            wait = planner_wait(goal, &receipt.planner_step, replayed);
             let owned = assignments
                 .iter()
                 .filter(|(_, (owner, _))| *owner == goal_id);
             for (id, (_, state)) in owned {
-                // Newest first: `fleet` keeps the assignment's newest entry past the history.
-                let lane = receipt.fleet.get(id).into_iter().chain(
-                    entries
-                        .listed
-                        .iter()
-                        .rev()
-                        .map(|(event, _)| *event)
-                        .filter(|event| event["assignment_id"] == id.as_str()),
-                );
-                match assignment_wait(goal, state, lane) {
+                let step = &receipt.fleet_steps[id.as_str()];
+                match assignment_wait(goal, state, step, replayed) {
                     Some(call) if call["role"] == "goal_reviewer" => {
                         wait.get_or_insert(call);
                     }
@@ -212,9 +224,13 @@ struct Shown {
     last_activity: Value,
     activity: Value,
     fleet: Value,
-    /// Taken from the store's history only, never from a receipt.
+    /// This and the steps are taken from the store's history only, never from a receipt.
     #[serde(skip)]
     planner_activity: Value,
+    #[serde(skip)]
+    planner_step: Value,
+    #[serde(skip)]
+    fleet_steps: Value,
 }
 
 /// Whether an entry is the planner's own: the fleet records every worker entry with its
@@ -280,36 +296,22 @@ fn entry_id(goal: &str, event: &Value) -> String {
     format!("entry-{hash:016x}")
 }
 
-/// One lane's open model call, read from the lane's entries newest first.
-enum Call<'a> {
-    /// The newest entry other than `loom.event` is this request.
-    Requested(&'a Value),
-    /// Only `loom.event` entries are retained, and this is the newest. The runtime records
-    /// them only while a model call streams, so the call is open; its request has left the
-    /// retained history.
-    Streaming(&'a Value),
-}
-
-/// A call opens with one of `requests`, streams `loom.event` entries while the model answers,
-/// and ends with the lane's next entry of any other action.
-fn open_call<'a>(lane: impl Iterator<Item = &'a Value>, requests: &[&str]) -> Option<Call<'a>> {
-    let mut streamed = None;
-    for event in lane {
-        let action = field(event, "action");
-        if action == "loom.event" {
-            streamed.get_or_insert(event);
-        } else if requests.contains(&action) {
-            return Some(Call::Requested(event));
-        } else {
-            return None;
-        }
-    }
-    streamed.map(Call::Streaming)
+/// The call a lane's step opened, if it is still open: the step (`{recorded, entry}`, see
+/// `Store::activity_history`) is one of `requests` and was recorded by this process, after
+/// progress record `replayed`. Any later entry of the lane but a stream event replaces the
+/// step and so ends the call.
+fn open_call<'a>(step: &'a Value, replayed: u64, requests: &[&str]) -> Option<&'a Value> {
+    let call = &step["entry"];
+    (step["recorded"]
+        .as_u64()
+        .is_some_and(|recorded| recorded > replayed)
+        && requests.contains(&field(call, "action")))
+    .then_some(call)
 }
 
 /// `{role, model, since}` of an open call, if `call` was recorded at the goal's revision.
 /// The model is the goal's field for the role, as the runtime sends it (see [`compact`]).
-fn wait(goal: &Value, role: &str, call: &Value, since: Value) -> Option<Value> {
+fn wait(goal: &Value, role: &str, call: &Value) -> Option<Value> {
     if goal["revision"].is_null() || call["goal_revision"] != goal["revision"] {
         return None;
     }
@@ -320,50 +322,42 @@ fn wait(goal: &Value, role: &str, call: &Value, since: Value) -> Option<Value> {
         _ => Value::Null,
     };
     let role: String = role.chars().take(240).collect();
+    let since: String = field(call, "at").chars().take(240).collect();
     Some(json!({"role":role,"model":model,"since":since}))
 }
 
-fn requested_since(call: &Value) -> Value {
-    json!(field(call, "at").chars().take(240).collect::<String>())
-}
-
-/// The planner's open call, from its entries newest first. engine.rs `Planning::respond`
+/// The planner's open call, from the planner lane's step. engine.rs `Planning::respond`
 /// records `model.requested` before each planner or plan-critic call, `loom.event` entries
 /// with the call's role while it streams, and `model.completed` or `model.failed` after it.
-/// The caller checks that the goal is Running.
-fn planner_wait<'a>(goal: &Value, planner: impl Iterator<Item = &'a Value>) -> Option<Value> {
-    match open_call(planner, &["model.requested"])? {
-        Call::Requested(call) => wait(goal, field(call, "role"), call, requested_since(call)),
-        Call::Streaming(call) => wait(goal, field(call, "role"), call, Value::Null),
-    }
+/// The caller checks that the goal is Running and the runtime has not stopped.
+fn planner_wait(goal: &Value, step: &Value, replayed: u64) -> Option<Value> {
+    let call = open_call(step, replayed, &["model.requested"])?;
+    wait(goal, field(call, "role"), call)
 }
 
-/// An assignment's open call, from the assignment's entries newest first. fleet.rs records
-/// `model.request` (role `implementor`) before each implementor call while Implementing,
-/// `review.request` (`reviewer`) before the review while Reviewing, and `goal.review`
-/// (`goal_reviewer`) on a Merged assignment before the final goal review; while the model
-/// streams it records `loom.event` entries with role `runtime`. It records no completion: the
-/// assignment's next entry of any other action ends the call, and so does the assignment
-/// leaving the state its call belongs to. A call whose request has left the retained history
-/// takes its role from that state. The caller checks that the goal is Running.
-fn assignment_wait<'a>(
-    goal: &Value,
-    state: &str,
-    lane: impl Iterator<Item = &'a Value>,
-) -> Option<Value> {
+/// An assignment's open call, from the assignment's step. fleet.rs records `model.request`
+/// (role `implementor`) before each implementor call while Implementing, `review.request`
+/// (`reviewer`) before the review while Reviewing, and `goal.review` (`goal_reviewer`) on a
+/// Merged assignment before the final goal review; while the model streams it records
+/// `loom.event` entries with role `runtime`. It records no completion: the assignment's next
+/// entry of any other action ends the call, and so does the assignment leaving the state its
+/// call belongs to. The caller checks that the goal is Running and the runtime has not stopped.
+fn assignment_wait(goal: &Value, state: &str, step: &Value, replayed: u64) -> Option<Value> {
     let role = match state {
         "Implementing" => "implementor",
         "Reviewing" => "reviewer",
         "Merged" => "goal_reviewer",
         _ => return None,
     };
-    match open_call(lane, &["model.request", "review.request", "goal.review"])? {
-        Call::Requested(call) if field(call, "role") == role => {
-            wait(goal, role, call, requested_since(call))
-        }
-        Call::Requested(_) => None,
-        Call::Streaming(call) => wait(goal, role, call, Value::Null),
+    let call = open_call(
+        step,
+        replayed,
+        &["model.request", "review.request", "goal.review"],
+    )?;
+    if field(call, "role") != role {
+        return None;
     }
+    wait(goal, role, call)
 }
 
 /// When a Merged assignment's merge receipt observed the merge. Only `observed_at` is read.
@@ -1073,13 +1067,13 @@ mod tests {
             json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
         );
         // Streamed model events push the request out of the retained history (64 entries);
-        // the call is still in progress, and its start is no longer known.
+        // the call is still in progress, and the journal still knows when it started.
         for index in 0..70 {
             record_planner(&state, &goal, &revision, json!({"id":format!("stream-{index}"),"action":"loom.event","role":"planner","detail":format!("Receiving model response ({index} streamed events)"),"status":"running","at":"2026-10-06T10:01:00Z","worktree":"tree","goal_revision":revision})).await;
         }
         assert_eq!(
             console().await,
-            json!({"role":"planner","model":"planner-model","since":null})
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
         );
         // A paused goal waits for nothing.
         state
@@ -1403,14 +1397,17 @@ mod tests {
         // The next entry of the assignment that is not a stream event ends the call.
         record("tool.run", "implementor").await;
         assert_eq!(waits().await.1, Value::Null);
-        // A call whose request streamed out of the retained history is still open.
+        // A call whose request streamed out of the retained history is still open, and keeps
+        // its start time.
         record("model.request", "implementor").await;
+        let started = waits().await.0["fleet"][&assignment]["at"].clone();
+        assert!(started.is_string());
         for _ in 0..70 {
             record("loom.event", "runtime").await;
         }
         assert_eq!(
             waits().await.1,
-            json!({"role":"implementor","model":"implementor-model","since":null})
+            json!({"role":"implementor","model":"implementor-model","since":started})
         );
         record("checks.run", "host").await;
         assert_eq!(waits().await.1, Value::Null);
@@ -1473,6 +1470,49 @@ mod tests {
         assert_eq!(
             row(&view, "assignments", "assignment_id", &assignment)["waiting"],
             Value::Null
+        );
+    }
+
+    #[tokio::test]
+    async fn planner_wait_does_not_survive_a_restart_and_a_new_call_opens() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "reopened").await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let request = |id: &str, at: &str| json!({"id":id,"action":"model.requested","role":"planner","detail":"Waiting for planner response from planner-model","status":"running","at":at,"worktree":"tree","goal_revision":revision});
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            request("before", "2026-10-06T10:00:00Z"),
+        )
+        .await;
+        let waiting = |view: Value| row(&view, "goals", "goal_id", &goal)["waiting"].clone();
+        assert_eq!(
+            waiting(console_view(&state).await),
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
+        );
+        drop(state);
+        let reopened = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+        let state = AppState::new(
+            Arc::new(Mutex::new(reopened)),
+            "127.0.0.1:8787".parse().unwrap(),
+            Arc::new(Notify::new()),
+        );
+        // The process that held the call is gone; the goal is still Running.
+        let view = console_view(&state).await;
+        assert_eq!(row(&view, "goals", "goal_id", &goal)["state"], "Running");
+        assert_eq!(waiting(view), Value::Null);
+        // A call this process requests is open, with the same fixed-time records as before.
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            request("after", "2026-10-06T10:00:00Z"),
+        )
+        .await;
+        assert_eq!(
+            waiting(console_view(&state).await),
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
         );
     }
 }
