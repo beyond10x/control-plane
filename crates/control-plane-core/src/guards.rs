@@ -34,6 +34,13 @@ fn active(state: A) -> bool {
     )
 }
 
+/// Whether a publication intent still holds its assignment: every intent but one closed as not
+/// published. An open intent waits for its outcome to be observed, and a confirmed one for its
+/// assignment to be reconciled.
+fn holds(state: P) -> bool {
+    state != P::NotPublished
+}
+
 fn occupies_worker(state: A) -> bool {
     matches!(
         state,
@@ -182,6 +189,12 @@ impl Store {
             ensure!(
                 !text(body, "receipt")?.is_empty(),
                 "publication receipt is empty"
+            );
+        }
+        if command == "ClosePublication" {
+            ensure!(
+                !text(body, "reason")?.trim().is_empty(),
+                "publication close reason is empty"
             );
         }
         if command == "SatisfyGoal" {
@@ -337,8 +350,8 @@ impl Store {
                     .memory
                     .publications
                     .values()
-                    .any(|p| p.data.assignment_id == data.assignment_id),
-                "publication must be reconciled before repair or cancellation"
+                    .any(|p| p.data.assignment_id == data.assignment_id && holds(p.state)),
+                "publication must be reconciled or closed before repair or cancellation"
             );
         }
         if command == "ReviewAssignment" {
@@ -388,7 +401,7 @@ impl Store {
                     .memory
                     .publications
                     .values()
-                    .any(|p| p.data.assignment_id == data.assignment_id),
+                    .any(|p| p.data.assignment_id == data.assignment_id && holds(p.state)),
                 "publication already exists; reconcile it"
             );
         }

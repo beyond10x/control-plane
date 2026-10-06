@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-contract digest slice-sha256/2:c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+contract digest slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 do not edit: regenerate with `ess generate`
 -->
 
@@ -219,14 +219,15 @@ It holds:
 - `target` — `String`
 - `expected_base` — `String`
 - `receipt` — `String`
+- `reason` — `Optional<String>`, which may be absent
 
 Its `assignment_id` is what [`Assignment`](#assignment) owns it by, as `publications`.
 
 No invariant is declared, so nothing here constrains an instance at rest.
 
-Its state is a `controlplane.host.PublicationIntent.State`, one of `Confirmed`, `Prepared` and `Uncertain`. That enum is synthesised from the lifecycle rather than declared beside it, so the states a view's filter compares and the states drawn below cannot disagree.
+Its state is a `controlplane.host.PublicationIntent.State`, one of `Confirmed`, `NotPublished`, `Prepared` and `Uncertain`. That enum is synthesised from the lifecycle rather than declared beside it, so the states a view's filter compares and the states drawn below cannot disagree.
 
-An instance is created in `Prepared`. `Confirmed` is terminal, so an instance may rest there forever. That is declared rather than inferred from having no way out: an entity that cannot leave a state is either finished or stuck, and only its author knows which.
+An instance is created in `Prepared`. `Confirmed` and `NotPublished` are terminal, so an instance may rest there forever. That is declared rather than inferred from having no way out: an entity that cannot leave a state is either finished or stuck, and only its author knows which.
 
 ```mermaid
 stateDiagram-v2
@@ -234,20 +235,28 @@ stateDiagram-v2
     Prepared --> Uncertain: uncertain (MarkPublicationUncertain)
     Prepared --> Confirmed: confirm (ConfirmPublication)
     Uncertain --> Confirmed: confirm (ConfirmPublication)
+    Prepared --> NotPublished: close (ClosePublication)
+    Uncertain --> NotPublished: close (ClosePublication)
     Confirmed --> [*]
+    NotPublished --> [*]
 ```
 
 Each move is taken by a declared command outcome, and a move nothing takes is refused as `missing_causation` rather than left as a state change nobody can trigger:
 
 - `uncertain` — taken by `controlplane.host.MarkPublicationUncertain` on its `applied` outcome
 - `confirm` — taken by `controlplane.host.ConfirmPublication` on its `applied` outcome
+- `close` — taken by `controlplane.host.ClosePublication` on its `applied` outcome
 
 An instance is brought into existence by `controlplane.host.PreparePublication` on its `created` outcome.
 
 Illegal transitions are illegal by absence: no rule forbids them, there is simply no arrow, because a rule would be a second place for the same truth to live. A diagram cannot show an absence, so the pairs it does not connect are listed here, derived from the same transitions — anything named below is a move this specification does not permit.
 
+- `Confirmed` may not become `NotPublished`
 - `Confirmed` may not become `Prepared`
 - `Confirmed` may not become `Uncertain`
+- `NotPublished` may not become `Confirmed`
+- `NotPublished` may not become `Prepared`
+- `NotPublished` may not become `Uncertain`
 - `Uncertain` may not become `Prepared`
 
 One view projects it: [`PublicationIntentList`](#publicationintentlist).
@@ -465,6 +474,7 @@ It exposes:
 - `target` — `String`
 - `expected_base` — `String`
 - `receipt` — `String`
+- `reason` — `Optional<String>`, which may be absent
 - `state` — `controlplane.host.PublicationIntent.State`
 
 It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.
@@ -644,6 +654,23 @@ It has three outcomes.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.AssignmentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
+### `ClosePublication`
+
+`controlplane.host.ClosePublication`.
+
+It takes:
+
+- `publication_id` — `Uuid`
+- `reason` — `String`
+
+It has three outcomes.
+
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.PublicationIntent` from `Prepared` and `Uncertain` to `NotPublished`, along the declared move `close`. The instance is the one named by the input field `publication_id`. It emits `controlplane.host.ClosePublicationApplied`. It sets `reason` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+
+**`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed` and `NotPublished`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+
 ### `CompleteAssignment`
 
 `controlplane.host.CompleteAssignment`.
@@ -693,7 +720,7 @@ It has three outcomes.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
-**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed` and `NotPublished`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 ### `CreateGoal`
 
@@ -782,7 +809,7 @@ It has three outcomes.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
-**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed` and `Uncertain`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.PublicationIntent` in `Confirmed`, `NotPublished` and `Uncertain`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.PublicationIntentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 ### `MergeAssignment`
 
@@ -1139,6 +1166,19 @@ It carries:
 - `base_revision` — `String`
 
 Emitted by `controlplane.host.ClaimAssignment` on its `applied` outcome.
+
+Nothing in this system reacts to it.
+
+### `ClosePublicationApplied`
+
+`controlplane.host.ClosePublicationApplied`.
+
+It carries:
+
+- `publication_id` — `Uuid`
+- `reason` — `String`
+
+Emitted by `controlplane.host.ClosePublication` on its `applied` outcome.
 
 Nothing in this system reacts to it.
 
@@ -1579,6 +1619,8 @@ Reported by `controlplane.host.UpdateGoal` on its `satisfied` and `cancelled` ou
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
+Reported by `controlplane.host.ClosePublication` on its `not-found` outcome.
+
 Reported by `controlplane.host.ConfirmPublication` on its `not-found` outcome.
 
 Reported by `controlplane.host.MarkPublicationUncertain` on its `not-found` outcome.
@@ -1588,6 +1630,8 @@ Reported by `controlplane.host.MarkPublicationUncertain` on its `not-found` outc
 It carries:
 
 - `state` — `controlplane.host.PublicationIntent.State`
+
+Reported by `controlplane.host.ClosePublication` on its `wrong-state` outcome.
 
 Reported by `controlplane.host.ConfirmPublication` on its `wrong-state` outcome.
 
@@ -1663,9 +1707,9 @@ It may invoke [`AddWorkspaceDirectory`](#addworkspacedirectory), [`ArchiveWorksp
 
 `controlplane.host.Supervisor`.
 
-It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`CompleteAssignment`](#completeassignment), [`ConfirmPublication`](#confirmpublication), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MarkPublicationUncertain`](#markpublicationuncertain), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`PreparePublication`](#preparepublication), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`ReconcileAssignment`](#reconcileassignment), [`RecordPlanningProgress`](#recordplanningprogress), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
+It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#blockassignment), [`CancelAssignment`](#cancelassignment), [`CancelGoal`](#cancelgoal), [`ClaimAssignment`](#claimassignment), [`ClosePublication`](#closepublication), [`CompleteAssignment`](#completeassignment), [`ConfirmPublication`](#confirmpublication), [`CreateGoal`](#creategoal), [`DisableRepositoryRegistration`](#disablerepositoryregistration), [`EnableRepositoryRegistration`](#enablerepositoryregistration), [`MarkPublicationUncertain`](#markpublicationuncertain), [`MergeAssignment`](#mergeassignment), [`PauseGoal`](#pausegoal), [`PreparePublication`](#preparepublication), [`QueueAssignment`](#queueassignment), [`ReadyAssignment`](#readyassignment), [`ReconcileAssignment`](#reconcileassignment), [`RecordPlanningProgress`](#recordplanningprogress), [`RegisterRepository`](#registerrepository), [`RegisterWorkspace`](#registerworkspace), [`RepairAssignment`](#repairassignment), [`ReviewAssignment`](#reviewassignment), [`SatisfyGoal`](#satisfygoal) and [`StartGoal`](#startgoal).
 
 
 ---
 
-Generated from controlplane v1 · model digest `5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba` · contract digest `slice-sha256/2:c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b` · contract digest `slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead`. Do not edit this file; change the specification and regenerate it with `ess generate`.

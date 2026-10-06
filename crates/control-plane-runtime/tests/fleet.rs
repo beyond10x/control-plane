@@ -1300,6 +1300,181 @@ async fn restart_reconciles_effects() {
     assert!(!assignment["merge_receipt"].as_str().unwrap().is_empty());
 }
 
+async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
+    store
+        .lock()
+        .await
+        .query(view)
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+/// One delivery whose publisher exits without pushing (`git --version`): after the fleet tick
+/// its intent is Uncertain and its assignment Blocked, with the goal still running.
+async fn unresolved_publication() -> (Fixture, Supervisor) {
+    let fixture = fixture(1).await;
+    fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        Arc::new(Scripted::new()),
+    );
+    supervisor.tick().await.unwrap();
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(!report.blockers.is_empty(), "{report:?}");
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+    (fixture, supervisor)
+}
+
+/// The fixture's remote moved away, so observing the target fails as for an unreachable remote.
+fn unreachable(fixture: &Fixture) -> impl FnOnce() + use<> {
+    let remote = fixture.root.join("remotes/repo0.git");
+    let moved = fixture.root.join("remotes/repo0-unreachable.git");
+    std::fs::rename(&remote, &moved).unwrap();
+    move || std::fs::rename(&moved, &remote).unwrap()
+}
+
+#[tokio::test]
+async fn failed_observation_keeps_intent_open() {
+    let (fixture, supervisor) = unresolved_publication().await;
+    let restore = unreachable(&fixture);
+    for _ in 0..3 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+    let blocker = history(&fixture.store).await["fleet"]
+        [assignment["assignment_id"].as_str().unwrap()]
+    .clone();
+    assert!(
+        blocker["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication observation unavailable")),
+        "{blocker}"
+    );
+
+    // The failed observation kept the intent open, not a missing exit: observed again without
+    // its candidate, the same intent closes. The paused goal keeps the freed assignment idle.
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    restore();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "NotPublished", "{intents:?}");
+    assert!(
+        intents[0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("does not contain")),
+        "{intents:?}"
+    );
+    assert_eq!(
+        rows(&fixture.store, "AssignmentList").await[0]["state"],
+        "Blocked"
+    );
+}
+
+#[tokio::test]
+async fn published_candidate_still_reconciles() {
+    let (fixture, supervisor) = unresolved_publication().await;
+    let intent = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/main", intent["candidate"].as_str().unwrap()),
+        ],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Confirmed", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Merged", "{assignment}");
+    assert_eq!(assignment["merge_receipt"], intents[0]["receipt"]);
+    assert!(!assignment["merge_receipt"].as_str().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn unchanged_unresolved_publication_appends_once() {
+    let (fixture, supervisor) = unresolved_publication().await;
+    let _restore = unreachable(&fixture);
+    let database = fixture.root.join("host.sqlite3");
+    drop(supervisor);
+    let Fixture { store, config, .. } = fixture;
+    drop(store);
+    // `replayed_progress` counts the progress decisions a store holds when it opens.
+    let reopened = Store::open(&database).await.unwrap();
+    let before = reopened.replayed_progress();
+    let store = Arc::new(tokio::sync::Mutex::new(reopened));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(Scripted::new()),
+    );
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    assert_eq!(
+        rows(&store, "PublicationIntentList").await[0]["state"],
+        "Uncertain"
+    );
+    assert_eq!(rows(&store, "AssignmentList").await[0]["state"], "Blocked");
+    drop(supervisor);
+    drop(store);
+    let after = Store::open(&database).await.unwrap().replayed_progress();
+    assert!(
+        after - before <= 1,
+        "ten fleet ticks over one unresolved publication appended {} progress decisions",
+        after - before
+    );
+}
+
+/// A closed publication frees its assignment for another attempt, which publishes through a
+/// new intent; the closed one stays closed.
+#[tokio::test]
+async fn closed_publication_is_retried_with_a_new_intent() {
+    let (fixture, supervisor) = unresolved_publication().await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0]["publication_id"].clone();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 2, "{intents:?}");
+    for intent in &intents {
+        let expected = if intent["publication_id"] == first {
+            "NotPublished"
+        } else {
+            "Uncertain"
+        };
+        assert_eq!(intent["state"], expected, "{intents:?}");
+    }
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["attempt"], 2, "{assignment}");
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+}
+
 #[tokio::test]
 async fn repository_execution_is_exclusive() {
     let fixture = fixture(1).await;

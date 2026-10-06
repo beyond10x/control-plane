@@ -216,13 +216,20 @@ impl Host {
         }
         Ok(current_assignment)
     }
+    /// Record `error` as the assignment's blocker and block it unless it already rests. A blocker
+    /// that is unchanged, on an assignment that already rests, records nothing: the fleet meets
+    /// an unresolved publication on every tick.
     fn block(&self, id: &Value, error: &str) -> Result<()> {
         let row = self.row("AssignmentList", "assignment_id", id)?;
-        self.progress(&row, "blocked", "host", json!({"reason":error}))?;
-        if !matches!(
+        let rests = matches!(
             row["state"].as_str(),
             Some("Blocked" | "Merged" | "Cancelled")
-        ) {
+        );
+        if rests && self.last_blocker_is(&row, error)? {
+            return Ok(());
+        }
+        self.progress(&row, "blocked", "host", json!({"reason":error}))?;
+        if !rests {
             self.execute(
                 "BlockAssignment",
                 json!({"assignment_id":id,"reason":error}),
@@ -230,6 +237,42 @@ impl Host {
         }
         Ok(())
     }
+    /// Whether the assignment's newest recorded activity is the blocker `error`. The store
+    /// keeps a long reason bounded: its first bytes and the size of the detail it was given.
+    fn last_blocker_is(&self, assignment: &Value, error: &str) -> Result<bool> {
+        let (goal, id) = (
+            text(assignment, "goal_id")?,
+            text(assignment, "assignment_id")?,
+        );
+        let history = self
+            .handle
+            .block_on(async { self.store.lock().await.activity_history(goal) })?;
+        let last = &history["fleet"][id];
+        let detail = &last["detail"];
+        let reason = detail["reason"].as_str().unwrap_or_default();
+        Ok(last["action"] == "blocked"
+            && match detail["_bounded"]["bytes"].as_u64() {
+                Some(bytes) => {
+                    error.starts_with(reason)
+                        && bytes == json!({"reason":error}).to_string().len() as u64
+                }
+                None => reason == error,
+            })
+    }
+}
+
+/// Whether a publication intent still holds its assignment and repository: every intent but one
+/// closed as not published. An open intent waits for its outcome to be observed, and a
+/// confirmed one for its assignment to be reconciled.
+fn holds(intent: &Value) -> bool {
+    intent["state"] != "NotPublished"
+}
+
+/// Whether `assignment` has a publication intent that still holds it.
+fn held(publications: &[Value], assignment: &Value) -> bool {
+    publications
+        .iter()
+        .any(|p| p["assignment_id"] == assignment["assignment_id"] && holds(p))
 }
 /// A goal acceptance stop that latches (`failed`): a verdict on the goal (the goal reviewer
 /// rejected it, a check ran and failed, a target moved) or a goal review turn that ran and
@@ -466,16 +509,18 @@ pub async fn run(
         if common.contains(text(repo, "common_dir")?) {
             continue;
         }
-        // A blocked publication still owns its repository until its outcome is observed.
+        // Publication reconciliation, not another attempt, resolves a held publication.
+        if held(&publications, &assignment) {
+            continue;
+        }
+        // A blocked publication still owns its repository until its outcome is observed or
+        // it is closed as not published.
         if assignments.iter().any(|other| {
             other["assignment_id"] != assignment["assignment_id"]
                 && (matches!(
                     other["state"].as_str(),
                     Some("Implementing" | "Reviewing" | "ReadyToMerge" | "Merging")
-                ) || (other["state"] != "Merged"
-                    && publications
-                        .iter()
-                        .any(|p| p["assignment_id"] == other["assignment_id"])))
+                ) || (other["state"] != "Merged" && held(&publications, other)))
                 && repositories.iter().any(|r| {
                     r["repository_id"] == other["repository_id"]
                         && r["common_dir"] == repo["common_dir"]
@@ -523,9 +568,7 @@ fn retire_stale(host: &Host) -> Result<()> {
         if matches!(
             a["state"].as_str(),
             Some("Merged" | "Cancelled" | "Merging")
-        ) || publications
-            .iter()
-            .any(|p| p["assignment_id"] == a["assignment_id"])
+        ) || held(&publications, &a)
         {
             continue;
         }
@@ -777,11 +820,7 @@ fn fetch(host: &Host, path: &Path, target: &str) -> Result<String> {
     Ok(head)
 }
 fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<()> {
-    if host
-        .rows("PublicationIntentList")?
-        .iter()
-        .any(|p| p["assignment_id"] == initial["assignment_id"])
-    {
+    if held(&host.rows("PublicationIntentList")?, initial) {
         bail!("publication intent exists; waiting for exact remote reconciliation");
     }
     let mut worker = host.clone();
@@ -1860,7 +1899,7 @@ fn publish(
     let outcome = admitted_publication(execution, &governor, &case_id, &bindings);
     let intent = host.row("PublicationIntentList", "publication_id", &publication_id)?;
     match observe_merge(host, repo, &intent) {
-        Ok(Some(receipt)) => {
+        Ok(Observation::Merged(receipt)) => {
             let observed = attestation(
                 "merge_observation",
                 "merged",
@@ -1916,7 +1955,14 @@ fn publish(
         }
     }
 }
-fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Option<String>> {
+/// What a fetched publication target showed.
+enum Observation {
+    /// It contains the candidate: the merge receipt.
+    Merged(String),
+    /// It does not contain the candidate: the head it was observed at.
+    Missing { head: String },
+}
+fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Observation> {
     let path = Path::new(text(repo, "path")?);
     let head = fetch(host, path, text(intent, "target")?)?;
     let candidate = text(intent, "candidate")?;
@@ -1926,15 +1972,23 @@ fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Option<Str
         "candidate is not based on expected publication base"
     );
     if git(host, path, &["merge-base", candidate, &head])? != candidate {
-        return Ok(None);
+        return Ok(Observation::Missing { head });
     }
-    Ok(Some(json!({"kind":"git_merge_observation","operation_id":intent["publication_id"],"candidate":candidate,"expected_base":base,"target":intent["target"],"observed_head":head,"origin":git(host,path,&["remote","get-url","origin"])?,"observed_at":now()}).to_string()))
+    Ok(Observation::Merged(json!({"kind":"git_merge_observation","operation_id":intent["publication_id"],"candidate":candidate,"expected_base":base,"target":intent["target"],"observed_head":head,"origin":git(host,path,&["remote","get-url","origin"])?,"observed_at":now()}).to_string()))
 }
+/// Observe every publication that still holds its assignment. A target that contains the
+/// candidate confirms the intent and reconciles the assignment. A target that does not closes an
+/// Uncertain intent as not published, which frees the assignment for repair or cancellation.
+/// Uncertain means the publisher has exited: `publish` marks an intent Uncertain once its
+/// publisher returned, and this function marks a Prepared one, left by an attempt that stopped
+/// before then, so that only a later observation closes it. Each tick runs this under the fleet
+/// lock, before any attempt of this service starts a publisher. An observation that fails closes
+/// nothing; the intent stays as it is and the assignment Blocked.
 fn reconcile_publications(host: &Host) -> Result<()> {
     let repositories = host.rows("RepositoryRegistrationList")?;
     for intent in host.rows("PublicationIntentList")? {
         let assignment = host.row("AssignmentList", "assignment_id", &intent["assignment_id"])?;
-        if assignment["state"] == "Merged" {
+        if assignment["state"] == "Merged" || !holds(&intent) {
             continue;
         }
         let repo = repositories
@@ -1942,7 +1996,7 @@ fn reconcile_publications(host: &Host) -> Result<()> {
             .find(|r| r["repository_id"] == assignment["repository_id"])
             .context("publication repository missing")?;
         match observe_merge(host, repo, &intent) {
-            Ok(Some(receipt)) => {
+            Ok(Observation::Merged(receipt)) => {
                 let receipt = if intent["state"] == "Confirmed" {
                     text(&intent, "receipt")?.to_owned()
                 } else {
@@ -1963,7 +2017,20 @@ fn reconcile_publications(host: &Host) -> Result<()> {
                     json!({"assignment_id":assignment["assignment_id"],"merge_receipt":receipt}),
                 )?;
             }
-            Ok(None) => {
+            Ok(Observation::Missing { head }) if intent["state"] == "Uncertain" => {
+                let reason = format!(
+                    "The publisher exited and {} at {head} does not contain candidate {}; \
+                     closed as not published",
+                    text(&intent, "target")?,
+                    text(&intent, "candidate")?
+                );
+                host.execute(
+                    "ClosePublication",
+                    json!({"publication_id":intent["publication_id"],"reason":reason}),
+                )?;
+                host.block(&assignment["assignment_id"], &reason)?;
+            }
+            Ok(Observation::Missing { .. }) => {
                 if intent["state"] == "Prepared" {
                     host.execute(
                         "MarkPublicationUncertain",
@@ -2824,5 +2891,106 @@ mod progress_tests {
         let activity = history["activity"].as_array().unwrap();
         assert_eq!(activity.len(), 64);
         assert_eq!(activity.last(), Some(&receipt["last_activity"]));
+    }
+}
+
+#[cfg(test)]
+mod blocker_tests {
+    use super::*;
+    use control_plane_core::Store;
+
+    struct NoModel;
+    impl AgentModel for NoModel {
+        fn respond(&self, _: &ModelRequest) -> Result<Value> {
+            bail!("blocking calls no model")
+        }
+    }
+
+    /// Decisions the store has committed so far.
+    fn committed(host: &Host) -> u64 {
+        *host.store.blocking_lock().subscribe().borrow()
+    }
+
+    /// A blocker the store records bounded, because it is long, is still recognised as the
+    /// assignment's last one: repeating it appends nothing, and a different one appends again.
+    #[test]
+    fn long_unchanged_blocker_appends_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--quiet", "--initial-branch=main"])
+                .arg(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (store, assignment) = runtime.block_on(async {
+            let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+            let id = |outcome: Value, field: &str| outcome["published"][0]["payload"][field].clone();
+            let ws = id(
+                store
+                    .execute(
+                        "RegisterWorkspace",
+                        json!({"path":temp.path(),"name":"blockers"}),
+                        Actor::Operator,
+                    )
+                    .await
+                    .unwrap(),
+                "workspace_id",
+            );
+            let repository = id(store.execute("RegisterRepository",json!({"workspace_id":ws,"path":repo,"name":"repo","common_dir":"","base_branch":"main","test_command":"cargo test","publish_command":"publish-helper"}),Actor::Operator).await.unwrap(),"repository_id");
+            let goal = id(store.execute("CreateGoal",json!({"workspace_id":ws,"objective":"Report blockers","acceptance":"Blockers stay bounded","max_workers":1,"max_attempts":1,"max_minutes":60,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await.unwrap(),"goal_id");
+            store
+                .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap();
+            let assignment = id(store.execute("QueueAssignment",json!({"goal_id":goal,"repository_id":repository,"story_id":"story:blocked","case_id":"case","worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1}),Actor::Supervisor).await.unwrap(),"assignment_id");
+            (Arc::new(tokio::sync::Mutex::new(store)), assignment)
+        });
+        let host = Host {
+            store,
+            handle: runtime.handle().clone(),
+            config: RuntimeConfig::default(),
+            model: Arc::new(NoModel),
+            runner: ProcessRunner {
+                environment: vec![],
+                timeout: Duration::from_secs(60),
+                cancel: CancellationToken::new(),
+            },
+            deadline: None,
+        };
+        let long = format!(
+            "Publication observation unavailable: {}",
+            "fatal: could not read from remote repository. ".repeat(40)
+        );
+        let start = committed(&host);
+        host.block(&assignment, &long).unwrap();
+        assert_eq!(
+            committed(&host) - start,
+            2,
+            "the first block records progress and blocks the assignment"
+        );
+        let blocked = committed(&host);
+        for _ in 0..3 {
+            host.block(&assignment, &long).unwrap();
+        }
+        assert_eq!(
+            committed(&host) - blocked,
+            0,
+            "an unchanged blocker was recorded again"
+        );
+        host.block(&assignment, &format!("{long}, and again"))
+            .unwrap();
+        assert_eq!(
+            committed(&host) - blocked,
+            1,
+            "a changed blocker records progress once"
+        );
     }
 }

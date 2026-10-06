@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+// model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+// contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -326,6 +326,32 @@ where
     }
 }
 
+/// `controlplane.host.ClosePublication`, generated: every outcome is one the specification fully determines.
+impl<P> crate::host::obligations::ClosePublicationBehavior for Generated<P>
+where
+    P: PublicationIntentStorage,
+{
+    fn close_publication(&mut self, input: crate::host::ClosePublication) -> Result<crate::host::ClosePublicationOutcome, UnmetObligation> {
+        let _ = &input;
+        // `applied`: the default.
+        let Some(held) = PublicationIntentStorage::get(&self.ports, &input.publication_id) else {
+            return Ok(crate::host::ClosePublicationOutcome::NotFound { error: crate::host::PublicationIntentNotFound });
+        };
+        let _ = &held;
+        let held_state = held.state;
+        let moved = match held.refine() {
+            crate::host::AnyPublicationIntent::Prepared(instance) => crate::host::AnyPublicationIntent::NotPublished(instance.close()),
+            crate::host::AnyPublicationIntent::Uncertain(instance) => crate::host::AnyPublicationIntent::NotPublished(instance.close()),
+            _ => return Ok(crate::host::ClosePublicationOutcome::WrongState { error: crate::host::PublicationIntentStateConflict { state: held_state } }),
+        };
+        let mut next = moved.snapshot();
+        next.data.reason = Some(input.reason.clone());
+        let answer = crate::host::ClosePublicationOutcome::Applied { close_publication_applied: crate::host::ClosePublicationApplied { publication_id: input.publication_id.clone(), reason: input.reason.clone() } };
+        PublicationIntentStorage::put(&mut self.ports, next);
+        return Ok(answer);
+    }
+}
+
 /// `controlplane.host.CompleteAssignment`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::CompleteAssignmentBehavior for Generated<P>
 where
@@ -612,6 +638,7 @@ where
             target: input.target.clone(),
             expected_base: input.expected_base.clone(),
             receipt: "".to_owned(),
+            reason: None,
         };
         let answer = crate::host::PreparePublicationOutcome::Created { publication_intent_created: crate::host::PublicationIntentCreated { assignment_id: input.assignment_id.clone(), candidate: input.candidate.clone(), target: input.target.clone(), expected_base: input.expected_base.clone(), publication_id: identity.clone() } };
         PublicationIntentStorage::put(&mut self.ports, crate::host::AnyPublicationIntent::Prepared(crate::host::PublicationIntent::new(data)).snapshot());
@@ -1041,6 +1068,7 @@ where
                 target: held.data.target,
                 expected_base: held.data.expected_base,
                 receipt: held.data.receipt,
+                reason: held.data.reason,
                 state: held.state,
             })
             .collect())

@@ -1,17 +1,36 @@
 {
   "AssignmentList": [
     {
-      "assignment_id": "6440a8df-017f-46d6-9fe6-2b81f507794a",
+      "assignment_id": "010606a4-3e40-4ec7-ba06-1df35fa5883b",
+      "attempt": 1,
+      "base_revision": "base-fourth",
+      "candidate": "candidate-fourth",
+      "case_id": "story:fourth/case",
+      "goal_id": "8cb243da-9783-4e18-96ae-883375dba0e3",
+      "goal_revision": 2,
+      "implementor_run": "implementor-fourth",
+      "merge_receipt": "",
+      "reason": "publisher returned without an observed merge",
+      "repository_id": "e6e4655b-cc77-49fe-9476-6530f184689a",
+      "review_revision": "candidate-fourth",
+      "reviewer_run": "reviewer-fourth",
+      "state": "Cancelled",
+      "story_id": "story:fourth",
+      "test_revision": "candidate-fourth",
+      "worktree_id": "tree-fourth"
+    },
+    {
+      "assignment_id": "1236fbd7-6f29-4d07-8e02-16f498da040b",
       "attempt": 2,
       "base_revision": "base-second",
       "candidate": "candidate-second",
       "case_id": "story:second/case",
-      "goal_id": "88889505-6109-427e-b068-86de8b04cff8",
+      "goal_id": "8cb243da-9783-4e18-96ae-883375dba0e3",
       "goal_revision": 2,
       "implementor_run": "implementor-second-2",
       "merge_receipt": "merge-receipt-second",
       "reason": "publication outcome uncertain",
-      "repository_id": "ca63c874-83e2-48b0-80c6-98a50b7e739c",
+      "repository_id": "16f0d128-b6b1-4c25-8410-95ec56e07231",
       "review_revision": "candidate-second",
       "reviewer_run": "reviewer-second",
       "state": "Merged",
@@ -20,17 +39,17 @@
       "worktree_id": "tree-second"
     },
     {
-      "assignment_id": "97c1d635-04fb-45d6-b712-7a251cbc1d58",
+      "assignment_id": "3466aacc-1a6d-46cc-8985-20f4cd56fd3b",
       "attempt": 2,
       "base_revision": "base-first",
       "candidate": "candidate-first-2",
       "case_id": "story:first/case",
-      "goal_id": "88889505-6109-427e-b068-86de8b04cff8",
+      "goal_id": "8cb243da-9783-4e18-96ae-883375dba0e3",
       "goal_revision": 2,
       "implementor_run": "implementor-first-2",
       "merge_receipt": "merge-receipt-first",
       "reason": "review requested changes",
-      "repository_id": "84275810-a4fd-4db8-ac86-fe36038cc77b",
+      "repository_id": "e6e4655b-cc77-49fe-9476-6530f184689a",
       "review_revision": "candidate-first-2",
       "reviewer_run": "reviewer-first",
       "state": "Merged",
@@ -39,17 +58,17 @@
       "worktree_id": "tree-first"
     },
     {
-      "assignment_id": "b120f006-d500-483e-9886-86aecc1ec7c5",
+      "assignment_id": "dd2ab296-58db-42a8-8331-976926a240de",
       "attempt": 0,
       "base_revision": "",
       "candidate": "",
       "case_id": "story:third/case",
-      "goal_id": "88889505-6109-427e-b068-86de8b04cff8",
+      "goal_id": "8cb243da-9783-4e18-96ae-883375dba0e3",
       "goal_revision": 2,
       "implementor_run": "",
       "merge_receipt": "",
       "reason": "",
-      "repository_id": "c8d96477-65c6-44bc-a176-bfa0ecb558c9",
+      "repository_id": "fba6791a-543a-4c02-9df5-73984e42d834",
       "review_revision": "",
       "reviewer_run": "",
       "state": "Cancelled",
@@ -60,32 +79,8 @@
   ],
   "GoalList": [
     {
-      "acceptance": "Tests and an independent review pass",
-      "goal_id": "88889505-6109-427e-b068-86de8b04cff8",
-      "implementor_model": "scripted-implementor",
-      "max_attempts": 3,
-      "max_minutes": 90,
-      "max_workers": 2,
-      "merge_authority": true,
-      "objective": "Deliver the recorded change",
-      "planner_model": "scripted-planner",
-      "planning_fingerprint": "plan-fingerprint",
-      "planning_phase": "Queued",
-      "planning_reason": "",
-      "planning_receipt": "plan-receipt",
-      "planning_repository": "84275810-a4fd-4db8-ac86-fe36038cc77b",
-      "planning_revision": 2,
-      "planning_worktree_id": "planning-tree",
-      "planning_worktree_path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/planning",
-      "reviewer_model": "scripted-reviewer",
-      "revision": 2,
-      "satisfaction_receipt": "{\"goal_revision\":2,\"kind\":\"goal_acceptance\"}",
-      "state": "Satisfied",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
-    },
-    {
       "acceptance": "Satisfied without assignments",
-      "goal_id": "e69f0052-d039-4ddf-b270-21b2512000c4",
+      "goal_id": "2000e1f2-0162-413b-8088-574ffb0675a0",
       "implementor_model": "scripted-implementor",
       "max_attempts": 1,
       "max_minutes": 10,
@@ -105,94 +100,128 @@
       "revision": 1,
       "satisfaction_receipt": "{\"goal_revision\":1,\"kind\":\"goal_acceptance\"}",
       "state": "Satisfied",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
+    },
+    {
+      "acceptance": "Tests and an independent review pass",
+      "goal_id": "8cb243da-9783-4e18-96ae-883375dba0e3",
+      "implementor_model": "scripted-implementor",
+      "max_attempts": 3,
+      "max_minutes": 90,
+      "max_workers": 2,
+      "merge_authority": true,
+      "objective": "Deliver the recorded change",
+      "planner_model": "scripted-planner",
+      "planning_fingerprint": "plan-fingerprint",
+      "planning_phase": "Queued",
+      "planning_reason": "",
+      "planning_receipt": "plan-receipt",
+      "planning_repository": "e6e4655b-cc77-49fe-9476-6530f184689a",
+      "planning_revision": 2,
+      "planning_worktree_id": "planning-tree",
+      "planning_worktree_path": "/dev/shm/cp-wave4-publication-exit-scratch/history/planning",
+      "reviewer_model": "scripted-reviewer",
+      "revision": 2,
+      "satisfaction_receipt": "{\"goal_revision\":2,\"kind\":\"goal_acceptance\"}",
+      "state": "Satisfied",
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
     }
   ],
   "PublicationIntentList": [
     {
-      "assignment_id": "97c1d635-04fb-45d6-b712-7a251cbc1d58",
+      "assignment_id": "1236fbd7-6f29-4d07-8e02-16f498da040b",
+      "candidate": "candidate-second",
+      "expected_base": "base-second",
+      "publication_id": "0868acb7-6b8f-46b9-95c2-10c7faf32120",
+      "receipt": "merge-receipt-second",
+      "state": "Confirmed",
+      "target": "main"
+    },
+    {
+      "assignment_id": "3466aacc-1a6d-46cc-8985-20f4cd56fd3b",
       "candidate": "candidate-first-2",
       "expected_base": "base-first",
-      "publication_id": "644e8406-2a35-47c2-ae26-6f02e3976944",
+      "publication_id": "6bcb830a-bcfc-47d8-b6a4-b068e2bf4a94",
       "receipt": "merge-receipt-first",
       "state": "Confirmed",
       "target": "main"
     },
     {
-      "assignment_id": "6440a8df-017f-46d6-9fe6-2b81f507794a",
-      "candidate": "candidate-second",
-      "expected_base": "base-second",
-      "publication_id": "d705a5d0-b761-4a23-9269-03787c8eb005",
-      "receipt": "merge-receipt-second",
-      "state": "Confirmed",
+      "assignment_id": "010606a4-3e40-4ec7-ba06-1df35fa5883b",
+      "candidate": "candidate-fourth",
+      "expected_base": "base-fourth",
+      "publication_id": "e682b6bd-f0b7-427c-b113-cdd9f75a598c",
+      "reason": "The publisher exited and main does not contain candidate-fourth; closed as not published",
+      "receipt": "",
+      "state": "NotPublished",
       "target": "main"
     }
   ],
   "RepositoryRegistrationList": [
     {
       "base_branch": "main",
-      "common_dir": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/alpha/.git",
-      "name": "alpha",
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/alpha",
-      "publish_command": "publish-helper",
-      "repository_id": "84275810-a4fd-4db8-ac86-fe36038cc77b",
+      "common_dir": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/beta/.git",
+      "name": "beta",
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/beta",
+      "publish_command": "",
+      "repository_id": "16f0d128-b6b1-4c25-8410-95ec56e07231",
       "state": "Disabled",
       "test_command": "task check",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
     },
     {
       "base_branch": "main",
-      "common_dir": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/manual/.git",
-      "name": "manual",
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/manual",
+      "common_dir": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/alpha/.git",
+      "name": "alpha",
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/alpha",
       "publish_command": "publish-helper",
-      "repository_id": "c8d96477-65c6-44bc-a176-bfa0ecb558c9",
+      "repository_id": "e6e4655b-cc77-49fe-9476-6530f184689a",
+      "state": "Disabled",
+      "test_command": "task check",
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
+    },
+    {
+      "base_branch": "main",
+      "common_dir": "/dev/shm/cp-wave4-publication-exit-scratch/history/manual/.git",
+      "name": "manual",
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/manual",
+      "publish_command": "publish-helper",
+      "repository_id": "fba6791a-543a-4c02-9df5-73984e42d834",
       "state": "Registered",
       "test_command": "cargo test",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
-    },
-    {
-      "base_branch": "main",
-      "common_dir": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/beta/.git",
-      "name": "beta",
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/beta",
-      "publish_command": "",
-      "repository_id": "ca63c874-83e2-48b0-80c6-98a50b7e739c",
-      "state": "Disabled",
-      "test_command": "task check",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
     }
   ],
   "WorkspaceDirectoryList": [
     {
-      "directory_id": "380aea8a-1972-44f2-ae78-40fa4d858cd2",
-      "managed_common_dirs": [],
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/context",
-      "repository_common_dirs": [],
-      "state": "Registered",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
-    },
-    {
-      "directory_id": "fb256223-c7fa-4fbf-ac76-c3eef55f788d",
+      "directory_id": "1636c830-a895-42c3-8bcf-eccfc0435666",
       "managed_common_dirs": [
-        "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/alpha/.git",
-        "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/beta/.git"
+        "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/alpha/.git",
+        "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/beta/.git"
       ],
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace",
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace",
       "repository_common_dirs": [
-        "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/alpha/.git",
-        "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace/beta/.git"
+        "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/alpha/.git",
+        "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace/beta/.git"
       ],
       "state": "Removed",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
+    },
+    {
+      "directory_id": "481cebb7-a4af-4a54-8110-efea3bc7415f",
+      "managed_common_dirs": [],
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/context",
+      "repository_common_dirs": [],
+      "state": "Registered",
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
     }
   ],
   "WorkspaceList": [
     {
       "name": "recorded",
-      "path": "/dev/shm/cp-wave3-goal-acceptance-authority-scratch/history/workspace",
+      "path": "/dev/shm/cp-wave4-publication-exit-scratch/history/workspace",
       "state": "Archived",
-      "workspace_id": "9a294290-736a-40d4-bf71-b7cff2cc8c9f"
+      "workspace_id": "ab514357-99c7-4d2a-8c89-aacd6789cad0"
     }
   ]
 }

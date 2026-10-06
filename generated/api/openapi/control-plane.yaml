@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-# contract digest slice-sha256/2:c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+# model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+# contract digest slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-    contract_digest: slice-sha256/2:c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+    source_digest: 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+    contract_digest: slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
   x-ess-reached-by: network
 tags:
 - name: host
@@ -430,6 +430,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ClaimAssignment.wrong-state.Response'
+        '501':
+          description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  committed:
+                    description: '`true` when the command''s effect and events were committed and delivering what it published failed; `false` when an unmet obligation stopped the command before anything was written.'
+                    type: boolean
+                  refused:
+                    description: What was left unfinished, in words.
+                    type: string
+                required:
+                - refused
+                - committed
+                type: object
+  /host/commands/ClosePublication:
+    post:
+      operationId: controlplane.host.ClosePublication
+      summary: ClosePublication
+      tags:
+      - host
+      x-ess-may-invoke:
+      - controlplane.host.Supervisor
+      requestBody:
+        description: The input `controlplane.host.ClosePublication` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/controlplane.host.ClosePublication.Input'
+      responses:
+        '202':
+          description: 'Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ClosePublication.applied.Response'
+        '403':
+          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  actor:
+                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                    type:
+                    - string
+                    - 'null'
+                  refused:
+                    description: The standard refusal for an actor no grant admits.
+                    enum:
+                    - not granted
+                    type: string
+                required:
+                - refused
+                - actor
+                type: object
+        '404':
+          description: 'Outcome `not-found`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ClosePublication.not-found.Response'
+        '409':
+          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/controlplane.host.ClosePublication.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -2862,6 +2934,108 @@ components:
       - implementor_run
       - base_revision
       additionalProperties: false
+    controlplane.host.ClosePublication.Input:
+      title: ClosePublication input
+      x-ess-name: controlplane.host.ClosePublication
+      x-ess-kind: command-input
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
+      required:
+      - publication_id
+      - reason
+      additionalProperties: false
+    controlplane.host.ClosePublication.applied.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `controlplane.host.PublicationIntent` has moved to `NotPublished`, along `close`. The instance is the one `publication_id` names. Emits `ClosePublicationApplied`, published to consumers and listed under `published`.
+      properties:
+        outcome:
+          const: applied
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          items: false
+          maxItems: 1
+          minItems: 1
+          prefixItems:
+          - additionalProperties: false
+            properties:
+              event:
+                const: controlplane.host.ClosePublicationApplied
+                type: string
+              payload:
+                $ref: '#/components/schemas/controlplane.host.ClosePublicationApplied.Event'
+            required:
+            - event
+            - payload
+            type: object
+          type: array
+      required:
+      - outcome
+      - published
+      type: object
+    controlplane.host.ClosePublication.not-found.Response:
+      additionalProperties: false
+      description: Taken when the request names an identity no record carries.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentNotFound
+          type: string
+        outcome:
+          const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ClosePublication.wrong-state.Response:
+      additionalProperties: false
+      description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
+      properties:
+        error:
+          const: controlplane.host.PublicationIntentStateConflict
+          type: string
+        outcome:
+          const: wrong-state
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.PublicationIntentStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
+      type: object
+    controlplane.host.ClosePublicationApplied.Event:
+      title: ClosePublicationApplied payload
+      x-ess-name: controlplane.host.ClosePublicationApplied
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        publication_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reason:
+          type: string
+      required:
+      - publication_id
+      - reason
+      additionalProperties: false
     controlplane.host.CompleteAssignment.Input:
       title: CompleteAssignment input
       x-ess-name: controlplane.host.CompleteAssignment
@@ -4150,6 +4324,7 @@ components:
       type: string
       enum:
       - Confirmed
+      - NotPublished
       - Prepared
       - Uncertain
     controlplane.host.PublicationIntentCreated.Event:
@@ -4212,6 +4387,8 @@ components:
         expected_base:
           type: string
         receipt:
+          type: string
+        reason:
           type: string
         state:
           $ref: '#/components/schemas/controlplane.host.PublicationIntent.State'
@@ -5915,6 +6092,8 @@ x-ess-entities:
         type: string
       receipt:
         type: string
+      reason:
+        type: string
       state:
         $ref: '#/x-ess-entities/controlplane.host.PublicationIntent.State'
     required:
@@ -5933,6 +6112,7 @@ x-ess-entities:
     type: string
     enum:
     - Confirmed
+    - NotPublished
     - Prepared
     - Uncertain
   controlplane.host.RepositoryRegistration:

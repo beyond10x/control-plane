@@ -76,6 +76,58 @@
       ],
       "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
       "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Cancelled goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
+    },
+    {
+      "id": "entity/controlplane.host.PublicationIntent/terminal-added/NotPublished",
+      "change": {
+        "category": "entity",
+        "subject": "controlplane.host.PublicationIntent",
+        "changed": {
+          "kind": "terminal-added",
+          "state": "NotPublished"
+        }
+      },
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "Only ClosePublication, a new command, moves an intent into NotPublished, so no stored decision does: stored history cannot hold a call of a command that did not exist. Every recorded intent replays to the Prepared, Uncertain or Confirmed state it reached, and PreparePublication, MarkPublicationUncertain and ConfirmPublication answer from those states as before. The committed recorded history replayed to its committed views with this change before it was re-recorded."
+    },
+    {
+      "id": "entity/controlplane.host.PublicationIntent/transition-added/close",
+      "change": {
+        "category": "entity",
+        "subject": "controlplane.host.PublicationIntent",
+        "changed": {
+          "kind": "transition-added",
+          "transition": "close"
+        }
+      },
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "The close transition is taken only by the applied outcome of ClosePublication, a new command; no stored decision calls it. The transitions of the recorded publication commands are unchanged, so each recorded outcome replays as recorded (see the NotPublished entry)."
+    },
+    {
+      "id": "component/control-plane/accepts-added/controlplane.host.ClosePublication",
+      "change": {
+        "category": "component",
+        "subject": "control-plane",
+        "changed": {
+          "command": "controlplane.host.ClosePublication",
+          "kind": "accepts-added"
+        }
+      },
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "The component gains a route for a new command. Replay routes only recorded commands, and no stored decision names ClosePublication, so no recorded call reaches the new route; ESS rates the change compatible for history."
+    },
+    {
+      "id": "component/control-plane/publishes-added/controlplane.host.ClosePublicationApplied",
+      "change": {
+        "category": "component",
+        "subject": "control-plane",
+        "changed": {
+          "event": "controlplane.host.ClosePublicationApplied",
+          "kind": "publishes-added"
+        }
+      },
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "Only the applied outcome of ClosePublication, a new command, publishes this event, so no stored outcome carries it and no recorded outcome changes; ESS rates the change compatible for history."
     }
   ]
 }
