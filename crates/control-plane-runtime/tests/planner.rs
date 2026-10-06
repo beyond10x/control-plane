@@ -55,7 +55,7 @@ async fn missing_reads_are_observations_and_planning_can_continue() {
 }
 
 #[tokio::test]
-async fn identical_specification_writes_exhaust_unchanged_action_budget() {
+async fn no_change_is_not_progress() {
     let (_, store, config, _, _) = setup(true).await;
     let write = json!({"action":"write_specification","path":"ess/system.yaml","contents":"format: ess/22\nsystem: demo\nversion: v1\ndomains: [demo.item]\n"});
     let mut actions = VecDeque::from(vec![write; 4]);
@@ -340,7 +340,7 @@ async fn existing_backlog_is_not_duplicated() {
 }
 
 #[tokio::test]
-async fn planner_can_read_aep_help_then_finish_existing_work() {
+async fn aep_prefix_help_is_read_only() {
     let (_fixture, store, config, _goal, _repo) = setup(true).await;
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
         json!({"action":"aep","args":["--help"],"body":null}),
@@ -433,7 +433,7 @@ async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
 }
 
 #[tokio::test]
-async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
+async fn command_syntax_feedback_allows_correction() {
     struct Recovering(Mutex<usize>);
     impl AgentModel for Recovering {
         fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
@@ -479,7 +479,7 @@ async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
 }
 
 #[tokio::test]
-async fn prior_actions_and_unchanged_feedback_break_a_stationary_model_loop() {
+async fn unchanged_reads_preserve_action_history() {
     struct NeedsMemory(Mutex<Vec<String>>);
     impl AgentModel for NeedsMemory {
         fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
@@ -544,7 +544,7 @@ async fn unchanged_aep_reads_stop_with_explicit_stall_reason() {
 }
 
 #[tokio::test]
-async fn alternating_reads_retain_unchanged_feedback_across_actions() {
+async fn alternating_reads_receive_stall_feedback() {
     struct Alternates(Mutex<usize>);
     impl AgentModel for Alternates {
         fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
@@ -582,7 +582,7 @@ async fn alternating_reads_retain_unchanged_feedback_across_actions() {
 }
 
 #[tokio::test]
-async fn repeated_aep_syntax_errors_stop_at_a_bounded_failure_budget() {
+async fn syntax_recovery_has_an_attempt_budget() {
     let (_fixture, store, config, _goal, _repo) = setup(true).await;
     let bad = json!({"action":"aep","args":["list","--not-a-real-option"],"body":null});
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([

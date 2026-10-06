@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn real_durable_suite_passes_and_wrong_archived_state_fails_by_name() -> Result<()> {
+    fn real_adapter_conformance() -> Result<()> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()

@@ -511,7 +511,7 @@ mod tests {
         }
     }
     #[test]
-    fn loom_session_retains_continuation_refusals_and_spent_turns_across_restart() -> Result<()> {
+    fn session_budget_restart() -> Result<()> {
         let root = tempfile::tempdir()?;
         let workspace = root.path().join("workspace");
         std::fs::create_dir(&workspace)?;

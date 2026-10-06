@@ -1000,7 +1000,7 @@ async fn workspace_directory_api_lists_adds_and_isolates_multiple_workspaces() {
 }
 
 #[tokio::test]
-async fn startup_registers_current_directory_once_and_explicit_roots_override_it() {
+async fn startup_registers_current_directory_once() {
     let (temp, state) = fixture().await;
     let other = temp.path().join("other");
     std::fs::create_dir_all(&other).unwrap();
