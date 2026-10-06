@@ -1,0 +1,169 @@
+{
+  "assignments": [
+    {
+      "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1",
+      "attempt": 1,
+      "base_revision": "base-alpha",
+      "candidate": "",
+      "case_id": "story:status-endpoint/case",
+      "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c1",
+      "goal_revision": 1,
+      "implementor_run": "implementor-alpha-1",
+      "merged_at": null,
+      "reason": "",
+      "repository_id": "6f1d2c3b-0000-4000-8000-0000000000a1",
+      "review_revision": "",
+      "reviewer_run": "",
+      "state": "Implementing",
+      "story_id": "story:status-endpoint",
+      "test_revision": "",
+      "waiting": null,
+      "worktree_id": "tree-alpha"
+    },
+    {
+      "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d2",
+      "attempt": 0,
+      "base_revision": "",
+      "candidate": "",
+      "case_id": "story:status-docs/case",
+      "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c1",
+      "goal_revision": 1,
+      "implementor_run": "",
+      "merged_at": null,
+      "reason": "",
+      "repository_id": "6f1d2c3b-0000-4000-8000-0000000000b1",
+      "review_revision": "",
+      "reviewer_run": "",
+      "state": "Queued",
+      "story_id": "story:status-docs",
+      "test_revision": "",
+      "waiting": null,
+      "worktree_id": ""
+    }
+  ],
+  "directories": [
+    {
+      "directory_id": "6f1d2c3b-0000-4000-8000-0000000000f1",
+      "managed_common_dirs": [],
+      "path": "/srv/console-fixture/demo",
+      "repository_common_dirs": [],
+      "state": "Registered",
+      "workspace_id": "6f1d2c3b-0000-4000-8000-000000000001"
+    }
+  ],
+  "goals": [
+    {
+      "acceptance": "GET /status answers 200",
+      "acceptance_recorded": false,
+      "activity": [
+        {
+          "action": "tool.run",
+          "at": "2026-10-06T09:55:00Z",
+          "detail": "cargo test --locked",
+          "goal_revision": 1,
+          "id": "entry-worker-alpha",
+          "role": "implementor",
+          "status": "running",
+          "worktree": "tree-alpha"
+        },
+        {
+          "action": "planning.Queued",
+          "at": "2026-10-06T09:50:00Z",
+          "detail": "Planning phase: Queued",
+          "goal_revision": 1,
+          "id": "entry-planner-queued",
+          "role": "planner",
+          "status": "waiting",
+          "worktree": "planning-tree"
+        }
+      ],
+      "fleet": {
+        "6f1d2c3b-0000-4000-8000-0000000000d1": {
+          "action": "tool.run",
+          "at": "2026-10-06T09:55:00Z",
+          "detail": "cargo test --locked",
+          "goal_revision": 1,
+          "id": "entry-worker-alpha",
+          "role": "implementor",
+          "status": "running",
+          "worktree": "tree-alpha"
+        }
+      },
+      "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c1",
+      "implementor_model": "fixture-implementor",
+      "last_activity": {
+        "action": "tool.run",
+        "at": "2026-10-06T09:55:00Z",
+        "detail": "cargo test --locked",
+        "goal_revision": 1,
+        "id": "entry-worker-alpha",
+        "role": "implementor",
+        "status": "running",
+        "worktree": "tree-alpha"
+      },
+      "max_attempts": 2,
+      "max_minutes": 30,
+      "max_workers": 2,
+      "merge_authority": true,
+      "objective": "Add a status endpoint",
+      "planner_activity": {
+        "action": "planning.Queued",
+        "at": "2026-10-06T09:50:00Z",
+        "detail": "Planning phase: Queued",
+        "goal_revision": 1,
+        "id": "entry-planner-queued",
+        "role": "planner",
+        "status": "waiting",
+        "worktree": "planning-tree"
+      },
+      "planner_model": "fixture-planner",
+      "planning_fingerprint": "plan-fingerprint",
+      "planning_phase": "Queued",
+      "planning_reason": "",
+      "planning_repository": "6f1d2c3b-0000-4000-8000-0000000000a1",
+      "planning_revision": 1,
+      "planning_worktree_id": "planning-tree",
+      "planning_worktree_path": "/srv/console-fixture/planning",
+      "reviewer_model": "fixture-reviewer",
+      "revision": 1,
+      "state": "Running",
+      "waiting": null,
+      "workspace_id": "6f1d2c3b-0000-4000-8000-000000000001"
+    }
+  ],
+  "publications": [],
+  "repositories": [
+    {
+      "base_branch": "main",
+      "common_dir": "/srv/console-fixture/demo/alpha/.git",
+      "name": "alpha",
+      "path": "/srv/console-fixture/demo/alpha",
+      "publish_command": "",
+      "repository_id": "6f1d2c3b-0000-4000-8000-0000000000a1",
+      "state": "Registered",
+      "test_command": "cargo test --locked",
+      "workspace_id": "6f1d2c3b-0000-4000-8000-000000000001"
+    },
+    {
+      "base_branch": "main",
+      "common_dir": "/srv/console-fixture/demo/beta/.git",
+      "name": "beta",
+      "path": "/srv/console-fixture/demo/beta",
+      "publish_command": "",
+      "repository_id": "6f1d2c3b-0000-4000-8000-0000000000b1",
+      "state": "Registered",
+      "test_command": "cargo test --locked",
+      "workspace_id": "6f1d2c3b-0000-4000-8000-000000000001"
+    }
+  ],
+  "runtime_error": null,
+  "server_time": "2026-10-06T10:00:00.000Z",
+  "workspaces": [
+    {
+      "name": "demo",
+      "path": "/srv/console-fixture/demo",
+      "state": "Registered",
+      "workspace_id": "6f1d2c3b-0000-4000-8000-000000000001"
+    }
+  ]
+}
