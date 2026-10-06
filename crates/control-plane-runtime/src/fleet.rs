@@ -27,6 +27,9 @@ use std::{
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
+/// The acceptance record rides along in every later progress decision of its goal.
+const ACCEPTANCE_REASON_BYTES: usize = 2 * 1024;
+
 #[derive(Clone)]
 struct Host {
     store: SharedStore,
@@ -78,21 +81,14 @@ impl Host {
     }
     fn progress(&self, assignment: &Value, action: &str, role: &str, detail: Value) -> Result<()> {
         self.handle.block_on(async {
-            let mut store=self.store.lock().await;
-            let goals=store.query("GoalList")?;
-            let goal=goals.as_array().context("goals not array")?.iter().find(|g|g["goal_id"]==assignment["goal_id"]).context("progress goal missing")?;
-            let mut receipt=serde_json::from_str::<Value>(goal["planning_receipt"].as_str().unwrap_or("{}")).unwrap_or_else(|_|json!({}));
-            if !receipt.is_object(){receipt=json!({"planning":receipt});}
-            let status=if action=="blocked" {"failed"}else if action.ends_with(".completed") {"completed"}else{"running"};
-            let activity=json!({"assignment_id":assignment["assignment_id"],"goal_revision":assignment["goal_revision"],"action":action,"role":role,"at":now(),"worktree":assignment["worktree_id"],"status":status,"detail":detail});
-            if !receipt["fleet"].is_object(){receipt["fleet"]=json!({});}
-            receipt["fleet"][text(assignment,"assignment_id")?]=activity.clone();receipt["last_activity"]=activity;
-            if !receipt["activity"].is_array(){receipt["activity"]=json!([]);}
-            let activity=receipt["last_activity"].clone();
-            let history=receipt["activity"].as_array_mut().unwrap();history.push(activity);if history.len()>64 {history.drain(..history.len()-64);}
-            let mut body=goal.as_object().context("goal not object")?.clone();body.retain(|key,_|key.starts_with("planning_")||key=="goal_id");body.insert("planning_receipt".into(),json!(receipt.to_string()));
-            let outcome=store.execute("RecordPlanningProgress",Value::Object(body),Actor::Supervisor).await?;
-            ensure!(outcome["outcome"]=="applied","progress append refused: {outcome}");Ok(())
+            record_progress(
+                &mut *self.store.lock().await,
+                assignment,
+                action,
+                role,
+                detail,
+            )
+            .await
         })
     }
     fn rows(&self, view: &str) -> Result<Vec<Value>> {
@@ -119,7 +115,7 @@ impl Host {
             let current = goals.as_array().context("goals view")?.iter().find(|g|g["goal_id"]==goal["goal_id"]).context("goal missing")?;
             ensure!(current["revision"]==goal["revision"], "goal changed during acceptance");
             let mut receipt: Value = serde_json::from_str(current["planning_receipt"].as_str().unwrap_or("{}"))?;
-            receipt["acceptance"] = json!({"fingerprint":fingerprint,"status":status,"reason":reason,"at":now(),"goal_revision":goal["revision"]});
+            receipt["acceptance"] = json!({"fingerprint":fingerprint,"status":status,"reason":crate::context::excerpt(reason, ACCEPTANCE_REASON_BYTES),"at":now(),"goal_revision":goal["revision"]});
             let mut body = current.as_object().context("goal object")?.clone();
             body.retain(|key,_|key.starts_with("planning_")||key=="goal_id");
             body.insert("planning_receipt".into(),json!(receipt.to_string()));
@@ -216,6 +212,33 @@ impl Host {
         }
         Ok(())
     }
+}
+/// Record one runtime progress event of an assignment on its goal's planning receipt.
+/// The decision carries this activity alone; the host journal keeps the goal's history and
+/// each assignment's newest activity.
+pub(crate) async fn record_progress(
+    store: &mut control_plane_core::Store,
+    assignment: &Value,
+    action: &str,
+    role: &str,
+    detail: Value,
+) -> Result<()> {
+    text(assignment, "assignment_id")?;
+    let status = if action == "blocked" {
+        "failed"
+    } else if action.ends_with(".completed") {
+        "completed"
+    } else {
+        "running"
+    };
+    let activity = json!({"id":uuid::Uuid::new_v4().to_string(),"assignment_id":assignment["assignment_id"],"goal_revision":assignment["goal_revision"],"action":action,"role":role,"at":now(),"worktree":assignment["worktree_id"],"status":status,"detail":detail});
+    let goal = text(assignment, "goal_id")?;
+    let outcome = store.record_activity(goal, activity).await?;
+    ensure!(
+        outcome["outcome"] == "applied",
+        "progress append refused: {outcome}"
+    );
+    Ok(())
 }
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     engine::text(value, key)
@@ -2485,5 +2508,192 @@ mod tests {
                 String::from_utf8_lossy(&output.stderr)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    use control_plane_core::Store;
+
+    const DECISION_LIMIT: u64 = 16 * 1024;
+
+    /// A 1 KiB progress detail, unique per event, with characters JSON must escape.
+    fn detail(index: usize) -> String {
+        let mut text = format!("event {index:05}: \"loom\" streamed tokens ");
+        while text.len() < 1024 {
+            text.push_str("abcdefghij");
+        }
+        text.truncate(1024);
+        text
+    }
+
+    /// A model whose turn only reports Loom progress through the host's progress callback.
+    /// It measures the event data each progress event appends and stops at the first one
+    /// that exceeds the bound, so an unbounded build cannot fill the disk.
+    struct Emitter {
+        events: usize,
+        store: SharedStore,
+        appended: std::sync::Mutex<Vec<u64>>,
+    }
+    impl AgentModel for Emitter {
+        fn respond(&self, _: &ModelRequest) -> Result<Value> {
+            bail!("this model only reports progress")
+        }
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            environment: &crate::ModelEnvironment,
+        ) -> Result<Value> {
+            let bytes = || self.store.blocking_lock().appended_event_bytes();
+            for index in 0..self.events {
+                let before = bytes();
+                (environment.progress)(json!(detail(index)))?;
+                let added = bytes() - before;
+                ensure!(
+                    added <= DECISION_LIMIT,
+                    "progress event {index} appended {added} bytes of event data"
+                );
+                self.appended.lock().unwrap().push(added);
+            }
+            Ok(json!({}))
+        }
+    }
+
+    struct Fixture {
+        _temp: tempfile::TempDir,
+        runtime: tokio::runtime::Runtime,
+        database: PathBuf,
+        workspace: PathBuf,
+        store: SharedStore,
+        assignment: Value,
+    }
+
+    fn fixture() -> Fixture {
+        let temp = tempfile::tempdir().unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+        let database = temp.path().join("state.sqlite");
+        let (store, assignment) = runtime.block_on(async {
+            let mut store = Store::open(&database).await.unwrap();
+            let id = |outcome: Value, field: &str| outcome["published"][0]["payload"][field].clone();
+            let ws = id(
+                store
+                    .execute(
+                        "RegisterWorkspace",
+                        json!({"path":workspace,"name":"progress"}),
+                        Actor::Operator,
+                    )
+                    .await
+                    .unwrap(),
+                "workspace_id",
+            );
+            let goal = id(store.execute("CreateGoal",json!({"workspace_id":ws,"objective":"Report progress","acceptance":"Progress stays bounded","max_workers":1,"max_attempts":1,"max_minutes":60,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await.unwrap(),"goal_id");
+            store
+                .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap();
+            let assignment = json!({"goal_id":goal,"assignment_id":uuid::Uuid::new_v4().to_string(),"goal_revision":1,"worktree_id":"cp-impl-progress"});
+            (Arc::new(tokio::sync::Mutex::new(store)), assignment)
+        });
+        Fixture {
+            _temp: temp,
+            runtime,
+            database,
+            workspace,
+            store,
+            assignment,
+        }
+    }
+
+    /// Send `events` Loom progress events through one implementor turn, the way the fleet
+    /// receives them: the host callback rechecks the goal, then records the progress.
+    fn emit(fixture: &Fixture, events: usize) -> Vec<u64> {
+        let model = Arc::new(Emitter {
+            events,
+            store: fixture.store.clone(),
+            appended: Default::default(),
+        });
+        let host = Host {
+            store: fixture.store.clone(),
+            handle: fixture.runtime.handle().clone(),
+            config: RuntimeConfig::default(),
+            model: model.clone(),
+            runner: ProcessRunner {
+                environment: vec![],
+                timeout: Duration::from_secs(600),
+                cancel: CancellationToken::new(),
+            },
+            deadline: None,
+        };
+        let request = ModelRequest {
+            role: "implementor".into(),
+            execution_context: "implementor-progress".into(),
+            model: "scripted".into(),
+            instructions: String::new(),
+            prompt: String::new(),
+            schema: json!({}),
+            timeout: Duration::from_secs(600),
+        };
+        host.respond(&request, &fixture.workspace, &fixture.assignment)
+            .unwrap();
+        std::mem::take(&mut *model.appended.lock().unwrap())
+    }
+
+    #[test]
+    fn progress_decision_stays_under_16_kib() {
+        let fixture = fixture();
+        let appended = emit(&fixture, 1_000);
+        assert_eq!(appended.len(), 1_000);
+        assert!(
+            appended.iter().all(|bytes| *bytes > 0),
+            "every progress event is one durable decision"
+        );
+        let largest = appended.iter().max().copied().unwrap();
+        eprintln!(
+            "1,000 progress events: largest decision {largest} bytes, total {} bytes",
+            appended.iter().sum::<u64>()
+        );
+        assert!(largest <= DECISION_LIMIT, "{largest} bytes");
+    }
+
+    #[test]
+    fn restart_open_is_bounded() {
+        let fixture = fixture();
+        let appended = emit(&fixture, 10_000);
+        assert_eq!(appended.len(), 10_000);
+        let Fixture {
+            _temp,
+            runtime,
+            database,
+            store,
+            ..
+        } = fixture;
+        drop(store);
+        let started = Instant::now();
+        let reopened = runtime.block_on(Store::open(&database)).unwrap();
+        let elapsed = started.elapsed();
+        eprintln!(
+            "10,000 progress events: {} bytes of event data, Store::open {elapsed:?}",
+            appended.iter().sum::<u64>()
+        );
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "Store::open took {elapsed:?}"
+        );
+        let goal = reopened.query("GoalList").unwrap()[0].clone();
+        let receipt: Value =
+            serde_json::from_str(goal["planning_receipt"].as_str().unwrap()).unwrap();
+        let last = receipt["last_activity"]["detail"].as_str().unwrap();
+        assert!(last.starts_with("event 09999:"), "{last}");
+        assert!(detail(9_999).starts_with(last));
+        assert_eq!(
+            receipt["activity"].as_array().unwrap().last(),
+            Some(&receipt["last_activity"])
+        );
     }
 }

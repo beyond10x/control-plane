@@ -1559,3 +1559,85 @@ async fn planner_input_refusals_reach_the_model() {
         assert!(receipt.contains(code), "{code} did not reach the planner");
     }
 }
+
+#[tokio::test]
+async fn planner_progress_does_not_repeat_the_transcript() {
+    /// Reads six 10 KiB files, then finishes; notes the event data recorded before each turn.
+    struct Reader {
+        store: Arc<tokio::sync::Mutex<Store>>,
+        appended: Mutex<Vec<u64>>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let appended = tokio::runtime::Handle::current()
+                .block_on(async { self.store.lock().await.appended_event_bytes() });
+            let mut seen = self.appended.lock().unwrap();
+            seen.push(appended);
+            Ok(match (request.role.as_str(), seen.len()) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 6 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=6 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(380)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        store: store.clone(),
+        appended: Mutex::new(Vec::new()),
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    let appended = model.appended.lock().unwrap().clone();
+    assert_eq!(appended.len(), 8, "{appended:?}");
+    // Between two planner turns: the response, the read intent, its observation, governance
+    // events and the next request. Each of them repeated the growing transcript and activity
+    // history before progress was bounded, so every read cost more than the one before.
+    let turns = appended
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect::<Vec<_>>();
+    assert!(
+        turns[1..6].iter().all(|bytes| *bytes < 48 * 1024),
+        "{turns:?}"
+    );
+    assert!(
+        turns[5] <= turns[1] + 1024,
+        "progress grows with the transcript: {turns:?}"
+    );
+    let receipt = store.lock().await.query("GoalList").unwrap()[0]["planning_receipt"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        receipt.contains("# Note 6"),
+        "the validated plan keeps its observations"
+    );
+}

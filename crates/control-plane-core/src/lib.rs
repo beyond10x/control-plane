@@ -17,7 +17,7 @@ pub use discovery::{DiscoveredRepository, DiscoveredWorkspace, discover};
 use eventlog_core::{CommandMeta, EventStore, Expected, NewEvent, StreamId, TenantId};
 use eventlog_sqlite::SqliteEventStore;
 use fs2::FileExt;
-use memory::{Memory, Ports};
+use memory::{Journal, Memory, Ports};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -34,6 +34,7 @@ pub struct Store {
     version: u64,
     committed: tokio::sync::watch::Sender<u64>,
     memory: Memory,
+    appended: u64,
     _lock: File,
 }
 
@@ -178,6 +179,7 @@ impl Store {
             version: 0,
             committed: tokio::sync::watch::channel(0).0,
             memory: Memory::default(),
+            appended: 0,
             _lock: lock,
         };
         loop {
@@ -202,8 +204,9 @@ impl Store {
                     "Supervisor" => Actor::Supervisor,
                     _ => bail!("unknown recorded actor"),
                 };
+                // Opening fails on any refused decision, so replay moves its state forward.
                 let (next, outcome) = invoke(
-                    &store.memory,
+                    std::mem::take(&mut store.memory),
                     &decision.command,
                     &decision.body,
                     actor,
@@ -229,6 +232,11 @@ impl Store {
     /// Notifications are hints to re-query views, not an independent event journal.
     pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
         self.committed.subscribe()
+    }
+
+    /// Serialized event data this instance has appended since it opened the store.
+    pub fn appended_event_bytes(&self) -> u64 {
+        self.appended
     }
 
     /// Execute one generated command and return its generated outcome envelope.
@@ -261,6 +269,9 @@ impl Store {
                 )
                 .await;
         }
+        if command == "RecordPlanningProgress" {
+            self.bound_progress(&mut body);
+        }
         if let Some(existing) = self.prepare(command, &mut body)? {
             return Ok(existing);
         }
@@ -286,6 +297,10 @@ impl Store {
             .iter()
             .map(|value| NewEvent::new("HostDecision", 1, value.clone()))
             .collect::<std::result::Result<Vec<_>, _>>()?;
+        let bytes = data
+            .iter()
+            .map(|value| serde_json::to_vec(value).map(|bytes| bytes.len() as u64))
+            .sum::<std::result::Result<u64, _>>()?;
         let id = uuid::Uuid::new_v4().to_string();
         let meta = CommandMeta {
             idempotency_key: id.clone(),
@@ -310,14 +325,103 @@ impl Store {
             .await
             .context("host decision was not committed; no dependent effect may run")?;
         self.version = result.last_version;
+        self.appended += bytes;
         self.memory = next;
         self.committed.send_replace(self.version);
         Ok(())
     }
 
+    /// Record one progress activity on a goal's planning receipt, keeping every other planning
+    /// field. The decision stores this activity alone; the goal's journal keeps the history.
+    pub async fn record_activity(&mut self, goal_id: &str, activity: Value) -> Result<Value> {
+        let goal = self
+            .rows("GoalList")?
+            .as_array()
+            .context("goals view is not an array")?
+            .iter()
+            .find(|goal| goal["goal_id"] == goal_id)
+            .context("progress goal missing")?
+            .clone();
+        let mut body = goal
+            .as_object()
+            .context("goal row is not an object")?
+            .clone();
+        body.retain(|key, _| key.starts_with("planning_") || key == "goal_id");
+        let stored = body
+            .get("planning_receipt")
+            .and_then(Value::as_str)
+            .unwrap_or("{}");
+        let mut receipt = serde_json::from_str::<Value>(stored).unwrap_or_else(|_| json!({}));
+        if !receipt.is_object() {
+            receipt = json!({ "planning": receipt });
+        }
+        receipt["last_activity"] = activity;
+        body.insert("planning_receipt".into(), json!(receipt.to_string()));
+        self.execute(
+            "RecordPlanningProgress",
+            Value::Object(body),
+            Actor::Supervisor,
+        )
+        .await
+    }
+
+    /// The host rule for planning receipts recorded from now on: the activity is bounded,
+    /// and history and unchanged planner evidence are left to the goal's journal instead of
+    /// being repeated in every decision. Other receipts are recorded as given.
+    fn bound_progress(&self, body: &mut Value) {
+        let Some(goal) = body["goal_id"].as_str() else {
+            return;
+        };
+        let Some(previous) = self.memory.goals.get(goal) else {
+            return;
+        };
+        let Ok(Value::Object(mut receipt)) =
+            serde_json::from_str::<Value>(body["planning_receipt"].as_str().unwrap_or_default())
+        else {
+            return;
+        };
+        receipt.remove("activity");
+        receipt.remove("fleet");
+        if let Some(planner) = receipt.get("planner")
+            && Journal::planner_of(&self.memory, goal, &previous.data.planning_receipt).as_deref()
+                == Some(planner.to_string().as_str())
+        {
+            receipt.remove("planner");
+        }
+        if let Some(activity) = receipt.get_mut("last_activity") {
+            *activity = memory::bounded_activity(activity);
+        }
+        receipt.insert(
+            memory::RECEIPT_FORMAT.into(),
+            json!(memory::BOUNDED_RECEIPT),
+        );
+        body["planning_receipt"] = json!(Value::Object(receipt).to_string());
+    }
+
+    /// Views as ESS defines them. A bounded planning receipt is shown with the history its
+    /// goal's journal keeps, in the shape every receipt had before it was bounded.
     pub fn query(&self, view: &str) -> Result<Value> {
+        let mut rows = self.rows(view)?;
+        if view.strip_prefix("controlplane.host.").unwrap_or(view) == "GoalList" {
+            for goal in rows.as_array_mut().into_iter().flatten() {
+                if let Some(journal) = goal["goal_id"]
+                    .as_str()
+                    .and_then(|id| self.memory.journals.get(id))
+                    && let Some(expanded) = goal["planning_receipt"]
+                        .as_str()
+                        .and_then(|stored| journal.expand(stored))
+                {
+                    goal["planning_receipt"] = Value::String(expanded);
+                }
+            }
+        }
+        Ok(rows)
+    }
+
+    /// Generated view rows as recorded, without journal expansion.
+    fn rows(&self, view: &str) -> Result<Value> {
         let name = view.strip_prefix("controlplane.host.").unwrap_or(view);
-        let stage = Arc::new(Mutex::new(self.memory.clone()));
+        let stage = Arc::new(Mutex::new(self.memory.rows()));
         let mut system = System::new(ControlPlane::new(Generated::new(Ports(stage))));
         let response = dispatch(
             &mut system,
@@ -366,7 +470,8 @@ fn stage(
     body: Value,
     actor: Actor,
 ) -> Result<Value> {
-    let (next, outcome) = invoke(memory, command, &body, actor, None)?;
+    // A failed stage is discarded by every caller, so the transaction copy is moved, not cloned.
+    let (next, outcome) = invoke(std::mem::take(memory), command, &body, actor, None)?;
     decisions.push(Decision {
         command: command.to_owned(),
         body,
@@ -379,13 +484,19 @@ fn stage(
 }
 
 fn invoke(
-    memory: &Memory,
+    mut staged: Memory,
     name: &str,
     body: &Value,
     actor: Actor,
     replay: Option<Vec<String>>,
 ) -> Result<(Memory, Value)> {
-    let mut staged = memory.clone();
+    let progress = (name == "RecordPlanningProgress")
+        .then(|| body["goal_id"].as_str())
+        .flatten()
+        .and_then(|goal| {
+            let receipt = &staged.goals.get(goal)?.data.planning_receipt;
+            Some((goal.to_owned(), receipt.clone()))
+        });
     staged.replay = replay.is_some();
     staged.ids = replay.unwrap_or_default();
     staged.cursor = 0;
@@ -409,14 +520,26 @@ fn invoke(
         response.body
     );
     drop(system);
-    let mut next = shared
-        .lock()
-        .map_err(|_| anyhow::anyhow!("memory stage poisoned"))?
-        .clone();
+    let poisoned = || anyhow::anyhow!("memory stage poisoned");
+    let mut next = match Arc::try_unwrap(shared) {
+        Ok(stage) => stage.into_inner().map_err(|_| poisoned())?,
+        Err(shared) => shared.lock().map_err(|_| poisoned())?.clone(),
+    };
     ensure!(
         next.cursor == next.ids.len(),
         "recorded UUID sequence was not consumed exactly"
     );
+    if let Some((goal, previous)) = progress
+        && outcome["outcome"] == "applied"
+    {
+        advance_journal(&mut next, &goal, &previous);
+    }
+    if name == "DeleteGoal"
+        && let Some(goal) = body["goal_id"].as_str()
+        && !next.goals.contains_key(goal)
+    {
+        next.journals.remove(goal);
+    }
     if let Some(key) = guards::registration_key(name, body) {
         next.registration_receipts.insert(key, outcome.clone());
     }
@@ -433,6 +556,28 @@ fn invoke(
         );
     }
     Ok((next, outcome))
+}
+
+/// Keep a goal's progress journal in step with the receipt just recorded for it.
+/// Replay runs this for every recorded decision, so the journal never needs storing.
+fn advance_journal(next: &mut Memory, goal: &str, previous: &str) {
+    let Some(receipt) = next
+        .goals
+        .get(goal)
+        .map(|row| row.data.planning_receipt.clone())
+    else {
+        return;
+    };
+    match memory::bounded_receipt(&receipt) {
+        Some(fields) => {
+            let mut journal = Journal::take(next, goal, previous);
+            journal.record(&receipt, &fields);
+            next.journals.insert(goal.to_owned(), journal);
+        }
+        None => {
+            next.journals.remove(goal);
+        }
+    }
 }
 
 #[cfg(test)]

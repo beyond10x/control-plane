@@ -1111,3 +1111,170 @@ async fn legacy_backfill_still_propagates_storage_failure() {
             .is_empty()
     );
 }
+
+/// Write a recorded host history verbatim, below `Store`, as an older build appended it.
+async fn recorded_history(database: &Path, events: &str) {
+    let log = SqliteEventStore::open(database.to_str().unwrap(), "control_plane")
+        .await
+        .unwrap();
+    let stream = StreamId::new(TenantId::new("local").unwrap(), "host", "state").unwrap();
+    for (index, line) in events.lines().enumerate() {
+        let data: Value = serde_json::from_str(line).unwrap();
+        let id = format!("recorded-{index}");
+        let meta = CommandMeta {
+            idempotency_key: id.clone(),
+            request_hash: eventlog_core::request_hash(&data).unwrap(),
+            subject: "local-operator".into(),
+            actor: data["actor"].as_str().unwrap().into(),
+            request_id: id.clone(),
+            trace_id: id,
+            causation_id: None,
+            causation_depth: 0,
+            occurred_at: time::OffsetDateTime::now_utc(),
+            claim: None,
+        };
+        let expected = if index == 0 {
+            Expected::NoStream
+        } else {
+            Expected::Exact(index as u64)
+        };
+        log.append(
+            &stream,
+            expected,
+            &[NewEvent::new("HostDecision", 1, data).unwrap()],
+            &meta,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn existing_receipts_still_open() {
+    // Written by a09cff6's own progress paths (planner record, fleet progress, acceptance):
+    // every receipt carries its whole activity history, fleet map and planner evidence.
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/progress-receipts-a09cff6");
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    recorded_history(
+        &database,
+        &std::fs::read_to_string(fixture.join("events.jsonl")).unwrap(),
+    )
+    .await;
+    let expected: Value =
+        serde_json::from_str(&std::fs::read_to_string(fixture.join("views.json")).unwrap())
+            .unwrap();
+    let store = Store::open(&database).await.unwrap();
+    for view in [
+        "WorkspaceList",
+        "GoalList",
+        "AssignmentList",
+        "PublicationIntentList",
+    ] {
+        assert_eq!(store.query(view).unwrap(), expected[view], "{view}");
+    }
+}
+
+#[tokio::test]
+async fn first_bounded_progress_continues_an_existing_receipt_history() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/progress-receipts-a09cff6");
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    recorded_history(
+        &database,
+        &std::fs::read_to_string(fixture.join("events.jsonl")).unwrap(),
+    )
+    .await;
+    let mut store = Store::open(&database).await.unwrap();
+    let goal = store.query("GoalList").unwrap()[0].clone();
+    let goal_id = goal["goal_id"].as_str().unwrap().to_owned();
+    let legacy: Value = serde_json::from_str(goal["planning_receipt"].as_str().unwrap()).unwrap();
+    let event = json!({"id":"next","assignment_id":"new-assignment","goal_revision":1,"action":"tool.run","role":"implementor","at":"2026-10-06T12:00:00Z","worktree":"tree","status":"running","detail":"next"});
+    let before = store.appended_event_bytes();
+    store
+        .record_activity(&goal_id, event.clone())
+        .await
+        .unwrap();
+    assert!(store.appended_event_bytes() - before < 4096);
+    let expanded = store.query("GoalList").unwrap();
+    let receipt: Value = serde_json::from_str(
+        expanded
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|goal| goal["goal_id"] == goal_id.as_str())
+            .unwrap()["planning_receipt"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let mut history = legacy["activity"].as_array().unwrap().clone();
+    history.push(event.clone());
+    assert_eq!(receipt["activity"], json!(history));
+    assert_eq!(receipt["last_activity"], event);
+    assert_eq!(receipt["planner"], legacy["planner"]);
+    assert_eq!(receipt["acceptance"], legacy["acceptance"]);
+    let mut fleet = legacy["fleet"].as_object().unwrap().clone();
+    fleet.insert("new-assignment".into(), event);
+    assert_eq!(receipt["fleet"], Value::Object(fleet));
+    drop(store);
+    let reopened = Store::open(&database).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap(), expanded);
+}
+
+#[tokio::test]
+async fn unchanged_planner_evidence_is_recorded_once() {
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    let evidence = json!({"namespace":"plan","transcript":["observed ".repeat(8192)]});
+    let mut appended = Vec::new();
+    for index in 0..3 {
+        let event = json!({"id":index.to_string(),"action":"planning.Planning","role":"planner","status":"running","detail":format!("step {index}")});
+        let receipt = json!({"planner":evidence,"last_activity":event,"activity":[event]});
+        let before = store.appended_event_bytes();
+        store.execute("RecordPlanningProgress",json!({"goal_id":goal,"planning_revision":1,"planning_fingerprint":"f","planning_repository":"","planning_worktree_id":"t","planning_worktree_path":"t","planning_phase":"Planning","planning_reason":"","planning_receipt":receipt.to_string()}),Actor::Supervisor).await.unwrap();
+        appended.push(store.appended_event_bytes() - before);
+    }
+    assert!(appended[0] > 2 * 65536, "{appended:?}");
+    assert!(appended[1] < 4096 && appended[2] < 4096, "{appended:?}");
+    let shown = |store: &Store| -> Value {
+        serde_json::from_str(
+            store.query("GoalList").unwrap()[0]["planning_receipt"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap()
+    };
+    let receipt = shown(&store);
+    assert_eq!(receipt["planner"], evidence);
+    assert_eq!(receipt["activity"].as_array().unwrap().len(), 3);
+    drop(store);
+    assert_eq!(shown(&Store::open(&database).await.unwrap()), receipt);
+}
+
+#[test]
+fn recorded_activity_bounds_are_stable() {
+    let large =
+        json!({"summary":"界".repeat(900),"event":{"kind":"model-stream","text":"x".repeat(4096)}});
+    let unnamed = json!({"program":"cargo","path":"src/lib.rs","output":"y".repeat(4096)});
+    for detail in [
+        json!("z".repeat(2048)),
+        large,
+        unnamed,
+        json!({"small":true}),
+    ] {
+        let activity = json!({"id":"a","action":"tool.run","role":"implementor","status":"running","at":"now","worktree":"w".repeat(1024),"unlisted":"dropped","detail":detail});
+        let once = memory::bounded_activity(&activity);
+        assert_eq!(memory::bounded_activity(&once), once);
+        assert!(once.to_string().len() < 4096, "{once}");
+        assert!(once.get("unlisted").is_none());
+    }
+    let unnamed = memory::bounded_activity(
+        &json!({"detail":{"program":"cargo","path":"src/lib.rs","output":"y".repeat(4096)}}),
+    );
+    assert_eq!(unnamed["detail"]["summary"], "cargo · src/lib.rs");
+    assert!(unnamed["detail"]["omitted_bytes"].as_u64().unwrap() > 4096);
+}

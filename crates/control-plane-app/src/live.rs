@@ -50,11 +50,13 @@ fn compact(mut view: Value) -> Value {
         })
         .collect();
     for goal in view["goals"].as_array_mut().into_iter().flatten() {
-        let receipt: Value =
-            serde_json::from_str(field(goal, "planning_receipt")).unwrap_or(Value::Null);
-        goal["last_activity"] = observation(&receipt["last_activity"]);
+        // Only the fields shown are materialized; planner evidence is skipped unparsed.
+        let receipt: Shown =
+            serde_json::from_str(field(goal, "planning_receipt")).unwrap_or_default();
+        goal["last_activity"] = observation(&receipt.last_activity);
         goal["activity"] = Value::Array(
-            receipt["activity"]
+            receipt
+                .activity
                 .as_array()
                 .into_iter()
                 .flatten()
@@ -63,7 +65,8 @@ fn compact(mut view: Value) -> Value {
                 .map(observation)
                 .collect(),
         );
-        let fleet = receipt["fleet"]
+        let fleet = receipt
+            .fleet
             .as_object()
             .map(|fleet| {
                 fleet
@@ -87,6 +90,15 @@ fn compact(mut view: Value) -> Value {
         }
     }
     view
+}
+
+/// The receipt fields the console shows.
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct Shown {
+    last_activity: Value,
+    activity: Value,
+    fleet: Value,
 }
 
 fn observation(value: &Value) -> Value {
@@ -360,6 +372,82 @@ mod tests {
         .await
         .into_body();
         assert!(frame(&mut restored).await.contains("streamed 18 events"));
+    }
+
+    #[tokio::test]
+    async fn console_activity_survives_bounding() {
+        use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
+        struct NoModel;
+        impl AgentModel for NoModel {
+            fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+                anyhow::bail!("progress recording does not call the model")
+            }
+        }
+        let (temp, state) = fixture().await;
+        let visible = workspace(&state, temp.path(), "bounded").await;
+        let id = goal(&state, &visible, "bounded-goal").await;
+        state
+            .command("StartGoal", json!({"goal_id":id}))
+            .await
+            .unwrap();
+        let supervisor = Supervisor::new(
+            state.store.clone(),
+            Arc::new(Notify::new()),
+            RuntimeConfig::default(),
+            Arc::new(NoModel),
+        );
+        let assignment = json!({"goal_id":id,"assignment_id":uuid::Uuid::new_v4().to_string(),"goal_revision":1,"worktree_id":"cp-impl-console"});
+        let mut sent = Vec::new();
+        for index in 0..100 {
+            let (action, role, status) = match index % 4 {
+                0 => ("tool.run", "implementor", "running"),
+                1 => ("tool.run.completed", "implementor", "completed"),
+                2 => ("loom.event", "runtime", "running"),
+                _ => ("blocked", "host", "failed"),
+            };
+            // Every fifth detail is longer than the 560 characters the console shows.
+            let detail = format!(
+                "event {index:03} \"{action}\" {}",
+                "observed ".repeat(if index % 5 == 0 { 120 } else { index % 7 + 1 })
+            );
+            supervisor
+                .record_progress(&assignment, action, role, json!(detail))
+                .await
+                .unwrap();
+            sent.push((action, role, status, detail));
+        }
+        let check = |view: Value| {
+            let goal = &view["goals"][0];
+            let shown = goal["activity"].as_array().unwrap();
+            assert_eq!(shown.len(), 24);
+            for (event, (action, role, status, detail)) in shown.iter().zip(sent.iter().rev()) {
+                assert_eq!(event["action"], *action);
+                assert_eq!(event["role"], *role);
+                assert_eq!(event["status"], *status);
+                assert_eq!(
+                    event["detail"],
+                    detail.chars().take(560).collect::<String>()
+                );
+            }
+            assert_eq!(goal["last_activity"], shown[0]);
+        };
+        let mut body = subscribe(&state, &format!("/workspaces/{visible}/events"), None)
+            .await
+            .into_body();
+        check(data(&frame(&mut body).await));
+        drop(body);
+        drop(supervisor);
+        drop(state);
+        let reopened = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+        let state = AppState::new(
+            Arc::new(Mutex::new(reopened)),
+            "127.0.0.1:8787".parse().unwrap(),
+            Arc::new(Notify::new()),
+        );
+        let mut restored = subscribe(&state, &format!("/workspaces/{visible}/events"), None)
+            .await
+            .into_body();
+        check(data(&frame(&mut restored).await));
     }
 
     #[tokio::test]

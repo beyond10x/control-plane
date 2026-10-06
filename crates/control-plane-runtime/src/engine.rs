@@ -295,14 +295,19 @@ impl Planning<'_> {
         Ok(text)
     }
     fn record(&self, message: String) -> Result<()> {
+        // Progress carries this observation only. The transcript is model input that Loom
+        // files with the session and the validated plan receipt keeps; repeating it in every
+        // progress decision made durable history grow with the square of its length.
+        const OBSERVATION_BYTES: usize = 2 * 1024;
         let receipt = {
             let mut state = self
                 .state
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
+            let receipt = json!({"namespace":self.input.namespace,"revision":state.revision,"observation":crate::context::excerpt(&message, OBSERVATION_BYTES)});
             state.unseen.push(message.clone());
             crate::context::push(&mut state.transcript, message);
-            json!({"namespace":self.input.namespace,"revision":state.revision,"transcript":state.transcript,"action_history":state.memory.prompt()})
+            receipt
         };
         (self.input.progress)("observation", &receipt)
     }
