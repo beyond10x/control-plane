@@ -31,6 +31,10 @@ pub enum Command {
         /// Allow Go and local Git commits only for eval repositories and origins beneath this root.
         #[arg(long)]
         local_eval_root: Option<PathBuf>,
+        /// Pass this service variable to the publish and commit commands only; repeatable.
+        /// Checks and model tool commands never receive it.
+        #[arg(long = "publish-env", value_name = "NAME")]
+        publish_env: Vec<String>,
     },
     /// Add and inspect workspaces through the running service.
     Workspace {
@@ -277,6 +281,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
         workspace,
         gates_policy,
         local_eval_root,
+        publish_env,
     } = cli.command
     {
         ensure!(
@@ -296,8 +301,23 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
                 .transpose()?,
             ..Default::default()
         };
+        // Gates settings are commit and publish credentials, never part of a check's environment.
+        for name in ["B10X_GATES_POLICY", "B10X_GATES_KEY", "B10X_GATES_GITLEAKS"] {
+            if gates_policy.is_some() && name == "B10X_GATES_POLICY" {
+                continue;
+            }
+            if let Ok(value) = std::env::var(name) {
+                config.credentials.push((name.into(), value));
+            }
+        }
+        for name in publish_env {
+            let value = std::env::var(&name).with_context(|| {
+                format!("--publish-env {name} is not set in the service environment")
+            })?;
+            config.credentials.push((name, value));
+        }
         if let Some(policy) = gates_policy {
-            config.environment.push((
+            config.credentials.push((
                 "B10X_GATES_POLICY".into(),
                 policy
                     .canonicalize()?

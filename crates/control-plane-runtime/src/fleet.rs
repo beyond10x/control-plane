@@ -234,11 +234,14 @@ fn git(host: &Host, path: &Path, args: &[&str]) -> Result<String> {
         .command(path, "git", args)
         .map(|out| out.trim().to_owned())
 }
+/// Run a repository-configured command. Only the publish command is `trusted`: it alone
+/// receives `RuntimeConfig::credentials`; checks run model-written code and never do.
 fn command(
     host: &Host,
     path: &Path,
     configured: &str,
     bindings: &BTreeMap<&str, String>,
+    trusted: bool,
 ) -> Result<String> {
     let mut argv = shell_words::split(configured).context("invalid configured command quoting")?;
     ensure!(!argv.is_empty(), "repository command is not configured");
@@ -247,7 +250,11 @@ fn command(
             *arg = arg.replace(&format!("{{{key}}}"), value);
         }
     }
-    let mut runner = host.runner.clone();
+    let mut runner = if trusted {
+        host.config.credentialed(&host.runner)
+    } else {
+        host.runner.clone()
+    };
     runner.timeout = runner.timeout.min(host.remaining()?);
     for (key, value) in bindings {
         runner.environment.push((
@@ -263,7 +270,9 @@ fn commit(host: &Host, path: &Path, message: &str) -> Result<String> {
         let command = host.config.commit_for(path, &host.runner)?;
         let (program, prefix) = command.split_first().context("commit command empty")?;
         let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
-        host.runner.run(path, program, &args, None)?;
+        host.config
+            .credentialed(&host.runner)
+            .run(path, program, &args, None)?;
     }
     ensure!(
         git(host, path, &["status", "--porcelain"])?.is_empty(),
@@ -774,7 +783,13 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
             "host",
             json!({"candidate":candidate,"command":repo["test_command"]}),
         )?;
-        let checks = command(host, &path, text(repo, "test_command")?, &BTreeMap::new())?;
+        let checks = command(
+            host,
+            &path,
+            text(repo, "test_command")?,
+            &BTreeMap::new(),
+            false,
+        )?;
         ensure!(
             git(host, &path, &["rev-parse", "HEAD"])? == candidate
                 && git(host, &path, &["status", "--porcelain"])?.is_empty(),
@@ -816,7 +831,13 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
             "host",
             json!({"candidate":candidate,"command":repo["test_command"]}),
         )?;
-        let checks = command(host, &path, text(repo, "test_command")?, &BTreeMap::new())?;
+        let checks = command(
+            host,
+            &path,
+            text(repo, "test_command")?,
+            &BTreeMap::new(),
+            false,
+        )?;
         ensure!(
             git(host, &path, &["rev-parse", "HEAD"])? == candidate
                 && git(host, &path, &["status", "--porcelain"])?.is_empty(),
@@ -1853,6 +1874,7 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                         &checkout,
                         text(repo, "test_command")?,
                         &BTreeMap::new(),
+                        false,
                     )?;
                     ensure!(
                         git(host, &checkout, &["status", "--porcelain"])?.is_empty(),
@@ -2138,7 +2160,13 @@ impl EffectPort for Publication<'_> {
                     == self.bindings["expected_base"],
                 "publication base changed before effect"
             );
-            command(host, path, text(repo, "publish_command")?, self.bindings)?;
+            command(
+                host,
+                path,
+                text(repo, "publish_command")?,
+                self.bindings,
+                true,
+            )?;
             Ok(())
         })();
         let outcome = match &result {

@@ -409,7 +409,9 @@ impl Supervisor {
         let p = path.clone();
         let r = runner.clone();
         let command = self.config.commit_for(&p, &r)?;
-        let commit = tokio::task::spawn_blocking(move || commit_plan(&p, &r, &command)).await??;
+        let trusted = self.config.credentialed(&r);
+        let commit =
+            tokio::task::spawn_blocking(move || commit_plan(&p, &r, &trusted, &command)).await??;
         let mut queued = 0;
         for story in output.stories {
             let mut store = self.store.lock().await;
@@ -729,7 +731,13 @@ async fn fingerprint(
         Ok(engine::digest(&json!({"goal":goal,"repositories":inputs,"assignments":assignments})))
     }).await?
 }
-fn commit_plan(path: &Path, runner: &ProcessRunner, command: &[String]) -> Result<String> {
+/// `trusted` runs only the commit command; it carries the commit credentials.
+fn commit_plan(
+    path: &Path,
+    runner: &ProcessRunner,
+    trusted: &ProcessRunner,
+    command: &[String],
+) -> Result<String> {
     let spec = engine::spec_root(path)?;
     let changed = runner.command(
         path,
@@ -759,7 +767,7 @@ fn commit_plan(path: &Path, runner: &ProcessRunner, command: &[String]) -> Resul
             vec!["Record validated control-plane engineering plan".into()],
         ]
         .concat();
-        runner.run(path, program, &args, None)?;
+        trusted.run(path, program, &args, None)?;
     }
     Ok(runner
         .command(path, "git", &["rev-parse", "HEAD"])?

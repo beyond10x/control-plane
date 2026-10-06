@@ -563,6 +563,63 @@ async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change()
     assert!(model.0.calls.load(Ordering::SeqCst) > calls);
 }
 
+const PUBLISH_CREDENTIAL: &str = "CONTROL_PLANE_PUBLISH_PROBE";
+
+/// Deliver one assignment while the test and publish commands record their environments
+/// outside the candidate tree. Returns (test environment, publish environment).
+async fn delivered_command_environments() -> (String, String) {
+    let mut fixture = fixture(1).await;
+    let checks = fixture.root.join("test-environment");
+    let publish = fixture.root.join("publish-environment");
+    let repository = fixture.repositories[0]["repository_id"].clone();
+    fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":repository,"base_branch":"main","test_command":format!("sh -c 'env > {} && cargo test --quiet'",checks.display()),"publish_command":format!("sh -c 'env > {} && git push --force-with-lease=refs/heads/{{target}}:{{expected_base}} origin {{candidate}}:refs/heads/{{target}}'",publish.display())}),Actor::Operator).await.unwrap();
+    fixture
+        .config
+        .credentials
+        .push((PUBLISH_CREDENTIAL.into(), "publish-secret".into()));
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config,
+        Arc::new(Scripted::new()),
+    );
+    supervisor.tick().await.unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    assert_eq!(
+        fixture.store.lock().await.query("AssignmentList").unwrap()[0]["state"],
+        "Merged"
+    );
+    (
+        std::fs::read_to_string(checks).unwrap(),
+        std::fs::read_to_string(publish).unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn publish_command_receives_only_named_credentials() {
+    let (_, publish) = delivered_command_environments().await;
+    assert!(publish.contains(&format!("{PUBLISH_CREDENTIAL}=publish-secret")));
+    for line in publish.lines() {
+        let name = line.split_once('=').map_or(line, |(name, _)| name);
+        assert!(
+            control_plane_runtime::process::INHERITED_ENVIRONMENT.contains(&name)
+                || name == PUBLISH_CREDENTIAL
+                || name.starts_with("CONTROL_PLANE_")
+                || ["XDG_STATE_HOME", "XDG_CONFIG_HOME", "CARGO_TARGET_DIR"].contains(&name)
+                // Set by `sh` itself, not inherited from the service.
+                || ["PWD", "OLDPWD", "SHLVL", "_"].contains(&name),
+            "publish command received unnamed variable {name}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn named_credentials_stay_out_of_other_commands() {
+    let (checks, _) = delivered_command_environments().await;
+    assert!(checks.contains("PATH="), "{checks}");
+    assert!(!checks.contains(PUBLISH_CREDENTIAL), "{checks}");
+}
+
 async fn revise(fixture: &Fixture, authority: bool) {
     fixture.store.lock().await.execute("UpdateGoal",json!({"goal_id":fixture.goal,"objective":"Return 42 in every registered repository","acceptance":"requested_answer passes on each reviewed merged target","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":authority}),Actor::Operator).await.unwrap();
 }

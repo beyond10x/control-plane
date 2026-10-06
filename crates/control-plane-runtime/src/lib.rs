@@ -52,7 +52,10 @@ pub struct ModelEnvironment {
 pub struct RuntimeConfig {
     /// Explicitly isolated local eval repositories; never enables local commits for other repositories.
     pub local_eval_root: Option<PathBuf>,
+    /// Added to every host-started process, including commands that run model-written code.
     pub environment: Vec<(String, String)>,
+    /// Added only to the trusted commit and publish commands; never to checks or model tools.
+    pub credentials: Vec<(String, String)>,
     pub aep_protocols: String,
     pub commit_command: Vec<String>,
     pub max_steps: usize,
@@ -65,6 +68,7 @@ impl Default for RuntimeConfig {
         Self {
             local_eval_root: None,
             environment: Vec::new(),
+            credentials: Vec::new(),
             aep_protocols:
                 "git+https://github.com/beyond10x/aep#6d7a44d3607d2d9a6ffdf0a165993c546c43d0db"
                     .into(),
@@ -80,6 +84,12 @@ impl Default for RuntimeConfig {
 }
 
 impl RuntimeConfig {
+    /// The runner for a trusted commit or publish command: `runner` plus the credentials.
+    pub fn credentialed(&self, runner: &process::ProcessRunner) -> process::ProcessRunner {
+        let mut runner = runner.clone();
+        runner.environment.extend(self.credentials.iter().cloned());
+        runner
+    }
     pub fn local_eval(
         &self,
         path: &std::path::Path,

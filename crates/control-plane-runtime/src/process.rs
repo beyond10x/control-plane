@@ -5,6 +5,7 @@ use nix::{
     unistd::Pid,
 };
 use std::{
+    ffi::OsString,
     io::{Read, Write},
     os::unix::process::CommandExt,
     path::Path,
@@ -36,6 +37,59 @@ impl std::fmt::Display for ProcessExit {
 
 impl std::error::Error for ProcessExit {}
 
+/// Service variables a host-started process inherits: program lookup, user directories,
+/// locale and toolchain or build caches. Everything else is withheld, because test and
+/// tool commands run model-written code. Trusted commit and publish commands receive
+/// credentials explicitly through `RuntimeConfig::credentials`.
+pub const INHERITED_ENVIRONMENT: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "TZ",
+    "TMPDIR",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "GOPATH",
+    "GOCACHE",
+    "GOMODCACHE",
+    "GOROOT",
+    "GOTOOLCHAIN",
+    "GOFLAGS",
+];
+
+/// The complete environment of a host-started process: allowlisted parent variables,
+/// then configured entries, which override inherited ones of the same name.
+pub fn child_environment(
+    parent: impl IntoIterator<Item = (OsString, OsString)>,
+    configured: &[(String, String)],
+) -> Vec<(OsString, OsString)> {
+    let mut environment: Vec<(OsString, OsString)> = parent
+        .into_iter()
+        .filter(|(name, _)| {
+            name.to_str()
+                .is_some_and(|name| INHERITED_ENVIRONMENT.contains(&name))
+        })
+        .filter(|(name, _)| !configured.iter().any(|(key, _)| name == key.as_str()))
+        .collect();
+    environment.extend(
+        configured
+            .iter()
+            .map(|(key, value)| (key.into(), value.into())),
+    );
+    environment
+}
+
 #[derive(Clone, Debug)]
 pub struct ProcessRunner {
     pub environment: Vec<(String, String)>,
@@ -61,7 +115,8 @@ impl ProcessRunner {
         let mut child = Command::new(program)
             .args(args)
             .current_dir(cwd)
-            .envs(self.environment.iter().cloned())
+            .env_clear()
+            .envs(child_environment(std::env::vars_os(), &self.environment))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -217,5 +272,59 @@ mod tests {
             cancelled.downcast_ref::<ProcessExit>().is_none(),
             "cancellation must not become syntax feedback"
         );
+    }
+
+    #[test]
+    fn child_environment_keeps_only_allowlisted_and_configured_variables() {
+        let parent = [
+            ("PATH", "/usr/bin"),
+            ("HOME", "/home/operator"),
+            ("OPENAI_API_KEY", "service-secret"),
+            ("SSH_AUTH_SOCK", "/run/agent"),
+            ("XDG_STATE_HOME", "/home/operator/.local/state"),
+        ]
+        .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+        let configured = [
+            ("XDG_STATE_HOME".to_owned(), "/scratch/state".to_owned()),
+            ("CONTROL_PLANE_TARGET".to_owned(), "main".to_owned()),
+        ];
+        let mut environment = child_environment(parent, &configured)
+            .into_iter()
+            .map(|(name, value)| (name.into_string().unwrap(), value.into_string().unwrap()))
+            .collect::<Vec<_>>();
+        environment.sort();
+        assert_eq!(
+            environment,
+            [
+                ("CONTROL_PLANE_TARGET", "main"),
+                ("HOME", "/home/operator"),
+                ("PATH", "/usr/bin"),
+                ("XDG_STATE_HOME", "/scratch/state"),
+            ]
+            .map(|(name, value)| (name.to_owned(), value.to_owned()))
+        );
+    }
+
+    #[test]
+    fn processes_start_from_allowlisted_environment() {
+        let runner = ProcessRunner {
+            environment: vec![("CONTROL_PLANE_PROBE".into(), "configured".into())],
+            timeout: Duration::from_secs(10),
+            cancel: CancellationToken::new(),
+        };
+        let cwd = tempfile::tempdir().unwrap();
+        let observed = runner.command(cwd.path(), "env", &[]).unwrap();
+        let names = observed
+            .lines()
+            .filter_map(|line| line.split_once('=').map(|(name, _)| name))
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"PATH"), "{observed}");
+        assert!(observed.contains("CONTROL_PLANE_PROBE=configured"));
+        for name in names {
+            assert!(
+                INHERITED_ENVIRONMENT.contains(&name) || name == "CONTROL_PLANE_PROBE",
+                "child process inherited {name}"
+            );
+        }
     }
 }
