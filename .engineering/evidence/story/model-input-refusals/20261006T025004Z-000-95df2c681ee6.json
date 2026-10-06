@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T02:50:04Z",
+  "actor": "human:timo",
+  "artifact": "story:model-input-refusals",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (control-plane, local)",
+    "reference": "commit 4db6607: 172 tests, 167/167 conformance, exit 0"
+  }
+}

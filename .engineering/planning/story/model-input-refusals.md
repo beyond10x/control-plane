@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:model-input-refusals
 kind: story
-status: active
+status: implemented
 title: Every model-input refusal returns to the model instead of suspending the run
 relations:
 - decomposes: epic:unattended-operation
@@ -23,10 +23,11 @@ scope:
   path: crates/control-plane-runtime/tests/fleet.rs
 - confidence: inferred
   path: crates/control-plane-runtime/tests/planner.rs
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-review-session"}
 - {from: "proposed", to: "active", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":3}}, executor: "agent:claude-review-session"}
+- {from: "active", to: "implemented", at: "2026-10-06T02:50:05Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":3}}, executor: "agent:claude-review-session"}
 ---
 ## Outcome
 
