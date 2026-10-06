@@ -638,6 +638,70 @@ async fn closed_publication_admits_repair_and_a_new_intent() {
     );
 }
 
+/// ConfirmPublication's receipt check, like ClosePublication's reason check, guards only an open
+/// intent: an unknown or settled one answers its declared `not-found` or `wrong-state`.
+#[tokio::test]
+async fn confirm_receipt_check_leaves_declared_refusals_first() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let unknown = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":"00000000-0000-4000-8000-000000000000","receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        unknown
+            .as_ref()
+            .is_ok_and(|answer| answer["outcome"] == "not-found"),
+        "{unknown:?}"
+    );
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo, "story:receipt").await;
+    let publication = unresolved_publication(&mut store, &assignment).await;
+    let empty = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        empty.is_err(),
+        "an open intent confirmed without a receipt: {empty:?}"
+    );
+    store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":publication,"reason":NOT_PUBLISHED}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let settled = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        settled
+            .as_ref()
+            .is_ok_and(|answer| answer["outcome"] == "wrong-state"),
+        "{settled:?}"
+    );
+}
+
 /// Only a publication closed as not published releases its assignment: one the remote confirmed
 /// still refuses repair and cancellation until the assignment is reconciled.
 #[tokio::test]

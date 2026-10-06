@@ -185,13 +185,19 @@ impl Store {
                 anyhow::bail!("assignment not found");
             }
         }
-        if command == "ConfirmPublication" {
+        // A receipt or reason is checked only for an open intent: an unknown or settled one keeps
+        // its declared `not-found` or `wrong-state` answer.
+        let open = body["publication_id"]
+            .as_str()
+            .and_then(|id| self.memory.publications.get(id))
+            .is_some_and(|p| matches!(p.state, P::Prepared | P::Uncertain));
+        if command == "ConfirmPublication" && open {
             ensure!(
                 !text(body, "receipt")?.is_empty(),
                 "publication receipt is empty"
             );
         }
-        if command == "ClosePublication" {
+        if command == "ClosePublication" && open {
             ensure!(
                 !text(body, "reason")?.trim().is_empty(),
                 "publication close reason is empty"

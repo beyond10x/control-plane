@@ -30,7 +30,7 @@ cargo run --locked -p control-plane-app -- status
 
 Pass `--url http://127.0.0.1:8788` for a service using a different port. The CLI contacts the running service, so it shares the browser's state and command admission.
 
-The browser exposes repository membership and settings; goal objective and acceptance; per-role models; worker, attempt and time limits; and merge authority. Goals start paused. Starting a goal and allowing merges are separate controls. Repository settings name the repository's own test and publication commands.
+The browser exposes repository membership and settings; goal objective and acceptance; per-role models; worker, attempt and time limits; and merge authority. Goals start paused. Starting a goal and allowing merges are separate controls. Repository settings name the repository's own test and publication commands. The publication command must exit only after its merge is visible on the repository's fetch URL (`origin`), where the service looks for the candidate. While the candidate is missing there, the assignment waits and the command is not run again. Once the target moves past the head seen when the command exited, still without the candidate, or 10 minutes have passed, the publication is recorded as not published and the assignment may be attempted again; a merge that becomes visible after that is not recorded.
 
 Each workspace can contain several directories, including context directories without Git. Adding a directory discovers its repository or immediate child repositories. Removing membership preserves repositories still covered by another directory and manually registered repositories. Active work must finish or be cancelled before its directory can be removed.
 

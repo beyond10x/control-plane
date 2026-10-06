@@ -1,6 +1,8 @@
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -1312,14 +1314,18 @@ async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
 }
 
 /// One delivery whose publisher exits without pushing (`git --version`): after the fleet tick
-/// its intent is Uncertain and its assignment Blocked, with the goal still running.
-async fn unresolved_publication() -> (Fixture, Supervisor) {
+/// its intent is Uncertain and its assignment Blocked, with the goal still running. The
+/// supervisor waits `grace` for an unmoved target before it closes the intent.
+async fn unresolved_publication(grace: std::time::Duration) -> (Fixture, Supervisor) {
     let fixture = fixture(1).await;
     fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
     let supervisor = Supervisor::new(
         fixture.store.clone(),
         Arc::new(Notify::new()),
-        fixture.config.clone(),
+        RuntimeConfig {
+            publication_grace: grace,
+            ..fixture.config.clone()
+        },
         Arc::new(Scripted::new()),
     );
     supervisor.tick().await.unwrap();
@@ -1341,9 +1347,11 @@ fn unreachable(fixture: &Fixture) -> impl FnOnce() + use<> {
     move || std::fs::rename(&moved, &remote).unwrap()
 }
 
+/// With no grace, every observation of the unmoved target may close the intent: only the
+/// failed observations keep it open.
 #[tokio::test]
 async fn failed_observation_keeps_intent_open() {
-    let (fixture, supervisor) = unresolved_publication().await;
+    let (fixture, supervisor) = unresolved_publication(std::time::Duration::ZERO).await;
     let restore = unreachable(&fixture);
     for _ in 0..3 {
         supervisor.fleet_tick().await.unwrap();
@@ -1395,7 +1403,7 @@ async fn failed_observation_keeps_intent_open() {
 
 #[tokio::test]
 async fn published_candidate_still_reconciles() {
-    let (fixture, supervisor) = unresolved_publication().await;
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
     let intent = rows(&fixture.store, "PublicationIntentList").await[0].clone();
     cmd(
         &fixture.root.join("repos/repo0"),
@@ -1419,7 +1427,7 @@ async fn published_candidate_still_reconciles() {
 
 #[tokio::test]
 async fn unchanged_unresolved_publication_appends_once() {
-    let (fixture, supervisor) = unresolved_publication().await;
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
     let _restore = unreachable(&fixture);
     let database = fixture.root.join("host.sqlite3");
     drop(supervisor);
@@ -1454,10 +1462,10 @@ async fn unchanged_unresolved_publication_appends_once() {
 }
 
 /// A closed publication frees its assignment for another attempt, which publishes through a
-/// new intent; the closed one stays closed.
+/// new intent; the closed one stays closed. No grace: the next observation closes.
 #[tokio::test]
 async fn closed_publication_is_retried_with_a_new_intent() {
-    let (fixture, supervisor) = unresolved_publication().await;
+    let (fixture, supervisor) = unresolved_publication(std::time::Duration::ZERO).await;
     let first = rows(&fixture.store, "PublicationIntentList").await[0]["publication_id"].clone();
     supervisor.fleet_tick().await.unwrap();
     let intents = rows(&fixture.store, "PublicationIntentList").await;
@@ -1473,6 +1481,70 @@ async fn closed_publication_is_retried_with_a_new_intent() {
     let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
     assert_eq!(assignment["attempt"], 2, "{assignment}");
     assert_eq!(assignment["state"], "Blocked", "{assignment}");
+}
+
+/// Within the grace period an unmoved target keeps the intent Uncertain. Once the target moves
+/// past the head observed when the intent became Uncertain and still lacks the candidate, the
+/// intent closes without waiting for the grace period.
+#[tokio::test]
+async fn target_moved_past_uncertain_head_closes_intent() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+
+    // Another change lands on main; the candidate is not part of it.
+    let repo = fixture.root.join("repos/repo0");
+    let base = intents[0]["expected_base"].as_str().unwrap();
+    let other = cmd(
+        &repo,
+        "git",
+        &[
+            "commit-tree",
+            &format!("{base}^{{tree}}"),
+            "-p",
+            base,
+            "-m",
+            "an unrelated change",
+        ],
+        &[],
+    );
+    cmd(
+        &repo,
+        "git",
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/main", other.trim()),
+        ],
+        &[],
+    );
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "NotPublished", "{intents:?}");
+    assert!(
+        intents[0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(other.trim())),
+        "the reason names the head the target moved to: {intents:?}"
+    );
+    assert_eq!(
+        rows(&fixture.store, "AssignmentList").await[0]["state"],
+        "Blocked"
+    );
 }
 
 #[tokio::test]
