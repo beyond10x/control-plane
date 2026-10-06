@@ -234,7 +234,7 @@ pub fn run(root: &Path, write: bool) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
-    fn generated_gate_detects_changed_bytes() -> Result<()> {
+    fn generated_contracts_do_not_drift() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let expected = dir.path().join("expected");
         let actual = dir.path().join("actual");

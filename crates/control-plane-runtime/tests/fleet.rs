@@ -921,7 +921,7 @@ async fn pause_and_limits_stop_dispatch() {
 }
 
 #[tokio::test]
-async fn restart_reconciles_effects_and_zero_exit_is_not_a_merge_receipt() {
+async fn restart_reconciles_effects() {
     let fixture = fixture(1).await;
     fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
     let model = Arc::new(Scripted::new());
@@ -997,7 +997,7 @@ async fn restart_reconciles_effects_and_zero_exit_is_not_a_merge_receipt() {
 }
 
 #[tokio::test]
-async fn repository_execution_is_exclusive_across_workspace_aliases() {
+async fn repository_execution_is_exclusive() {
     let fixture = fixture(1).await;
     let primary = fixture.root.join("repos/repo0");
     let alias_id = format!("alias-{}", uuid::Uuid::new_v4());

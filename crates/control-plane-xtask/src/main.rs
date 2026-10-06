@@ -1,3 +1,4 @@
+mod acceptance;
 mod codec;
 mod eval;
 mod foundation;
@@ -45,6 +46,12 @@ enum Action {
         #[arg(long)]
         work_dir: PathBuf,
     },
+    /// Refuse scenario names in active and implemented stories that name no test.
+    AcceptanceCheck {
+        /// The repository to check; defaults to this one.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
 }
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -62,5 +69,8 @@ fn main() -> Result<()> {
         Action::FrontendCheck => frontend::run(root, false),
         Action::SpecHistoryCheck => spec_history::run(root),
         Action::RecordHistory { work_dir } => history::run(root, &work_dir),
+        Action::AcceptanceCheck { root: checked } => {
+            acceptance::run(checked.as_deref().unwrap_or(root))
+        }
     }
 }

@@ -158,7 +158,7 @@ also be added to `VIEW_NAMES` in `src/history.rs`. Review the views diff after r
 
 ## Evidence and negative controls
 
-The initial `generated_gate_detects_changed_bytes` test failed with exit 101 against a stub that
+The initial `generated_contracts_do_not_drift` test failed with exit 101 against a stub that
 accepted different contract bytes. The completed comparator passes that same assertion and
 also rejects stale generated files while ignoring machine ownership ledgers.
 
