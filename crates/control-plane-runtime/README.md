@@ -30,7 +30,10 @@ exit alone is not merge evidence. Ambiguous effects reconcile before further wri
 
 Goal satisfaction requires every relevant assignment to have an observed merge,
 real checks against every current repository target, and a separate final acceptance
-review. Rejected acceptance stays durable and idle until inputs change. Real model,
+review. Both scheduling paths share the durable acceptance-rejection guard, including
+after database reopen. A goal revision, repository configuration, directory membership
+or observed published target change permits reconsideration; activity timestamps and
+unavailable target observations do not. Real model,
 tool, check and publication progress is retained in bounded activity history.
 `max_minutes` bounds each execution or acceptance attempt, not cumulative lifetime
 across restarts; the durable assignment attempt count bounds retries. A changed base
@@ -42,8 +45,17 @@ real activity to the host. Loom's `AgentLoop` validates structured proposals, co
 context and files durable `SessionFile` records beside the host database. Planner,
 implementor and all independent reviewers use this same path, with separate sessions.
 Reopening a session deducts its recorded turns from the host's remaining turn limit.
+Each native role receives its compact task brief once. Planning receipts and UI activity
+are excluded; subsequent planner/implementor turns append new host observations and the
+implementation frontier. The durable host store remains authoritative for effect checks.
 Missing files, ESS validation diagnostics and unsuccessful inspection/build exits return observations; authority,
 confinement, persistence and cancellation failures stop effects.
+
+The planner's `ess_schema` action reads bounded JSON-pointer fragments from the exact
+ESS-owned authoring schema recorded in `resources/ess-0.53.0/README.md`. An empty pointer
+returns the definition/property index. The resource must match `ess specify toolchain
+which` in the specification directory; mismatches are explicit feedback. This adapter
+neither invents syntax nor replaces ESS semantic validation.
 
 Commission drives planner and implementation proposals and admits publication. Its
 `CanonGovernor` evaluates host-admitted planning/source-delivery profiles; the host

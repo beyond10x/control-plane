@@ -9,7 +9,7 @@ Standalone Rust product: local autonomous planner, implementation fleet and web 
 
 ## Working rules
 
-- Everything that runs is Rust; CLIs use clap derive. The UI is server-rendered HTML/CSS.
+- Backend and tooling are Rust; CLIs use clap derive. The frontend is Vue, bundled and embedded in the Rust binary. The Rust rule does not restrict frontend code (operator clarification, 2026-10-06). Live updates use SSE without page refresh.
 - Use managed worktrees. Keep primary checkouts clean. All commits and GitHub writes use the bot and repository-required publishing tools; never bypass hooks.
 - ESS under ess/ owns domain types and lifecycles. Specify first, record a failing test, generate Rust contracts, then implement adapters. Never hand-edit generated output.
 - AEP under .engineering/ owns the engineering plan. Artifact writes use aep plan artifact. Stories name conformance scenarios, scope, dependencies and evidence.

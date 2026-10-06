@@ -32,6 +32,7 @@ pub struct Store {
     log: SqliteEventStore,
     stream: StreamId,
     version: u64,
+    committed: tokio::sync::watch::Sender<u64>,
     memory: Memory,
     _lock: File,
 }
@@ -41,6 +42,66 @@ impl Drop for Store {
         // Explicit unlock also releases a descriptor briefly inherited by a concurrent fork.
         // Closing the descriptor remains the OS fallback if unlock itself fails.
         let _ = FileExt::unlock(&self._lock);
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn subscribers_observe_only_committed_state_and_replay_position() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("state.sqlite");
+        let mut store = Store::open(&path).await.unwrap();
+        let mut changed = store.subscribe();
+        assert_eq!(*changed.borrow_and_update(), 0);
+        store
+            .execute(
+                "RegisterWorkspace",
+                json!({"path":temp.path(),"name":"one"}),
+                Actor::Operator,
+            )
+            .await
+            .unwrap();
+        assert!(changed.has_changed().unwrap());
+        let committed = *changed.borrow_and_update();
+        assert!(committed > 0);
+        assert_eq!(store.query("WorkspaceList").unwrap()[0]["name"], "one");
+        assert!(
+            store
+                .execute("RecordPlanningProgress", json!({}), Actor::Operator)
+                .await
+                .is_err()
+        );
+        assert!(!changed.has_changed().unwrap());
+
+        // Force Eventlog's expected-version refusal: no speculative view or notification
+        // may escape if the append fails, even after the generated decision was staged.
+        store.version += 100;
+        assert!(
+            store
+                .apply(
+                    "RegisterWorkspace",
+                    json!({"path":"different","name":"not committed"}),
+                    Actor::Operator
+                )
+                .await
+                .is_err()
+        );
+        assert!(!changed.has_changed().unwrap());
+        assert_eq!(
+            store
+                .query("WorkspaceList")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(store);
+        let reopened = Store::open(&path).await.unwrap();
+        assert_eq!(*reopened.subscribe().borrow(), committed);
     }
 }
 
@@ -115,6 +176,7 @@ impl Store {
             log,
             stream,
             version: 0,
+            committed: tokio::sync::watch::channel(0).0,
             memory: Memory::default(),
             _lock: lock,
         };
@@ -158,7 +220,15 @@ impl Store {
                 break;
             }
         }
+        store.committed.send_replace(store.version);
         Ok(store)
+    }
+
+    /// Subscribe to successfully committed host decisions, coalescing slow observers to
+    /// the newest version. The receiver initially names the replayed durable state.
+    /// Notifications are hints to re-query views, not an independent event journal.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.committed.subscribe()
     }
 
     /// Execute one generated command and return its generated outcome envelope.
@@ -241,6 +311,7 @@ impl Store {
             .context("host decision was not committed; no dependent effect may run")?;
         self.version = result.last_version;
         self.memory = next;
+        self.committed.send_replace(self.version);
         Ok(())
     }
 

@@ -2,7 +2,7 @@
 
 A local workspace for autonomous engineering: add a repository or a directory of repositories, set a goal, and follow its plan, implementation assignments and verified merge receipts.
 
-The product is a standalone Rust service and CLI. Its domain is specified in [ESS](ess/system.yaml); the engineering plan lives in [AEP](.engineering/planning/epic/bootstrap.md). Browser and CLI commands use the same durable host.
+The product is a standalone Rust service and CLI with a Vue console bundled into the binary. Its domain is specified in [ESS](ess/system.yaml); the engineering plan lives in [AEP](.engineering/planning/epic/bootstrap.md). Browser and CLI commands use the same durable host.
 
 The [product vision](docs/vision.md) defines the live operator experience and its delivery standard.
 
@@ -36,7 +36,7 @@ Each workspace can contain several directories, including context directories wi
 
 The service starts its planner alongside the console. The planner uses the existing Codex login through the foundation LLM library and creates isolated managed worktrees. The goal page shows planning progress and concrete blockers, including unavailable repositories, dirty source trees, rejected plans and tool failures. Configure the bot's private policy with `serve --gates-policy PATH` or `B10X_GATES_POLICY`; keep policy files and credentials outside the repository.
 
-The operations dashboard refreshes live status every second while keeping goal forms and unsaved edits in place. Planner cards show the model, current stage, actual model-call waits, elapsed time and recorded blockers. Assignment state and durable activity history appear beneath them; full receipts are available through **Inspect evidence**. The server timestamp measures connection freshness, while work timestamps advance only when an operation is recorded.
+The Vue console receives committed state changes through SSE and updates cards in place, preserving form edits, focus and scroll. It shows connection and reconnect status separately from recorded work activity. Planner cards show the model, current stage and actual runtime observations. Assignment state and durable activity history appear beneath them; full receipts remain available through **Inspect evidence**. Stream heartbeats do not claim work progress. The embedded frontend needs no CDN, Node process or separate frontend server at runtime.
 
 Loom owns model turns, compaction and durable sessions; Commission admits planner, implementation and publication effects. Control-plane owns workspace scheduling, persistence, authority inputs and UI projections. Planner context uses bounded repository indexes and observations. Repeated reads refresh the same observation, and file pages allow later content to be inspected without accumulating entire files in every request.
 
@@ -51,7 +51,9 @@ The HTTP API shares the browser and CLI state:
 | `POST /api/workspaces/{id}/directories` | Add `{ "path": "..." }` |
 | `DELETE /api/workspaces/{id}/directories/{directory}` | Remove membership |
 | `GET /api/state` | Inspect the complete local state and runtime errors |
-| `GET /workspaces/{id}/live` | Automatically refreshed operations dashboard for one workspace |
+| `GET /events` | SSE stream of compact committed operations across workspaces |
+| `GET /workspaces/{id}/events` | SSE stream scoped to one workspace |
+| `GET /workspaces/{id}/live` | Vue operations console for one workspace |
 | `GET /goals/{id}/evidence` | Inspect a goal's stored planning and execution evidence |
 
 Mutation clients obtain `csrf_token` from `GET /api/session` and send it in `x-csrf-token`. The bundled CLI handles this automatically.
@@ -91,8 +93,9 @@ The cases are `go-cli`, `go-json-http` and `go-auth-web`; each seed contains its
 ```console
 task check
 task generate
+task frontend
 ```
 
-`task check` validates ESS and AEP, checks Rust formatting and lints, runs tests, checks generated drift and exercises the real durable conformance target. `task generate` regenerates artifacts from the specification. Generated files are not edited directly. Repository changes use managed worktrees; see [AGENTS.md](AGENTS.md).
+`task check` validates ESS and AEP, checks Rust formatting and lints, runs tests, checks generated drift and exercises the real durable conformance target. It also rebuilds Vue and verifies that the embedded assets match their source. Frontend development and this gate need Node 22.23.2 and npm; ordinary Cargo builds use the committed bundle. `task frontend` installs the locked frontend dependencies and rebuilds `frontend/dist`, which must be committed with frontend changes. `task generate` regenerates artifacts from the specification. Generated files are not edited directly. Repository changes use managed worktrees; see [AGENTS.md](AGENTS.md).
 
-Bootstrap status: the workspace host and dashboard are running through the corrected Loom integration. The external auth example still has no successful delivery: its latest attempt stopped on ESS validation diagnostics, now covered by a failing-then-passing native runtime recovery test. The [runtime ownership audit](.engineering/planning/architecture-design/runtime-ownership.md) records exact foundation API findings and their resolution; the [boundary correction](.engineering/planning/story/runtime-boundary.md) retains the outstanding real-provider acceptance. Passing scripted tests is not evidence of a delivered autonomous application.
+Bootstrap status: the real auth eval recovered through Loom, implemented and published a Go application, and passed the trusted external verifier. Final goal acceptance rejected an eval-bookkeeping requirement mistakenly included in application acceptance. The [boundary correction](.engineering/planning/story/runtime-boundary.md) records the result, token costs and the approved next round of runtime and console improvements. Passing scripted tests alone is not evidence of a delivered autonomous application.

@@ -15,7 +15,7 @@ The operator should be able to open the application and immediately answer:
 
 The main screen is an operational dashboard. Persistent workspace navigation, a system-health bar, current activity, planner and worker states, and a recent activity feed form its primary surface. Goal creation, directory management and configuration remain accessible without obscuring current work.
 
-Activity updates automatically while the operator watches. Editing a form must not interrupt updates, discard input, or reset focus. A server heartbeat shows connection freshness; executor activity shows actual model calls, file operations, checks, reviews and publication observations. These are separate facts. An animation or a refreshed clock must never imply that an agent made progress.
+The Vue application is bundled and embedded in the server binary. SSE delivers committed operational state without page refresh. Editing a form must not interrupt updates, discard input, or reset focus. Transport keepalives maintain the connection; executor activity shows actual model calls, file operations, checks, reviews and publication observations. These are separate facts. An animation or a refreshed clock must never imply that an agent made progress. Reconnection retrieves current durable state and preserves unsaved drafts.
 
 Every active operation shows a human-readable action, role, target, start or last-activity time, and elapsed time where observed. Waiting for a model response is a visible state. Failures and blockers explain what stopped and what action can resolve it. A quiet system explicitly says whether it is idle, paused, waiting, disconnected or stopped.
 
@@ -33,7 +33,7 @@ Workspaces may include several Git repositories and context directories without 
 
 ## Product boundaries
 
-The product lives in the standalone control-plane repository. Runtime code is Rust and uses beyond10x foundation libraries. ESS owns domain contracts; AEP owns engineering plans; the durable host owns observed execution records. Model output cannot grant authority or manufacture test and merge evidence. Release and deployment remain outside autonomous source-change delivery.
+The product lives in the standalone control-plane repository. Backend and tooling are Rust and use beyond10x foundation libraries. Frontend code is Vue; Node is needed to build assets, not to run the console. ESS owns domain contracts; AEP owns engineering plans; the durable host owns observed execution records. Model output cannot grant authority or manufacture test and merge evidence. Release and deployment remain outside autonomous source-change delivery.
 
 ## Delivery standard
 

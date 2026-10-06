@@ -1,24 +1,13 @@
-//! Compact projections of committed observations; refreshing this document never reloads forms.
+//! Static first-response projections; the embedded Vue console consumes SSE thereafter.
 use super::*;
-use axum::response::Html;
 use std::fmt::Write;
 use web::escape;
 
 pub async fn live(State(state): State<AppState>) -> Response {
-    render(state.snapshot().await)
+    web::home(State(state)).await
 }
 pub async fn workspace_live(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    render(state.workspace_detail(&id).await)
-}
-fn render(view: Result<Value>) -> Response {
-    let content = match view.and_then(|view| operations(&view)) {
-        Ok(content) => content,
-        Err(error) => format!(
-            "<section class=\"panel error\" role=\"alert\"><h2>State unavailable</h2><p>{}</p><p>Retrying in one second. Work progress cannot be confirmed.</p></section>",
-            escape(&error.to_string())
-        ),
-    };
-    Html(format!("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"1\"><title>Live operations</title><style>{}</style></head><body class=\"live\">{content}</body></html>", web::STYLE)).into_response()
+    web::workspace(State(state), Path(id)).await
 }
 pub async fn evidence(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let result = async {
@@ -176,7 +165,7 @@ pub(crate) fn operations(view: &Value) -> Result<String> {
             .filter(|g| field(g, "state") == "Running" && field(g, "planning_phase") == "Blocked")
             .count();
     let mut out = format!(
-        "<div class=\"health\"><span class=\"health-label\">LOCAL CONTROL PLANE</span><span>Server observed <time>{}</time> · refresh 1s</span></div><p class=\"freshness\">Server freshness only; work timestamps below change when activity is recorded. If this view stops refreshing or cannot load, the connection is unavailable.</p>",
+        "<div class=\"health\"><span class=\"health-label\">LOCAL CONTROL PLANE</span><span>Server observed <time>{}</time></span></div><p class=\"freshness\">Connecting to live observations. This initial snapshot is static until the console connects.</p>",
         escape(field(view, "server_observed_at"))
     );
     if let Some(error) = view["runtime_error"].as_str() {

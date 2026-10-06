@@ -1,0 +1,1 @@
+{"name":"control-plane-console","private":true,"version":"0.1.0","type":"module","scripts":{"build":"vite build"},"dependencies":{"vue":"3.5.43"},"devDependencies":{"@vitejs/plugin-vue":"6.0.9","vite":"8.3.2"}}

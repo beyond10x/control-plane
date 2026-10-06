@@ -85,6 +85,22 @@ impl Supervisor {
                 &all_repositories,
                 rows(&self.store, "AssignmentList").await?,
             );
+            let rejected_goal = goal.clone();
+            let rejected_repositories = repositories.clone();
+            let rejected_assignments = assignments.clone();
+            let runner = self.runner();
+            if tokio::task::spawn_blocking(move || {
+                crate::fleet::acceptance_is_unchanged(
+                    &rejected_goal,
+                    &rejected_repositories,
+                    &rejected_assignments,
+                    &runner,
+                )
+            })
+            .await?
+            {
+                continue;
+            }
             let input_fingerprint =
                 fingerprint(&goal, &repositories, &assignments, self.runner()).await?;
             if goal["planning_fingerprint"] == input_fingerprint

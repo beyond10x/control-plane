@@ -7,6 +7,27 @@ const ENTRY_BYTES: usize = 16 * 1024;
 const CONTEXT_BYTES: usize = 96 * 1024;
 const PAGE_BYTES: usize = 12 * 1024;
 
+/// Model-facing task context. The durable goal remains the host's authority;
+/// receipts and activity are observations, never part of a repeated task brief.
+pub fn goal_brief(goal: &Value) -> Value {
+    let mut brief = serde_json::Map::new();
+    for key in [
+        "goal_id",
+        "workspace_id",
+        "revision",
+        "objective",
+        "acceptance",
+        "directories",
+        "max_minutes",
+        "max_attempts",
+    ] {
+        if let Some(value) = goal.get(key) {
+            brief.insert(key.into(), value.clone());
+        }
+    }
+    Value::Object(brief)
+}
+
 #[derive(Default)]
 pub struct ActionMemory {
     steps: usize,

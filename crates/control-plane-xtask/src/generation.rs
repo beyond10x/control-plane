@@ -53,7 +53,7 @@ fn files(root: &Path) -> Result<Files> {
     Ok(out)
 }
 
-fn compare(expected: &Path, actual: &Path) -> Result<()> {
+pub(crate) fn compare(expected: &Path, actual: &Path) -> Result<()> {
     let expected_files = files(expected)?;
     let actual_files = files(actual)?;
     ensure!(

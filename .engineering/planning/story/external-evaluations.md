@@ -20,7 +20,7 @@ scope:
   path: ess/
 - confidence: inferred
   path: generated/
-revision: 11
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -80,3 +80,30 @@ One authorized real auth eval ran on goal revision 3 with one worker, one attemp
 The exact invalid domain now participates in native_loom_recovers_missing_and_invalid_specification_and_queues_validated_plan. It failed against the deployed adapter and passes after typed ESS-validation refusal handling. The test uses the real LLM port, Loom sessions, Commission, Canon governor, ESS and AEP; it proves diagnostics reach the next turn, invalid ESS does not mutate AEP, correction queues a validated story and independent review remains separate. Invalid Finish requests do not spend a critic review. Four unchanged validation refusals still stop; cancellation, transport/launch failures and non-validation process errors remain fatal. All 33 planner tests pass. This deterministic recovery is not a real-provider auth application success.
 
 The end-to-end acceptance remains unmet. Another paid eval requires an explicit additional attempt allocation; the agreed one-attempt limit has been consumed. Preserve the failed goal and all workspaces; do not erase the failure or mark this story implemented from component tests.
+
+## Operator-authorized improvement cycle
+
+The operator supersedes the previous single-attempt allocation: run as many eval rounds as useful to improve the system. Each round remains bounded and retains its observed failure, usage and runtime evidence. Start with the existing isolated Go auth workspace, current implementation and unchanged black-box acceptance.
+
+After each round, diagnose and present concrete suggested changes with their responsible foundation or host owner and verification criteria. Ask the operator before implementing those changes. Once approved, dispatch a sub-agent for the approved implementation, integrate its result, verify it, and run the next eval. This approval applies to code changes proposed from each round; running the evals and recording their results is already authorized. Do not silently patch between rounds or mistake passing regressions for real application delivery.
+
+Round 4 begins on the already-published correction 82aef4175944168ca8cf419428055b934b910517, with one worker, one attempt per round, gpt-5.6-sol for all roles and a ten-minute total watchdog. The historical failures remain in the external eval results. Successful outcome requires real runtime planning, implementation, trusted checks, independent review, observed publication and the auth verifier passing against the published application.
+
+## Round 4 outcome and proposed correction
+
+Round 4 ran for 569 seconds on control-plane 82aef4175944168ca8cf419428055b934b910517. Real provider planning recovered from ESS refusals, created one scoped story, passed independent plan review, implemented the Go app, executed tests and the trusted external auth verifier, passed independent code review and published c11fa5d62e059a3f731dcd0eaeed1b91c06f3681 to the isolated local origin. Checked, reviewed, candidate and observed target revisions match. The coordinator reran the trusted verifier against the clean published candidate: PASS go-auth-web. No manual implementation of the example was substituted.
+
+Goal acceptance was rejected: the coordinator incorrectly added eval-round evidence retention to the application acceptance. The final reviewer supported all application requirements but could not verify retained prior eval failures from the app diff. Those records correctly live outside the candidate. This is an eval setup error, not evidence that the auth implementation failed. The coordinator stopped this eval goal, retaining its merged assignment, app and all workspaces; it is not marked Satisfied.
+
+Recorded provider totals: 51 turns, 2,216,026 input tokens, 24,034 output tokens, 772,608 cached input tokens; dollar cost unavailable. Initial planning used 28 turns and 11 specification writes. Implementation used 12 turns but accumulated 1,611,572 input tokens. A deterministic inspection of its filed session found 12 user messages totalling 823,423 bytes, including the identical 56,134-byte planning receipt in every message (673,608 receipt bytes). fleet.rs serializes the entire Goal on each proposal and Host.respond sets continuation to None. Loom preserves that supplied history correctly; the host must stop supplying redundant operational records.
+
+After final rejection, Supervisor.tick scheduled another planner while fleet acceptance itself remained blocked. Eight further planner turns were filed before the round was stopped. The existing rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change test exercises only fleet_tick after restart, omitting tick. This is a scheduler coverage gap, not grounds to replace Loom execution.
+
+### Proposed changes — awaiting operator approval
+
+1. Control-plane model-input adapter: use a compact projection of the objective, acceptance and necessary authority/context references. Supply the role brief once and only new observations/frontier information on continuation. Exclude UI/activity receipts from every role prompt while retaining them in storage and the UI. Regression: N actions do not duplicate the role brief or planner receipts in the native session; authority and current-goal checks still use authoritative host state.
+2. Control-plane scheduler: preserve failed final acceptance as an explicit gate across both planner and fleet scheduling, including restart. Resume only after relevant operator/repository inputs change. Regression drives tick plus fleet_tick after a real merged assignment/rejected final review and proves zero additional provider calls on unchanged inputs; a relevant change permits progress.
+3. Control-plane authoring-context binding: expose bounded read-only lookup of the existing ESS-owned authoring schema and version-matched syntax/examples. ESS already generates schemas/generated/ess.schema.json from ess_domain::spec::RawSpecFile via cargo xtask schema; do not hand-write a parallel schema or insert the entire schema into every prompt. Validate the reference pin and exercise lifecycle transition/outcome/payload lookup through the native runtime.
+4. Eval configuration: keep orchestration/evidence-retention instructions outside the app acceptance, which must contain only the fixed TASK.md and trusted verifier obligations. Preserve all previous evidence. Compare the next round on an isolated seed while retaining the successfully published application.
+
+No implementation of these suggestions is authorized yet. After operator approval, delegate the approved scope to a sub-agent, independently inspect and integrate its changes, run regressions and repository gates, then run the next bounded real eval. Further eval rounds are already authorized; the per-round change approval is the operator's explicit workflow requirement.

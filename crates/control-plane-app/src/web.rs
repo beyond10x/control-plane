@@ -26,6 +26,31 @@ fn page(title: &str, body: String) -> Response {
 }
 pub(crate) const STYLE: &str = include_str!("dashboard.css");
 
+fn console_page(body: String) -> Response {
+    // An immediately readable first response remains useful without JavaScript. Vue
+    // takes over once, then updates keyed components from SSE without navigation.
+    let fallback = format!("<div id=\"app\"><main>{body}</main></div>");
+    Html(
+        include_str!("../../../frontend/dist/index.html")
+            .replace("<div id=\"app\"></div>", &fallback),
+    )
+    .into_response()
+}
+
+pub async fn javascript() -> impl IntoResponse {
+    (
+        [("content-type", "text/javascript; charset=utf-8")],
+        include_str!("../../../frontend/dist/app.js"),
+    )
+}
+
+pub async fn stylesheet() -> impl IntoResponse {
+    (
+        [("content-type", "text/css; charset=utf-8")],
+        include_str!("../../../frontend/dist/index.css"),
+    )
+}
+
 fn navigation(view: &Value, selected: &str) -> Result<String> {
     let mut out = String::from(
         "<nav class=\"sidebar\" aria-label=\"Workspaces\"><a class=\"overview\" href=\"/\">◈ &nbsp; Operations overview</a><p class=\"nav-label\">WORKSPACES</p>",
@@ -45,13 +70,6 @@ fn navigation(view: &Value, selected: &str) -> Result<String> {
     }
     out.push_str("<div class=\"sidebar-footer\"><strong>Local & governed</strong><p>Actions follow your authority.<br>Evidence stays with the work.</p></div></nav>");
     Ok(out)
-}
-fn live_frame(path: &str) -> String {
-    format!(
-        "<iframe class=\"operations-frame\" src=\"{}\" title=\"Live engineering operations\"></iframe><p class=\"muted frame-note\">Live status refreshes every second. Your controls and unsaved form edits stay in this page. <a href=\"{}\" target=\"_blank\" rel=\"noopener\">Open status separately ↗</a></p>",
-        escape(path),
-        escape(path)
-    )
 }
 fn token(state: &AppState) -> String {
     format!(
@@ -100,7 +118,7 @@ fn required<'a>(form: &'a HashMap<String, String>, key: &str) -> Result<&'a str>
 
 pub async fn home(State(state): State<AppState>) -> Response {
     match home_body(&state).await {
-        Ok(body) => page("Workspaces", body),
+        Ok(body) => console_page(body),
         Err(e) => error(e),
     }
 }
@@ -108,7 +126,7 @@ async fn home_body(state: &AppState) -> Result<String> {
     let view = state.snapshot().await?;
     let mut body = navigation(&view, "")?;
     body.push_str("<div class=\"page-heading\"><div><p class=\"eyebrow\">ALL WORKSPACES</p><h1>Operations overview</h1><p class=\"muted\">Your autonomous engineering, in view.</p></div><a class=\"button secondary\" href=\"#workspace-settings\">Manage workspaces ↓</a></div>");
-    body.push_str(&live_frame("/live"));
+    body.push_str(&dashboard::operations(&view)?);
     body.push_str("<details id=\"workspace-settings\" class=\"settings\"><summary>Manage workspaces · Add workspace</summary><div class=\"grid\">");
     for ws in rows(&view, "workspaces")? {
         write!(
@@ -131,7 +149,7 @@ async fn home_body(state: &AppState) -> Result<String> {
 }
 pub async fn workspace(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match workspace_body(&state, &id).await {
-        Ok(body) => page("Workspace", body),
+        Ok(body) => console_page(body),
         Err(e) => error(e),
     }
 }
@@ -148,7 +166,7 @@ async fn workspace_body(state: &AppState, id: &str) -> Result<String> {
         escape(field(ws, "name")),
         escape(field(ws, "path"))
     )?;
-    body.push_str(&live_frame(&format!("/workspaces/{id}/live")));
+    body.push_str(&dashboard::operations(&state.workspace_detail(id).await?)?);
     body.push_str(
         "<details class=\"settings\"><summary>Workspace settings · Directories</summary>",
     );

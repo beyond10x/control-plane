@@ -487,7 +487,7 @@ impl AgentModel for RejectGoalReview {
 
 #[tokio::test]
 async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change() {
-    let fixture = fixture(1).await;
+    let mut fixture = fixture(1).await;
     let model = Arc::new(RejectGoalReview(Scripted::new()));
     let supervisor = Supervisor::new(
         fixture.store.clone(),
@@ -517,14 +517,50 @@ async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change()
     );
     let calls = model.0.calls.load(Ordering::SeqCst);
     drop(supervisor);
+    drop(fixture.store);
+    fixture.store = Arc::new(tokio::sync::Mutex::new(
+        Store::open(fixture.root.join("host.sqlite3"))
+            .await
+            .unwrap(),
+    ));
     let restarted = Supervisor::new(
-        fixture.store,
+        fixture.store.clone(),
         Arc::new(Notify::new()),
-        fixture.config,
+        fixture.config.clone(),
         model.clone(),
     );
+    restarted.tick().await.unwrap();
     restarted.fleet_tick().await.unwrap();
     assert_eq!(model.0.calls.load(Ordering::SeqCst), calls);
+    let repo = fixture.root.join("repos/repo0");
+    let origin = cmd(&repo, "git", &["remote", "get-url", "origin"], &[]);
+    cmd(
+        &repo,
+        "git",
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            fixture.root.join("unavailable.git").to_str().unwrap(),
+        ],
+        &[],
+    );
+    restarted.tick().await.unwrap();
+    restarted.fleet_tick().await.unwrap();
+    assert_eq!(
+        model.0.calls.load(Ordering::SeqCst),
+        calls,
+        "unavailable remote is not evidence permitting more model spend"
+    );
+    cmd(
+        &repo,
+        "git",
+        &["remote", "set-url", "origin", origin.trim()],
+        &[],
+    );
+    revise(&fixture, true).await;
+    restarted.tick().await.unwrap();
+    assert!(model.0.calls.load(Ordering::SeqCst) > calls);
 }
 
 async fn revise(fixture: &Fixture, authority: bool) {
@@ -846,6 +882,12 @@ async fn native_loom_delivers_candidate_through_checks_review_and_observed_publi
                     .iter()
                     .filter(|item| matches!(item, llm_core::Item::ToolCall(_)))
                     .count();
+                let briefs = request.items.iter().filter(|item| matches!(item, llm_core::Item::UserText{text} if text.contains("\"goal\""))).count();
+                assert!(
+                    briefs <= 1,
+                    "native session repeated the role brief {briefs} times"
+                );
+                assert!(!request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("planning_receipt"))), "runtime bookkeeping leaked into native role session");
                 let arguments = if request
                     .instructions
                     .contains("Implement the accepted AEP story")

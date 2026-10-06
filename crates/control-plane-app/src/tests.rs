@@ -8,7 +8,7 @@ use serde_json::json;
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn dashboard_refreshes_only_live_frame_and_allows_only_same_origin_embedding() {
+async fn dashboard_embeds_vue_assets_without_refresh_or_iframe() {
     let (_temp, state) = fixture().await;
     let app = router(state);
     let request = |path| {
@@ -20,21 +20,23 @@ async fn dashboard_refreshes_only_live_frame_and_allows_only_same_origin_embeddi
     };
     let shell = app.clone().oneshot(request("/")).await.unwrap();
     let policy = shell.headers()["content-security-policy"].to_str().unwrap();
-    assert!(policy.contains("frame-src 'self'"));
+    assert!(policy.contains("script-src 'self'"));
+    assert!(policy.contains("connect-src 'self'"));
     assert!(policy.contains("frame-ancestors 'self'"));
     assert_eq!(shell.headers()["x-frame-options"], "SAMEORIGIN");
     let shell = body(shell).await;
-    assert!(shell.contains("src=\"/live\""));
+    assert!(shell.contains("src=\"/app.js\""));
+    assert!(shell.contains("href=\"/index.css\""));
+    assert!(!shell.contains("<iframe"));
     assert!(!shell.contains("http-equiv=\"refresh\""));
     assert!(shell.contains("action=\"/workspaces\""));
     let live = app.oneshot(request("/live")).await.unwrap();
     assert_eq!(live.status(), StatusCode::OK);
     let live = body(live).await;
-    assert!(live.contains("http-equiv=\"refresh\""));
+    assert!(!live.contains("http-equiv=\"refresh\""));
     assert!(live.contains("Server observed"));
     assert!(live.contains("No running goals"));
-    assert!(!live.contains("<form"));
-    assert!(!live.contains("<script"));
+    assert!(live.contains("src=\"/app.js\""));
 }
 
 #[tokio::test]
@@ -95,7 +97,7 @@ async fn live_activity_is_durable_scoped_and_does_not_inline_model_receipts() {
     assert!(html.contains("2026-10-05T09:00:00Z"));
     assert!(html.contains("since observation"));
     assert!(html.contains("&lt;script&gt;unsafe&lt;/script&gt;"));
-    assert!(!html.contains("other-workspace"));
+    assert!(!html.contains("Model waiting other-workspace"));
     assert!(!html.contains("MODEL-RAW-SECRET"));
     assert!(html.len() < 30000);
     let evidence = body(
@@ -120,7 +122,7 @@ fn concurrent_workers_and_blocked_stopped_states_are_distinct() {
     assert!(html.contains("Autonomous processing stopped"));
     assert!(html.contains("Planner needs attention"));
     assert!(html.contains("Repository unavailable"));
-    assert!(html.contains("Server freshness only"));
+    assert!(html.contains("initial snapshot is static"));
     assert!(!html.contains("Connected"));
     view["goals"][0]["state"] = json!("Paused");
     let paused = dashboard::operations(&view).unwrap();

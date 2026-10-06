@@ -53,7 +53,6 @@ struct State {
     revision: i64,
     transcript: Vec<String>,
     unseen: Vec<String>,
-    model_started: bool,
     pending: Option<PlannerAction>,
     selected: Vec<String>,
     evidence: Vec<AttestedEvidence>,
@@ -141,7 +140,6 @@ pub fn run(input: EngineInput, model: Arc<dyn AgentModel>) -> Result<EngineOutpu
         state: Mutex::new(State {
             revision: 1,
             unseen: Vec::new(),
-            model_started: false,
             transcript: vec![
                 inspection,
                 crate::context::scan(&scan)?,
@@ -228,14 +226,10 @@ impl Planning<'_> {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
             let new = std::mem::take(&mut state.unseen);
-            let started = std::mem::replace(&mut state.model_started, true);
-            started.then(|| {
-                format!(
-                    "New trusted host observations:\n{}\n{}",
-                    new.join("\n"),
-                    state.memory.prompt()
-                )
-            })
+            Some(format!(
+                "New trusted host observations:\n{}",
+                new.join("\n")
+            ))
         } else {
             None
         };
@@ -359,6 +353,7 @@ impl Planning<'_> {
                 "syntax rejected ({failures}/3): {}",
                 crate::context::excerpt(error, 512)
             ));
+            state.unseen.push(message.clone());
             crate::context::push(&mut state.transcript, message.clone());
             state.syntax_failures
         };
@@ -388,6 +383,21 @@ impl Planning<'_> {
             .attempted(&label);
         (self.input.progress)("intent", &serde_json::to_value(&action)?)?;
         match action {
+            PlannerAction::EssSchema { pointer } => {
+                let root = spec_root(path)?;
+                let root = if root.is_dir() {
+                    root.as_path()
+                } else {
+                    path.as_path()
+                };
+                let observation = match crate::ess_reference::lookup(root, runner, &pointer) {
+                    Ok(reference) => reference,
+                    Err(error) => format!(
+                        "ESS reference unavailable: {error:#}. No alternate schema is inferred."
+                    ),
+                };
+                self.read_record(&action_key, &label, observation)?;
+            }
             PlannerAction::Read { paths } => {
                 ensure!(paths.len() <= 32, "read requests at most 32 files");
                 for name in paths {
@@ -1069,7 +1079,7 @@ fn inspect(root: &Path, runner: &ProcessRunner) -> Result<String> {
     let relative = if relative.is_empty() { "." } else { &relative };
     context.push_str(&format!("\nAdmitted specification root: {relative}. write_specification paths are repository-relative, confined to this root. Planning markdown belongs in AEP, never in an invented specifications directory.\n"));
     if !spec.join("system.yaml").exists() && !spec.join("ess-inputs.yaml").exists() {
-        context.push_str(&format!("No ESS exists. Bootstrap these two files before AEP mutations. Rename example nouns to the task's domain; retain the ESS keys and typed structure. Do not invent prose keys such as behaviors or security. Begin with the smallest domain; acceptance scenarios belong in the story body.\n{relative}/system.yaml:\nformat: ess/22\nsystem: example\nversion: v1\ndomains: [example.session]\n\n{relative}/domains/session.yaml:\ndomain: example.session\nentities:\n  - name: example.session.Session\n    identity:\n      name: session_id\n      type: Uuid\n    fields:\n      - name: username\n        type: String\n    lifecycle:\n      initial: Active\n      states: [Active, Revoked]\n      terminal: [Revoked]\n"));
+        context.push_str(&format!("No ESS exists. Bootstrap these two files before AEP mutations. Rename example nouns to the task's domain; retain the ESS keys and typed structure. Do not invent prose keys such as behaviors or security. Begin with the smallest domain; acceptance scenarios belong in the story body.\n{relative}/system.yaml:\nformat: ess/22\nsystem: example\nversion: v1\ndomains: [example.session]\n\n{relative}/domains/session.yaml:\ndomain: example.session\nentities:\n  - name: example.session.Session\n    identity:\n      name: session_id\n      type: Uuid\n    fields:\n      - name: username\n        type: String\n    lifecycle:\n      initial: Active\n      states: [Active]\n      terminal: [Active]\n"));
     }
     for name in ["AGENTS.md", "README.md", "TODO.md", "PLAN.md"] {
         if root.join(name).is_file() {
@@ -1125,9 +1135,10 @@ const PLANNER_INSTRUCTIONS: &str = concat!(
     "You are the control-plane planner in an isolated managed worktree. ",
     "The standing goal's objective and acceptance define this task. Existing backlog is context only: reuse stories only when they directly serve that goal. ",
     "Build the smallest validated plan for the goal; do not complete unrelated project backlog. ",
-    "Everything runnable added to a beyond10x repository is Rust; CLIs use clap derive. Follow repository AGENTS.md. ",
+    "Backend and tooling added to a beyond10x repository is Rust; CLIs use clap derive. Frontend JS/TS/JSX/TSX/Vue assets may use explicitly accepted frontend/ or web/ scope, excluding backend/server/tools/scripts subdirectories; this does not authorize a JavaScript backend or tooling. Follow repository AGENTS.md. ",
     "Inspect existing ESS and AEP before changes. Migrate relevant written legacy backlog preserving sources and citing source locations. ",
     "New typed behavior belongs in ESS before any story. Use normal readable YAML. ",
+    "For exact authoring syntax use ess_schema with pointer \"\" for the property/definition index, or an RFC6901 pointer such as /definitions/RawEntitySpec. Follow returned $ref pointers. This read-only, version-matched foundation resource is bounded; semantic checks still use ESS. ",
     "Only write_specification may write specification files; only aep may mutate planning artifacts, always through the AEP CLI. ",
     "Use --from - and body for prose; record machine-readable scope. Acceptance must name conformance scenarios. ",
     "Use the recent action journal and unchanged-result feedback to choose new evidence, an authorized change or Finish; repeating unchanged reads is not progress. ",

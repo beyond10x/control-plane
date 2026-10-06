@@ -125,10 +125,14 @@ fn run(
         let outcome = AgentLoop::new(&mut port, &mut tools, &mut approvals, config).run_in(
             &mut items,
             &mut spent,
-            environment
-                .continuation
-                .as_deref()
-                .unwrap_or(&request.prompt),
+            if session.turns == 0 {
+                &request.prompt
+            } else {
+                environment
+                    .continuation
+                    .as_deref()
+                    .unwrap_or(&request.prompt)
+            },
             &mut sink,
         );
         session.items = items;

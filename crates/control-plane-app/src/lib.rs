@@ -1,6 +1,7 @@
 //! Local operator surface. Browser and CLI mutations share the same admitted Store.
 mod cli;
 mod dashboard;
+mod live;
 mod web;
 use anyhow::{Context, Result, ensure};
 use axum::{
@@ -52,7 +53,8 @@ pub struct AppState {
     pub wake: Arc<Notify>,
     listen: SocketAddr,
     csrf: String,
-    runtime_error: Arc<Mutex<Option<String>>>,
+    runtime_error: tokio::sync::watch::Sender<Option<String>>,
+    live_cancel: tokio_util::sync::CancellationToken,
 }
 impl AppState {
     pub fn new(store: SharedStore, listen: SocketAddr, wake: Arc<Notify>) -> Self {
@@ -61,7 +63,8 @@ impl AppState {
             listen,
             wake,
             csrf: uuid::Uuid::new_v4().to_string(),
-            runtime_error: Arc::new(Mutex::new(None)),
+            runtime_error: tokio::sync::watch::channel(None).0,
+            live_cancel: tokio_util::sync::CancellationToken::new(),
         }
     }
     fn host_allowed(&self, host: &str) -> bool {
@@ -76,13 +79,14 @@ impl AppState {
     async fn snapshot(&self) -> Result<Value> {
         let store = self.store.lock().await;
         Ok(json!({
+            "committed_version":*store.subscribe().borrow(),
             "workspaces":store.query("WorkspaceList")?,
             "directories":store.query("WorkspaceDirectoryList")?,
             "repositories":store.query("RepositoryRegistrationList")?,
             "goals":store.query("GoalList")?,
             "assignments":store.query("AssignmentList")?,
             "publications":store.query("PublicationIntentList")?,
-            "runtime_error":self.runtime_error.lock().await.clone(),
+            "runtime_error":self.runtime_error.borrow().clone(),
             "server_observed_at": time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339)?,
         }))
     }
@@ -141,6 +145,8 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(web::home))
         .route("/live", get(dashboard::live))
         .route("/workspaces/{id}/live", get(dashboard::workspace_live))
+        .route("/events", get(live::events))
+        .route("/workspaces/{id}/events", get(live::workspace_events))
         .route("/goals/{id}/evidence", get(dashboard::evidence))
         .route("/workspaces", post(web::add_workspace))
         .route("/workspaces/{id}", get(web::workspace))
@@ -157,6 +163,9 @@ pub fn router(state: AppState) -> Router {
         .route("/goals/{id}/{action}", post(web::goal_action))
         .route("/api/session", get(session))
         .route("/api/state", get(snapshot))
+        .route("/api/console", get(live::console))
+        .route("/app.js", get(web::javascript))
+        .route("/index.css", get(web::stylesheet))
         .route("/api/workspaces", get(list_workspaces).post(add_workspace))
         .route("/api/workspaces/{id}", get(workspace_detail))
         .route(
@@ -223,12 +232,16 @@ pub async fn serve_with_runtime(
                 "Autonomous processing stopped: {error:#}. Restart the service after resolving this problem."
             );
             eprintln!("{message}");
-            *runtime_error.lock().await = Some(message);
+            runtime_error.send_replace(Some(message));
         }
     };
     let server = async {
+        let live_cancel = state.live_cancel.clone();
         let result = axum::serve(listener, router(state))
-            .with_graceful_shutdown(server_shutdown.cancelled_owned())
+            .with_graceful_shutdown(async move {
+                server_shutdown.cancelled().await;
+                live_cancel.cancel();
+            })
             .await;
         shutdown.cancel();
         result
@@ -285,7 +298,7 @@ async fn request_guard(
     // Native form navigation with no-referrer sends Origin: null in Chromium.
     // Keep local form origins verifiable without sharing referrers cross-origin.
     headers.insert("referrer-policy", "same-origin".parse().unwrap());
-    headers.insert("content-security-policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'".parse().unwrap());
+    headers.insert("content-security-policy","default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'self'; base-uri 'none'".parse().unwrap());
     headers.insert("x-frame-options", "SAMEORIGIN".parse().unwrap());
     response
 }

@@ -6,6 +6,8 @@ tasks:
     cmds:
       - ess specify validate --path ess --strict-requires
       - aep plan artifact validate
+      - npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - cargo run --locked -p control-plane-xtask -- frontend-check
       - cargo fmt -p control-plane-core -p control-plane-protocol -p control-plane-runtime -p control-plane-app -p control-plane-xtask --check
       - cargo clippy --workspace --all-targets --locked -- -D warnings
       - cargo test --workspace --locked
@@ -22,3 +24,9 @@ tasks:
     desc: Start the local control plane
     cmds:
       - cargo run --locked -p control-plane-app -- serve {{.CLI_ARGS}}
+
+  frontend:
+    desc: Build Vue assets for embedding in the service binary
+    cmds:
+      - npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - cargo run --locked -p control-plane-xtask -- frontend-build

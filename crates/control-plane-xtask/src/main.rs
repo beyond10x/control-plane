@@ -1,6 +1,7 @@
 mod codec;
 mod eval;
 mod foundation;
+mod frontend;
 mod generation;
 mod target;
 
@@ -29,6 +30,10 @@ enum Action {
     Conformance,
     /// Reject higher-level libraries in the production dependency graph.
     FoundationCheck,
+    /// Build the Vue assets embedded in the service binary.
+    FrontendBuild,
+    /// Rebuild Vue in scratch and refuse drift in the embedded assets.
+    FrontendCheck,
 }
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -42,5 +47,7 @@ fn main() -> Result<()> {
         Action::GeneratedCheck => generation::run(root, false),
         Action::Conformance => target::conformance(root),
         Action::FoundationCheck => foundation::run(root),
+        Action::FrontendBuild => frontend::run(root, true),
+        Action::FrontendCheck => frontend::run(root, false),
     }
 }

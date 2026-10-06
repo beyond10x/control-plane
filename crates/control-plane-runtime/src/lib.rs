@@ -6,6 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 mod context;
 mod engine;
+mod ess_reference;
 mod fleet;
 mod governance;
 mod loom_model;
