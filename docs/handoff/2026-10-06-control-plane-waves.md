@@ -1,6 +1,6 @@
 # Hand-over: control-plane waves 3 to 5, 2026-10-06
 
-Written at the conductor's wrap-up dispatch DSP-20261006-07 (operator decision DEC-20261006-06). The operator's approval for waves 3 to 5 is approval-record:waves-3-to-5-2026-10-06; wave 3 is done, wave 4 stopped mid-wave, wave 5 not started.
+Written at the operator's wrap-up of the 2026-10-06 session. The operator's approval for waves 3 to 5 is approval-record:waves-3-to-5-2026-10-06; wave 3 is done, wave 4 stopped mid-wave, wave 5 not started.
 
 ## Where things are
 
