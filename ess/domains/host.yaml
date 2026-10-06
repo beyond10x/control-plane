@@ -1044,6 +1044,9 @@ commands:
   - name: applied
     updates: controlplane.host.Goal
     instance: goal_id
+    when_subject_state:
+    - Paused
+    - Running
     sets:
       objective: input.objective
       acceptance: input.acceptance
@@ -1072,6 +1075,12 @@ commands:
         implementor_model: input.implementor_model
         reviewer_model: input.reviewer_model
         merge_authority: input.merge_authority
+  - name: satisfied
+    when_subject_state: Satisfied
+    error: controlplane.host.GoalStateConflict
+  - name: cancelled
+    when_subject_state: Cancelled
+    error: controlplane.host.GoalStateConflict
   - name: not-found
     unknown_instance: true
     error: controlplane.host.GoalNotFound

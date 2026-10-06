@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
-// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
+// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
+// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -914,28 +914,45 @@ where
 {
     fn update_goal(&mut self, input: crate::host::UpdateGoal) -> Result<crate::host::UpdateGoalOutcome, UnmetObligation> {
         let _ = &input;
-        // `applied`: the default.
+        // The addressed row, read before the branches that select by it.
         let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
             return Ok(crate::host::UpdateGoalOutcome::NotFound { error: crate::host::GoalNotFound });
         };
         let _ = &held;
-        let before = held.data.clone();
-        let mut next = held;
-        next.data.objective = input.objective.clone();
-        next.data.acceptance = input.acceptance.clone();
-        next.data.max_workers = input.max_workers.clone();
-        next.data.max_attempts = input.max_attempts.clone();
-        next.data.max_minutes = input.max_minutes.clone();
-        next.data.planner_model = input.planner_model.clone();
-        next.data.implementor_model = input.implementor_model.clone();
-        next.data.reviewer_model = input.reviewer_model.clone();
-        next.data.merge_authority = input.merge_authority.clone();
-        next.data.revision = before.revision + 1;
-        next.data.satisfaction_receipt = "".to_owned();
-        next.data.planning_fingerprint = "".to_owned();
-        let answer = crate::host::UpdateGoalOutcome::Applied { update_goal_applied: crate::host::UpdateGoalApplied { goal_id: input.goal_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
-        GoalStorage::put(&mut self.ports, next);
-        return Ok(answer);
+        // `applied`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Paused | crate::host::GoalState::Running)), "controlplane.host.UpdateGoal")? {
+            let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+                return Ok(crate::host::UpdateGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+            };
+            let _ = &held;
+            let before = held.data.clone();
+            let mut next = held;
+            next.data.objective = input.objective.clone();
+            next.data.acceptance = input.acceptance.clone();
+            next.data.max_workers = input.max_workers.clone();
+            next.data.max_attempts = input.max_attempts.clone();
+            next.data.max_minutes = input.max_minutes.clone();
+            next.data.planner_model = input.planner_model.clone();
+            next.data.implementor_model = input.implementor_model.clone();
+            next.data.reviewer_model = input.reviewer_model.clone();
+            next.data.merge_authority = input.merge_authority.clone();
+            next.data.revision = before.revision + 1;
+            next.data.satisfaction_receipt = "".to_owned();
+            next.data.planning_fingerprint = "".to_owned();
+            let answer = crate::host::UpdateGoalOutcome::Applied { update_goal_applied: crate::host::UpdateGoalApplied { goal_id: input.goal_id.clone(), objective: input.objective.clone(), acceptance: input.acceptance.clone(), max_workers: input.max_workers.clone(), max_attempts: input.max_attempts.clone(), max_minutes: input.max_minutes.clone(), planner_model: input.planner_model.clone(), implementor_model: input.implementor_model.clone(), reviewer_model: input.reviewer_model.clone(), merge_authority: input.merge_authority.clone() } };
+            GoalStorage::put(&mut self.ports, next);
+            return Ok(answer);
+        }
+        // `satisfied`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Satisfied)), "controlplane.host.UpdateGoal")? {
+            return Ok(crate::host::UpdateGoalOutcome::Satisfied { error: crate::host::GoalStateConflict { state: held.state } });
+        }
+        // `cancelled`: selected by the addressed row.
+        if decided(Some(matches!(held.state, crate::host::GoalState::Cancelled)), "controlplane.host.UpdateGoal")? {
+            return Ok(crate::host::UpdateGoalOutcome::Cancelled { error: crate::host::GoalStateConflict { state: held.state } });
+        }
+        // No declared branch answers this request.
+        Err(undeclared("controlplane.host.UpdateGoal"))
     }
 }
 

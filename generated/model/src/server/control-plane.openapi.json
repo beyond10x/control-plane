@@ -8,8 +8,8 @@
     "x-ess-provenance": {
       "system": "controlplane",
       "specification_version": "v1",
-      "source_digest": "ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548",
-      "contract_digest": "slice-sha256/2:9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2"
+      "source_digest": "5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba",
+      "contract_digest": "slice-sha256/2:c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca"
     },
     "x-ess-reached-by": "network"
   },
@@ -3084,6 +3084,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/controlplane.host.UpdateGoal.not-found.Response"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Outcomes `satisfied` and `cancelled`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "cancelled": "#/components/schemas/controlplane.host.UpdateGoal.cancelled.Response",
+                      "satisfied": "#/components/schemas/controlplane.host.UpdateGoal.satisfied.Response"
+                    },
+                    "propertyName": "outcome"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.UpdateGoal.satisfied.Response"
+                    },
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.UpdateGoal.cancelled.Response"
+                    }
+                  ]
                 }
               }
             }
@@ -7561,7 +7585,7 @@
       },
       "controlplane.host.UpdateGoal.applied.Response": {
         "additionalProperties": false,
-        "description": "Taken when no other outcome's condition matched. A `controlplane.host.Goal` has changed, and its state is unchanged. The instance is the one `goal_id` names. Emits `UpdateGoalApplied`, published to consumers and listed under `published`.",
+        "description": "Taken when the existing subject is in Paused or Running. A `controlplane.host.Goal` has changed, and its state is unchanged. The instance is the one `goal_id` names. Emits `UpdateGoalApplied`, published to consumers and listed under `published`.",
         "properties": {
           "outcome": {
             "const": "applied",
@@ -7600,6 +7624,36 @@
         ],
         "type": "object"
       },
+      "controlplane.host.UpdateGoal.cancelled.Response": {
+        "additionalProperties": false,
+        "description": "Taken when the existing subject is in Cancelled.",
+        "properties": {
+          "error": {
+            "const": "controlplane.host.GoalStateConflict",
+            "description": "The command cannot act in the current state.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "cancelled",
+            "description": "Which declared outcome the command took."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/controlplane.host.GoalStateConflict.Error"
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error",
+          "payload"
+        ],
+        "type": "object"
+      },
       "controlplane.host.UpdateGoal.not-found.Response": {
         "additionalProperties": false,
         "description": "Taken when the request names an identity no record carries.",
@@ -7623,6 +7677,36 @@
           "outcome",
           "published",
           "error"
+        ],
+        "type": "object"
+      },
+      "controlplane.host.UpdateGoal.satisfied.Response": {
+        "additionalProperties": false,
+        "description": "Taken when the existing subject is in Satisfied.",
+        "properties": {
+          "error": {
+            "const": "controlplane.host.GoalStateConflict",
+            "description": "The command cannot act in the current state.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "satisfied",
+            "description": "Which declared outcome the command took."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/controlplane.host.GoalStateConflict.Error"
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error",
+          "payload"
         ],
         "type": "object"
       },

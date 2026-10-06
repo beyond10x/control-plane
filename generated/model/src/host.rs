@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest ababf8b26c6dd7e1f8c6cbec3d38a6897ebb4ebb9a1a5296c3980bb81d3f2548
-// contract digest 9905ca468d3ef7bea19af021061f1e1629effe3b09efa4c30cf08a552ffd80d2
+// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
+// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -2563,10 +2563,20 @@ pub struct UpdateGoal {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateGoalOutcome {
-    /// `applied` — otherwise.
+    /// `applied` — when the existing subject is in Paused or Running.
     Applied {
         /// The `controlplane.host.UpdateGoalApplied` this outcome publishes.
         update_goal_applied: UpdateGoalApplied,
+    },
+    /// `satisfied` — when the existing subject is in Satisfied.
+    Satisfied {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
+    },
+    /// `cancelled` — when the existing subject is in Cancelled.
+    Cancelled {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
     },
     /// `not-found` — for an identity no record carries.
     NotFound {
