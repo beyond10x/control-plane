@@ -146,23 +146,28 @@ async fn recorded_history_replays() -> Result<()> {
             ))
         })
         .collect();
-    let refusals = declared_refusals()?;
+    // Every declared refusal outcome on its own: a response that carries several outcomes
+    // (`DeleteGoal` 409: `paused`, `running`, `satisfied`) is not covered by one of them.
+    let refusals: BTreeSet<(&str, String, String)> = declared_refusals()?
+        .into_iter()
+        .flat_map(|(command, status, outcomes)| {
+            outcomes
+                .into_iter()
+                .map(move |outcome| (command, status.clone(), outcome))
+        })
+        .collect();
     let unrecorded: Vec<_> = refusals
         .iter()
-        .filter(|(command, _, outcomes)| {
-            !outcomes
-                .iter()
-                .any(|outcome| answered.contains(&(*command, outcome.as_str())))
-        })
-        .map(|(command, status, outcomes)| format!("{command} {status} {outcomes:?}"))
+        .filter(|(command, _, outcome)| !answered.contains(&(*command, outcome.as_str())))
+        .map(|(command, status, outcome)| format!("{command} {status} {outcome}"))
         .collect();
     ensure!(
         unrecorded.is_empty(),
-        "the recorded history never answers these declared refusals: {unrecorded:?}; extend record-history and regenerate"
+        "the recorded history never answers these declared refusal outcomes: {unrecorded:?}; extend record-history and regenerate"
     );
     let refused: BTreeSet<&str> = refusals.iter().map(|(command, _, _)| *command).collect();
     eprintln!(
-        "{} decisions; {} commands applied; {} declared refusal responses of {} commands answered",
+        "{} decisions; {} commands applied; {} declared refusal outcomes of {} commands answered",
         recorded.len(),
         applied.len(),
         refusals.len(),

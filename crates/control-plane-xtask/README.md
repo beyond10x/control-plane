@@ -70,7 +70,13 @@ keep a specification change from doing that silently.
 - When both exist, use the one that descends from the other. When neither descends from the
   other, the check fails.
 
-The baseline must be in the clone, so CI checks out full history.
+A recorded baseline counts only if the integration line already contains it. Until `origin/main`
+holds `ess/ess-inputs.yaml`, the integration line is `origin/control-plane/bootstrap`; after that,
+it is `origin/main`. A clone without the remote ref uses the local branch. A recorded baseline
+the integration line does not contain fails the check and names that line, so a branch cannot
+point the baseline at its own commit. The refusal still lists the changes measured against the
+merge base. The `control-plane/bootstrap` fallback goes away once that branch has merged into
+`main`. The baseline must be in the clone, so CI checks out full history.
 
 A change fails the check when ESS rates any of `callers`, `readers` or `history` other than
 `compatible`. ESS rates a changed outcome, payload, error shape or grant `history: compatible`,
@@ -86,10 +92,11 @@ in every dimension. A required input or field, and any field added to an event o
 fails. A command's `outcome-subject-changed` that only restates a reported
 `transition-route-changed` of the same entity and transition is decided by that route change.
 
-An acknowledgement admits exactly the change it reviewed: the id, plus the `change` object ESS
-printed for it. If a different change later carries the same id, it is not acknowledged. The
-refusal prints a ready entry for each unacknowledged change. Removing `Blocked` from
-`Assignment.repair.from` needs this one entry:
+An acknowledgement admits exactly the change it reviewed, against the baseline it was reviewed
+against. It records the id, the `change` object ESS printed and that baseline commit. If a
+different change later carries the same id, it is not acknowledged. The refusal prints a ready
+entry for each unacknowledged change. Removing `Blocked` from `Assignment.repair.from` needs this
+one entry:
 
 ```json
 {
@@ -108,26 +115,28 @@ refusal prints a ready entry for each unacknowledged change. Removing `Blocked` 
           "after": "Reviewing -> Implementing"
         }
       },
+      "baseline": "<the gate's baseline when the change was reviewed>",
       "reason": "stored Blocked repairs are migrated by <change>"
     }
   ]
 }
 ```
 
-An acknowledgement that matches no failing change is stale and fails the check. The exception is
-an entry that the baseline commit's own acknowledgement file already holds: it was published with
-that baseline. Acknowledge a change only after stored history has a migration or cannot contain
-the affected decision. When you move the recorded baseline, empty the acknowledgements in the
-same change.
+An entry applies only while the gate's baseline equals its `baseline`. Once the baseline moves,
+for example after the change is published, the entry is inert. It admits nothing, including a
+later repeat of the same change, and it does not fail the check. The output lists it as removable.
+An entry reviewed against the current baseline that matches no failing change is stale and fails
+the check. Acknowledge a change only after stored history has a migration or cannot contain the
+affected decision.
 
 `crates/control-plane-core/tests/recorded_history.rs` opens a committed history,
 `crates/control-plane-core/tests/fixtures/recorded-history.db`, and compares every view with
 `recorded-history.views.json`. The history must apply every generated command at least once. It
-must also answer every declared refusal response of every command at least once: each
-`not-found`, and each `wrong-state` or `DeleteGoal` `paused`. The test reads those responses
-from the generated OpenAPI contract. A second test changes one stored `applied` outcome in a copy
-and requires `Store::open` to refuse it. No test or gate writes the fixture. Re-record it only on
-purpose:
+must also answer every declared refusal outcome of every command at least once, outcome by
+outcome: each `not-found` and `wrong-state`, and `DeleteGoal`'s `paused`, `running` and
+`satisfied`. The test reads those outcomes from the generated OpenAPI contract. A second test
+changes one stored `applied` outcome in a copy and requires `Store::open` to refuse it. No test
+or gate writes the fixture. Re-record it only on purpose:
 
 ```console
 cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/control-plane-history
@@ -135,12 +144,17 @@ cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/
 
 `record-history` runs a scripted operator and supervisor through `Store::execute` against real Git
 repositories in the new work directory. That directory must be outside every home directory and
-Git work tree: recorded paths are committed, and the Security gate rejects personal paths. Before
-anything else, the command replays the committed history. It refuses to replace that history
-when `Store::open` fails or the replayed views differ from `recorded-history.views.json`. If
-replay fails after a specification change, write a migration; do not re-record. Re-record only to
-cover a new command or refusal, and review the views diff. A new view field also changes the
-recorded views, so delete both fixture files deliberately before you re-record.
+Git work tree: recorded paths are committed, and the Security gate rejects personal paths.
+
+Re-record only when `recorded_history_replays` fails after a change the gate admitted, such as a
+new command, view or refusal outcome the history does not cover yet. `record-history` refuses
+otherwise: before anything else, it replays the committed history. It refuses to replace that
+history when `Store::open` fails, or when the replayed state differs from
+`recorded-history.views.json`. Two differences are tolerated: a view the file lacks, and a row
+field that replays as `null`. Any other difference needs a migration, not a new recording. An
+admitted `Optional<…>` view field changes nothing here: the generated view omits a field that was
+never set, so the recorded views and `recorded_history_replays` are unaffected. A new view must
+also be added to `VIEW_NAMES` in `src/history.rs`. Review the views diff after re-recording.
 
 ## Evidence and negative controls
 

@@ -99,7 +99,7 @@ fn acknowledge(root: &Path, baseline: &str, ids: &[&str]) -> Result<()> {
     let acknowledged: Vec<_> = ids
         .iter()
         .map(|id| {
-            serde_json::json!({"id": id, "change": reviewed(id), "reason": "reviewed in the attack test"})
+            serde_json::json!({"id": id, "change": reviewed(id), "baseline": baseline, "reason": "reviewed in the attack test"})
         })
         .collect();
     let document = serde_json::json!({

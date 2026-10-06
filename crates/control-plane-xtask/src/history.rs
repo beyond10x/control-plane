@@ -2,10 +2,10 @@
 //!
 //! A scripted operator and supervisor drive real repositories through the public
 //! `control_plane_core::Store::execute`, so the fixture holds exactly what the Store writes. The
-//! script applies every generated command at least once and records every declared refusal
-//! response of every command: `not-found` for each, `wrong-state` (or `DeleteGoal`'s `paused`)
-//! where declared. `crates/control-plane-core/tests/recorded_history.rs` checks that coverage
-//! against the generated contract. No gate runs this command: the committed fixture is evidence
+//! script applies every generated command at least once and answers every declared refusal
+//! outcome of every command: `not-found` for each, `wrong-state` where declared, and `DeleteGoal`'s
+//! `paused`, `running` and `satisfied`. `crates/control-plane-core/tests/recorded_history.rs`
+//! checks that coverage, outcome by outcome, against the generated contract. No gate runs this command: the committed fixture is evidence
 //! about stored history, and refreshing it after a replay failure would discard that evidence.
 use anyhow::{Context, Result, bail, ensure};
 use control_plane_core::{Actor, Store};
@@ -98,10 +98,44 @@ async fn still_replays(root: &Path, work: &Path) -> Result<()> {
     let committed: Value = serde_json::from_slice(&fs::read(&views)?)
         .with_context(|| format!("{VIEWS} is not JSON"))?;
     ensure!(
-        query_views(&store)? == committed,
+        same_state(&query_views(&store)?, &committed),
         refuse("no longer replays to the committed views")
     );
     Ok(())
+}
+
+/// Whether replay reconstructed the committed state: every committed view with the same rows and
+/// values. A view the committed views lack is a new projection of that state and is tolerated. A
+/// row field they lack is tolerated only while it replays as `null`, which is how a gate-admitted
+/// `Optional<…>` field shows up when no recorded call ever set it.
+fn same_state(replayed: &Value, committed: &Value) -> bool {
+    let (Some(replayed), Some(committed)) = (replayed.as_object(), committed.as_object()) else {
+        return false;
+    };
+    committed
+        .iter()
+        .all(|(view, rows)| replayed.get(view).is_some_and(|r| same_rows(r, rows)))
+}
+
+fn same_rows(replayed: &Value, committed: &Value) -> bool {
+    match (replayed, committed) {
+        (Value::Object(replayed), Value::Object(committed)) => {
+            committed
+                .iter()
+                .all(|(key, value)| replayed.get(key).is_some_and(|r| same_rows(r, value)))
+                && replayed
+                    .iter()
+                    .all(|(key, value)| committed.contains_key(key) || value.is_null())
+        }
+        (Value::Array(replayed), Value::Array(committed)) => {
+            replayed.len() == committed.len()
+                && replayed
+                    .iter()
+                    .zip(committed)
+                    .all(|(replayed, committed)| same_rows(replayed, committed))
+        }
+        _ => replayed == committed,
+    }
 }
 
 /// Outside every home directory and Git work tree: recorded paths are committed, and repository
@@ -582,6 +616,32 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         run.expect(command, json!({"goal_id": abandoned}), Operator, outcome)
             .await?;
     }
+    // A goal without assignments refuses deletion while running and once satisfied.
+    let probe = identity(
+        &run.expect(
+            "CreateGoal",
+            json!({"workspace_id": workspace, "objective": "Probe objective",
+                "acceptance": "Satisfied without assignments", "max_workers": 1,
+                "max_attempts": 1, "max_minutes": 10, "planner_model": "scripted-planner",
+                "implementor_model": "scripted-implementor", "reviewer_model": "scripted-reviewer",
+                "merge_authority": false}),
+            Operator,
+            "created",
+        )
+        .await?,
+        "goal_id",
+    )?;
+    let probe = json!({"goal_id": probe});
+    run.expect("StartGoal", probe.clone(), Operator, "applied")
+        .await?;
+    run.expect("DeleteGoal", probe.clone(), Operator, "running")
+        .await?;
+    let mut satisfied = probe.clone();
+    satisfied["satisfaction_receipt"] = json!("probe-accepted");
+    run.expect("SatisfyGoal", satisfied, Supervisor, "applied")
+        .await?;
+    run.expect("DeleteGoal", probe, Operator, "satisfied")
+        .await?;
     for outcome in ["applied", "wrong-state"] {
         run.expect(
             "RemoveWorkspaceDirectory",
@@ -727,4 +787,38 @@ async fn unknown_instances(run: &mut Script<'_>) -> Result<()> {
 fn with(assignment: &str, mut body: Value) -> Value {
     body["assignment_id"] = json!(assignment);
     body
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Only a new view or an added field that replays as `null` is tolerated; anything that
+    /// changes, removes or adds recorded state is a different state.
+    #[test]
+    fn replayed_state_tolerates_only_new_views_and_added_null_fields() {
+        let committed = json!({"GoalList": [{"goal_id": "g", "revision": 2}]});
+        let same = |replayed: Value| same_state(&replayed, &committed);
+        assert!(same(json!({"GoalList": [{"goal_id": "g", "revision": 2}]})));
+        assert!(same(json!({
+            "GoalList": [{"goal_id": "g", "revision": 2}],
+            "GoalSummary": [{"running": 0}]
+        })));
+        assert!(same(
+            json!({"GoalList": [{"goal_id": "g", "revision": 2, "note": null}]})
+        ));
+        assert!(!same(
+            json!({"GoalList": [{"goal_id": "g", "revision": 2, "note": "set"}]})
+        ));
+        assert!(!same(
+            json!({"GoalList": [{"goal_id": "g", "revision": 3}]})
+        ));
+        assert!(!same(json!({"GoalList": [{"goal_id": "g"}]})));
+        assert!(!same(json!({"GoalList": []})));
+        assert!(!same(json!({"GoalList": [
+            {"goal_id": "g", "revision": 2},
+            {"goal_id": "h", "revision": 1}
+        ]})));
+        assert!(!same(json!({})));
+    }
 }
