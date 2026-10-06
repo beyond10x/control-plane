@@ -20,7 +20,7 @@ scope:
   path: ess/
 - confidence: inferred
   path: generated/
-revision: 13
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -107,3 +107,21 @@ After final rejection, Supervisor.tick scheduled another planner while fleet acc
 4. Eval configuration: keep orchestration/evidence-retention instructions outside the app acceptance, which must contain only the fixed TASK.md and trusted verifier obligations. Preserve all previous evidence. Compare the next round on an isolated seed while retaining the successfully published application.
 
 No implementation of these suggestions is authorized yet. After operator approval, delegate the approved scope to a sub-agent, independently inspect and integrate its changes, run regressions and repository gates, then run the next bounded real eval. Further eval rounds are already authorized; the per-round change approval is the operator's explicit workflow requirement.
+
+## Round 5 outcome and next proposed correction
+
+Round 5 executed the approved batch later published as 539b7ac565c8820d62397ab9e66c729efe917d77. The live binary digest matched its build and Vue/SSE passed the actual browser/restart check before the eval began. The fresh external Go seed retained one worker, one attempt, gpt-5.6-sol and a ten-minute total watchdog. The monitor stopped the round at 125.985 seconds after a terminal assignment blocker; the failed goal was cancelled to prevent unintended further spend, with the pre-stop state, managed trees and sessions retained. No application implementation or publication completed. A candidate field at this point is the planning base, not evidence of delivered source.
+
+The planner completed 17 turns, produced a validated ESS/AEP plan and passed a separate plan review. Total observed usage was 19 turns, 127,598 input tokens, 3,894 output tokens and 20,480 cached input tokens. Dollar cost was not supplied. Implementation stopped after its first model turn, so this round cannot establish an end-to-end efficiency improvement over the successful application delivery in round 4. Its first implementor brief was 7,082 bytes, versus the previously duplicated 56,134-byte planning receipt alone; full multi-turn runtime efficiency remains to be evaluated.
+
+The recorded first implementation proposal was a read of absolute paths to AGENTS.md, TASK.md and go.mod in the registered primary repository. The implementor schema accepts arbitrary strings and its instructions do not clearly state the worktree-relative path contract. engine::context_path delegates ordinary names to engine::confined, which correctly refuses absolute paths. ImplementationPhase::invoke then maps that input refusal to EffectError; Commission suspends for ExternalAvailability. The second proposal in the same provider turn was already refused by Loom's existing single-proposal contract and is not an additional accepted action. This is a control-plane adapter/contract problem, not a missing Loom API and not the new frontend write policy: the read path does not call fleet::scoped.
+
+An offline diagnostic replay using the actual compiled runtime, native Loom/Commission and the existing deterministic provider fixture reproduced the exact error in 4.90 seconds: path must be a normalized repository-relative path, followed by ExternalAvailability. No production code was changed for the probe; temporary test registration is removed, and probe source/logs stay outside the source repository. A one-variable control changes the supplied read to a relative file, without changing the product.
+
+Proposed next implementation, awaiting operator approval:
+
+1. Control-plane owns the implementation tool contract: explicitly expose worktree-relative read/write paths and the existing workspace:directory-id/relative-file context syntax, with accurate tool-schema descriptions and examples. Do not imply that primary-directory absolute paths are admitted effect targets.
+2. Return malformed read-path syntax as a typed, bounded refusal/observation through Commission's supported EffectOutcome and the existing Loom continuation. Retain absolute-path rejection; never normalize an external read into permission. Cancellation, changed authority, symlink/root escape, storage/permission and provider failures remain fatal. Bound repeated unchanged malformed requests.
+3. Lock down the recorded sequence in a native-runtime regression: absolute primary read is refused without accessing it; the observation reaches the next model turn; a corrected relative read allows implementation, real checks, independent review and observed publication. Add negative checks for escape/authority failures and unchanged-refusal exhaustion, then rerun repository gates and a fresh isolated Go eval under the same budget.
+
+The operator's round-by-round approval is required before implementing this proposal. Once approved, delegate this bounded correction to a sub-agent, integrate and independently verify it, then run the next eval. Preserve all round-5 artifacts. Do not report the overall autonomous delivery goal complete from Vue/browser tests or planning success.
