@@ -3,14 +3,20 @@
 //! A story's `## Acceptance` section names the scenarios that decide it. The rule for what counts
 //! as a name is the one `story:acceptance-traceability` states: a token of three or more lower-case
 //! words joined by `_` or `-`, backticked or not. A backticked span that contains whitespace is a
-//! command and is skipped whole; an artifact id (`<kind>:<slug>`) and a path (a token containing
-//! `/` or `.`) are single tokens that never match the name shape, so no part of them is a name
-//! either. A word is lower-case letters and digits; the first word starts with a letter, so a date
-//! such as `2026-10-06` is not a name.
+//! command and is skipped whole, and so is a fenced code block (opened by three or more backticks
+//! or tildes), whose lines never end the section; any other backticked span is split like plain
+//! text, so `` `name()` `` gives `name`. An artifact id (`<kind>:<slug>`) and a path (a token
+//! containing `/` or `.`) are single tokens that never match the name shape, so no part of them is
+//! a name either. A word is lower-case letters and digits; the first word starts with a letter, so
+//! a date such as `2026-10-06` is not a name.
 //!
 //! A name resolves when a Rust test function (`#[test]` or `#[tokio::test]`) anywhere under
 //! `crates/` has that name, with `_` in place of each `-`, or when a `test(...)` or `it(...)` call
-//! in a `frontend/src/**/*.test.js` file has that title.
+//! in a `frontend/src/**/*.test.js` file has that title. Resolution reads source text and never
+//! builds or lists the tests: it skips comments, string and regular-expression literals,
+//! `macro_rules!` bodies and whatever `#[cfg(any())]` or `#[cfg(false)]` switches off, and
+//! evaluates no other `cfg`, so a test switched off by a feature, a target or a `mod` declaration
+//! in another file still resolves.
 use anyhow::{Context, Result, bail};
 use std::{
     collections::BTreeSet,
@@ -104,52 +110,94 @@ fn story_parts(text: &str) -> Option<(&str, &str, &str)> {
         header.lines().find_map(|line| {
             line.strip_prefix(key)
                 .and_then(|value| value.strip_prefix(':'))
-                .map(|value| value.trim().trim_matches('"'))
+                .map(|value| value.trim().trim_matches(['"', '\'']))
         })
     };
     Some((field("id")?, field("status")?, body))
 }
 
 /// The text of a body's `## Acceptance` section, up to the next heading of the same or higher
-/// level.
+/// level outside a fenced code block.
 pub fn acceptance(body: &str) -> Option<String> {
-    let mut lines = body.lines();
-    lines
-        .by_ref()
-        .find(|line| line.trim_end() == "## Acceptance")?;
+    let mut fence = Fence::default();
+    let mut lines = body.lines().map(|line| (fence.code(line), line));
+    lines.find(|(code, line)| !code && line.trim_end() == "## Acceptance")?;
     let section: Vec<&str> = lines
-        .take_while(|line| !(line.starts_with("## ") || line.starts_with("# ")))
+        .take_while(|(code, line)| *code || !(line.starts_with("## ") || line.starts_with("# ")))
+        .map(|(_, line)| line)
         .collect();
     Some(section.join("\n"))
 }
 
-/// The scenario names `text` lists, in order of first appearance, each once.
-pub fn scenario_names(text: &str) -> Vec<String> {
-    let mut names: Vec<String> = Vec::new();
-    let mut keep = |token: &str| {
-        let token = token
-            .trim_start_matches(['"', '\'', '*'])
-            .trim_end_matches(['.', ',', ';', ':', '!', '?', '"', '\'', '*']);
-        if is_name(token) && !names.iter().any(|name| name == token) {
-            names.push(token.to_owned());
+/// Which lines of Markdown belong to a fenced code block: one opened by a line starting with
+/// three or more backticks or tildes and closed by a line of at least as many of the same.
+#[derive(Default)]
+struct Fence(Option<(char, usize)>);
+
+impl Fence {
+    /// Whether `line`, the next line of the text, opens, lies in or closes a fenced block.
+    fn code(&mut self, line: &str) -> bool {
+        let line = line.trim_start();
+        let marker = line
+            .chars()
+            .next()
+            .filter(|first| matches!(first, '`' | '~'));
+        let length = marker.map_or(0, |marker| {
+            line.chars().take_while(|c| *c == marker).count()
+        });
+        let rest = &line[length..];
+        match (self.0, marker) {
+            // A backtick line with another backtick after the run is inline code, not a fence.
+            (None, Some(marker)) if length >= 3 && !(marker == '`' && rest.contains('`')) => {
+                self.0 = Some((marker, length));
+                true
+            }
+            (None, _) => false,
+            (Some((open, opened)), marker) => {
+                if marker == Some(open) && length >= opened && rest.trim().is_empty() {
+                    self.0 = None;
+                }
+                true
+            }
         }
-    };
+    }
+}
+
+/// The scenario names `text` lists, in order of first appearance, each once. Fenced code blocks
+/// are skipped whole.
+pub fn scenario_names(text: &str) -> Vec<String> {
+    let mut fence = Fence::default();
+    let lines: Vec<(bool, &str)> = text.lines().map(|line| (fence.code(line), line)).collect();
+    let mut names = Vec::new();
+    for run in lines.chunk_by(|line, next| line.0 == next.0) {
+        if !run[0].0 {
+            let prose: Vec<&str> = run.iter().map(|(_, line)| *line).collect();
+            prose_names(&prose.join("\n"), &mut names);
+        }
+    }
+    names
+}
+
+/// Adds the names in the Markdown prose `text` that `names` does not hold yet.
+fn prose_names(text: &str, names: &mut Vec<String>) {
     let parts: Vec<&str> = text.split('`').collect();
     for (index, part) in parts.iter().enumerate() {
-        // Odd parts lie between backticks; the text after an unclosed backtick stays plain.
-        if index % 2 == 1 && index + 1 < parts.len() {
-            if !part.chars().any(char::is_whitespace) {
-                keep(part);
-            }
+        // Odd parts lie between backticks; the text after an unclosed backtick stays plain. A
+        // backticked span holding whitespace is a command; any other is split like plain text.
+        if index % 2 == 1 && index + 1 < parts.len() && part.chars().any(char::is_whitespace) {
             continue;
         }
         for token in part.split(|character: char| {
             character.is_whitespace() || matches!(character, ',' | ';' | '(' | ')' | '[' | ']')
         }) {
-            keep(token);
+            let token = token
+                .trim_start_matches(['"', '\'', '*'])
+                .trim_end_matches(['.', ',', ';', ':', '!', '?', '"', '\'', '*']);
+            if is_name(token) && !names.iter().any(|name| name == token) {
+                names.push(token.to_owned());
+            }
         }
     }
-    names
 }
 
 /// Three or more lower-case words joined by `_` or `-`; the first word starts with a letter.
@@ -226,56 +274,144 @@ enum Token<'a> {
 }
 
 /// The names of the functions an attribute `#[test]` or `#[tokio::test]` (with or without
-/// arguments) marks. Comments, string and character literals are skipped, so a test written in a
-/// string or commented out does not count.
+/// arguments) marks. Comments, string and character literals and `macro_rules!` bodies are
+/// skipped, and so is an item under `#[cfg(any())]` or `#[cfg(false)]` and the rest of a module or
+/// file that such an inner attribute (`#![cfg(any())]`) opens; no other `cfg` is evaluated.
 pub fn rust_test_names(source: &str) -> Vec<String> {
     let tokens = rust_tokens(source);
     let mut names = Vec::new();
     let mut marked = false;
     let mut index = 0;
     while index < tokens.len() {
-        match tokens[index] {
-            Token::Punct('#') if tokens.get(index + 1) == Some(&Token::Punct('[')) => {
-                let path: Vec<&Token> = tokens[index + 2..]
-                    .iter()
-                    .take_while(|token| matches!(token, Token::Ident(_) | Token::Punct(':')))
-                    .collect();
-                let path: Vec<&str> = path
-                    .iter()
-                    .filter_map(|token| match token {
-                        Token::Ident(ident) => Some(*ident),
-                        _ => None,
-                    })
-                    .collect();
-                marked |= matches!(path.as_slice(), ["test"] | ["tokio", "test"]);
-                let mut depth = 0usize;
-                index += 1;
-                while index < tokens.len() {
-                    match tokens[index] {
-                        Token::Punct('[') => depth += 1,
-                        Token::Punct(']') => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        _ => {}
+        index = match tokens[index] {
+            Token::Punct('#') => match attribute(&tokens, index) {
+                Some((inner, content, end)) if switched_off(content) => {
+                    marked = false;
+                    if inner {
+                        block_end(&tokens, end)
+                    } else {
+                        item_end(&tokens, end)
                     }
-                    index += 1;
                 }
+                Some((inner, content, end)) => {
+                    marked |= !inner && is_test(content);
+                    end
+                }
+                None => index + 1,
+            },
+            Token::Ident("macro_rules") if tokens.get(index + 1) == Some(&Token::Punct('!')) => {
+                marked = false;
+                item_end(&tokens, index + 2)
             }
             Token::Ident("fn") if marked => {
                 if let Some(Token::Ident(name)) = tokens.get(index + 1) {
                     names.push((*name).to_owned());
                 }
                 marked = false;
+                index + 1
             }
-            Token::Punct('{' | '}' | ';') => marked = false,
-            _ => {}
-        }
-        index += 1;
+            Token::Punct('{' | '}' | ';') => {
+                marked = false;
+                index + 1
+            }
+            _ => index + 1,
+        };
     }
     names
+}
+
+/// The attribute whose `#` is at `at`: whether it is an inner one (`#![…]`), the tokens between
+/// its brackets and the offset just past them.
+fn attribute<'t, 'a>(tokens: &'t [Token<'a>], at: usize) -> Option<(bool, &'t [Token<'a>], usize)> {
+    let inner = tokens.get(at + 1) == Some(&Token::Punct('!'));
+    let open = at + 1 + usize::from(inner);
+    if tokens.get(open) != Some(&Token::Punct('[')) {
+        return None;
+    }
+    let close = group_close(tokens, open).unwrap_or(tokens.len());
+    Some((inner, &tokens[open + 1..close], close + 1))
+}
+
+/// `test` or `tokio::test`, with or without arguments.
+fn is_test(content: &[Token]) -> bool {
+    let path: Vec<&str> = content
+        .iter()
+        .take_while(|token| matches!(token, Token::Ident(_) | Token::Punct(':')))
+        .filter_map(|token| match token {
+            Token::Ident(ident) => Some(*ident),
+            _ => None,
+        })
+        .collect();
+    matches!(path.as_slice(), ["test"] | ["tokio", "test"])
+}
+
+/// `cfg(any())` and `cfg(false)`, the two conditions no build satisfies.
+fn switched_off(content: &[Token]) -> bool {
+    use Token::{Ident, Punct};
+    matches!(
+        content,
+        [
+            Ident("cfg"),
+            Punct('('),
+            Ident("any"),
+            Punct('('),
+            Punct(')'),
+            Punct(')')
+        ] | [Ident("cfg"), Punct('('), Ident("false"), Punct(')')]
+    )
+}
+
+/// The offset of the delimiter that closes the group whose opening delimiter is at `open`.
+fn group_close(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (at, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Punct('(' | '[' | '{') => depth += 1,
+            Token::Punct(')' | ']' | '}') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The offset just past the item that starts at `start`: past its `{…}` body, or past the `;` of
+/// an item without one.
+fn item_end(tokens: &[Token], start: usize) -> usize {
+    let mut at = start;
+    while at < tokens.len() {
+        match tokens[at] {
+            Token::Punct('{') => {
+                return group_close(tokens, at).map_or(tokens.len(), |close| close + 1);
+            }
+            Token::Punct('(' | '[') => {
+                at = group_close(tokens, at).map_or(tokens.len(), |close| close + 1)
+            }
+            Token::Punct(';') => return at + 1,
+            Token::Punct(')' | ']' | '}') => return at,
+            _ => at += 1,
+        }
+    }
+    tokens.len()
+}
+
+/// The offset of the delimiter that closes the block `start` lies in, or the end of the file.
+fn block_end(tokens: &[Token], start: usize) -> usize {
+    let mut at = start;
+    while at < tokens.len() {
+        match tokens[at] {
+            Token::Punct('(' | '[' | '{') => {
+                at = group_close(tokens, at).map_or(tokens.len(), |close| close + 1)
+            }
+            Token::Punct(')' | ']' | '}') => return at,
+            _ => at += 1,
+        }
+    }
+    tokens.len()
 }
 
 fn rust_tokens(source: &str) -> Vec<Token<'_>> {
@@ -411,12 +547,15 @@ fn character_or_lifetime(source: &str, at: usize) -> usize {
 
 /// Titles of `test('…', …)` and `it('…', …)` calls in a JavaScript test file. A call reached
 /// through a member (`foo.test(…)`) or with a computed title (a template literal holding `${`) is
-/// not counted; comments and other string literals are skipped.
+/// not counted; comments, regular-expression literals and other string literals are skipped.
 pub fn frontend_test_titles(source: &str) -> Vec<String> {
     let bytes = source.as_bytes();
     let mut titles = Vec::new();
     let mut at = 0;
+    // The last byte that is not whitespace: `a` after a name, `0` after a literal.
     let mut previous = b' ';
+    // Whether that name is a keyword after which an expression, so a regular expression, starts.
+    let mut keyword = false;
     while at < bytes.len() {
         let byte = bytes[at];
         let next = bytes.get(at + 1).copied();
@@ -426,9 +565,15 @@ pub fn frontend_test_titles(source: &str) -> Vec<String> {
             at = source[at + 2..]
                 .find("*/")
                 .map_or(bytes.len(), |end| at + 2 + end + 2);
+        } else if byte == b'/'
+            && regex_may_start(previous, keyword)
+            && let Some(end) = regex_end(bytes, at)
+        {
+            at = end;
+            previous = b'0';
         } else if matches!(byte, b'"' | b'\'' | b'`') {
             at = quoted(bytes, at + 1, byte);
-            previous = byte;
+            previous = b'0';
         } else if byte == b'_' || byte == b'$' || byte.is_ascii_alphabetic() {
             let start = at;
             while at < bytes.len()
@@ -444,6 +589,23 @@ pub fn frontend_test_titles(source: &str) -> Vec<String> {
                 titles.push(title);
                 at = end;
             }
+            keyword = matches!(
+                ident,
+                "return"
+                    | "typeof"
+                    | "instanceof"
+                    | "in"
+                    | "of"
+                    | "new"
+                    | "delete"
+                    | "void"
+                    | "throw"
+                    | "case"
+                    | "do"
+                    | "else"
+                    | "yield"
+                    | "await"
+            );
             previous = b'a';
         } else {
             if !byte.is_ascii_whitespace() {
@@ -453,6 +615,39 @@ pub fn frontend_test_titles(source: &str) -> Vec<String> {
         }
     }
     titles
+}
+
+/// Whether a `/` after `previous` starts a regular expression rather than dividing: not after a
+/// literal, a number, a closing `)` or `]`, or a name other than a keyword.
+fn regex_may_start(previous: u8, keyword: bool) -> bool {
+    match previous {
+        b'a' => keyword,
+        b'0' | b')' | b']' => false,
+        byte => !byte.is_ascii_digit(),
+    }
+}
+
+/// The offset just past the regular-expression literal whose opening `/` is at `at`, flags
+/// included, or `None` when the line ends first.
+fn regex_end(bytes: &[u8], at: usize) -> Option<usize> {
+    let mut class = false;
+    let mut end = at + 1;
+    loop {
+        match *bytes.get(end)? {
+            b'\n' => return None,
+            b'\\' => end += 1,
+            b'[' => class = true,
+            b']' => class = false,
+            b'/' if !class => break,
+            _ => {}
+        }
+        end += 1;
+    }
+    end += 1;
+    while bytes.get(end).is_some_and(u8::is_ascii_alphabetic) {
+        end += 1;
+    }
+    Some(end)
 }
 
 /// The static title of a call whose `(` follows `at`, and the offset just past the title.

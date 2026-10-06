@@ -71,6 +71,7 @@ fn scenario_names_follow_the_rule() -> Result<()> {
                 "shared-governed-executor",
                 "no-change-is-not-progress",
                 "reject-missing-name",
+                "name-after-a-tilde-fence",
             ],
         ),
         ("story:no-acceptance", vec![]),
@@ -106,13 +107,25 @@ fn unresolved_name_fails_gate() -> Result<()> {
                  - `absent_scenario_name`: nothing has this name.\n\
                  - `helper_is_not_a_test`: a function without a test attribute.\n\
                  - `commented_out_scenario`: a test inside a comment.\n\
-                 - `scenario_in_a_string`: a test inside a string literal.";
+                 - `scenario_in_a_string`: a test inside a string literal.\n\
+                 - `false_cfg_scenario`: a test the compiler never builds.\n\
+                 - `inner_cfg_scenario`: a test in a module an inner attribute switches off.";
     let source = r##"pub fn helper_is_not_a_test() {}
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn present_unit_scenario() {}
+
+    #[cfg(false)]
+    #[test]
+    fn false_cfg_scenario() {}
+
+    mod switched_off {
+        #![cfg(any())]
+        #[test]
+        fn inner_cfg_scenario() {}
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "fixture"]
@@ -153,6 +166,8 @@ mod tests {
             "story:demo: helper_is_not_a_test",
             "story:demo: commented_out_scenario",
             "story:demo: scenario_in_a_string",
+            "story:demo: false_cfg_scenario",
+            "story:demo: inner_cfg_scenario",
         ],
         "{stderr}"
     );
@@ -187,7 +202,9 @@ fn frontend_test_titles_resolve() -> Result<()> {
 describe('title_of_a_describe_block', () => {
   test('app_renders_a_snapshot_payload', async () => {
     expect(1).toBe(1)
+    const half = total / 2, slash = '/'
   })
+  const quote = () => { return /"/ }
   it("shows-the-goal-card", () => {})
   test(`computed_${'title'}_is_not_static`, () => {})
 })
