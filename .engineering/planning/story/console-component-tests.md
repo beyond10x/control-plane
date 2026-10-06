@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-component-tests
 kind: story
-status: draft
+status: active
 title: Vue component tests run in the gate
 relations:
 - decomposes: epic:console-clarity
@@ -17,7 +17,10 @@ scope:
   path: frontend/package.json
 - confidence: inferred
   path: frontend/src
-revision: 5
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T05:17:10Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T05:17:11Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:terminal-goal-edits
 kind: story
-status: draft
+status: active
 title: Satisfied and cancelled goals refuse edits
 relations:
 - decomposes: epic:unattended-operation
@@ -15,8 +15,13 @@ scope:
 - confidence: cited
   path: ess/domains/host.yaml
 - confidence: inferred
+  path: ess/spec-acknowledgements.json
+- confidence: inferred
   path: generated
-revision: 3
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-06T05:17:10Z", actor: "human:timo", revision: 5, executor: "agent:claude-wave-coordinator"}
+- {from: "proposed", to: "active", at: "2026-10-06T05:17:10Z", actor: "human:timo", revision: 6, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
