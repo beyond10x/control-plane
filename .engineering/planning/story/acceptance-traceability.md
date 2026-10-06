@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:acceptance-traceability
 kind: story
-status: active
+status: implemented
 title: Named acceptance scenarios resolve to tests in the gate
 relations:
 - serves: vision:autonomous-engineering
@@ -18,10 +18,11 @@ scope:
   path: crates/control-plane-runtime/tests
 - confidence: inferred
   path: crates/control-plane-xtask/src
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T05:17:10Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":2}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T05:17:10Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"review_outcome":2}}, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-06T06:33:37Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 

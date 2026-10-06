@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T06:33:37Z",
+  "actor": "human:timo",
+  "artifact": "story:acceptance-traceability",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave-2 integration gate, task check 12 steps each exit 0 (control-plane/wave-2)",
+    "reference": "commit e5e6282: 269 Rust tests in 28 binaries passed 0 failed, spec-history-check passed (3 acknowledged), acceptance-check 72 names in 19 stories resolve, frontend-check 1 component test passed, 171/171 conformance, generated and foundation checks passed"
+  }
+}
