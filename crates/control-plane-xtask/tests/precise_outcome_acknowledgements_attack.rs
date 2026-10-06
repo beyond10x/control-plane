@@ -156,9 +156,9 @@ fn compiled(root: &Path, name: &str) -> Result<Value> {
         .with_context(|| format!("no compiled outcome {name}"))
 }
 
-/// The names of the outcomes `UpdateGoal` declares before `name`, as `ess specify compile` lists
-/// them for the specification under `root`: the position the README tells a reviewer to record.
-fn preceded_by(root: &Path, name: &str) -> Result<Value> {
+/// The names of all the outcomes `UpdateGoal` declares, in order, as `ess specify compile` lists
+/// them for the specification under `root`: the list the README tells a reviewer to record.
+fn command_outcomes(root: &Path) -> Result<Value> {
     let output = Command::new("ess")
         .current_dir(root)
         .args(["specify", "compile", "--path", "ess", "--format", "json"])
@@ -172,12 +172,8 @@ fn preceded_by(root: &Path, name: &str) -> Result<Value> {
     let outcomes = model["commands"][COMMAND]["outcomes"]
         .as_array()
         .context("no compiled outcomes")?;
-    let position = outcomes
-        .iter()
-        .position(|outcome| outcome["name"] == name)
-        .with_context(|| format!("no compiled outcome {name}"))?;
     Ok(json!(
-        outcomes[..position]
+        outcomes
             .iter()
             .map(|outcome| outcome["name"].clone())
             .collect::<Vec<_>>()
@@ -295,7 +291,7 @@ fn moving_an_added_outcome_ahead_of_an_overlapping_one_is_not_admitted() -> Resu
         &baseline,
     );
     acknowledgement["outcome"] = reviewed.clone();
-    acknowledgement["preceded_by"] = preceded_by(root, "too-many-attempts")?;
+    acknowledgement["command_outcomes"] = command_outcomes(root)?;
     acknowledge(root, &baseline, vec![acknowledgement])?;
     assert_valid(root)?;
     assert_eq!(
@@ -409,7 +405,7 @@ fn added_outcome_acknowledgement_binds_its_field_updates() -> Result<()> {
     let root = dir.path();
     let mut added = entry(APPLIED_ADDED, "outcome-added", "applied", &baseline);
     added["outcome"] = compiled(root, "applied")?;
-    added["preceded_by"] = preceded_by(root, "applied")?;
+    added["command_outcomes"] = command_outcomes(root)?;
     let removed = entry(EDITED_REMOVED, "outcome-removed", "edited", &baseline);
     acknowledge(root, &baseline, vec![added, removed])?;
     let summary = spec_history::check(root)?;

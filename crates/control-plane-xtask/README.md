@@ -126,18 +126,26 @@ ESS prints an added outcome's `change` with the outcome's name only. An `outcome
 therefore also records two things from `ess specify compile --path ess --format json`:
 
 - `outcome`: the outcome exactly as the compiler prints it under the command's `outcomes`.
-- `preceded_by`: the names of the outcomes listed before it there, in order.
+- `command_outcomes`: the names of all the command's outcomes there, in order, the added one
+  included.
 
-A command answers with the first outcome whose condition holds, so the outcomes before an added
-outcome decide which calls it answers. ESS reports order changes only among outcomes that both
-revisions declare. An added outcome can therefore move without any reported change.
+ESS does not answer in declaration order alone. Input-guarded refusals answer first, before the
+addressed record is read, wherever they are declared. Subject-guarded branches, accepting branches
+and the default follow. So any other outcome of the command, declared before or after the added
+one, can decide which calls the added one answers. ESS reports order changes only among outcomes
+that both revisions declare. Outcomes can therefore be added, dropped or moved without any change
+reported against the added outcome and without its compiled object changing. The entry binds the
+whole list for that reason. Any change to the list re-opens every added-outcome entry of the
+command, even a swap of two outcomes that cannot both hold. That over-binds on purpose: an entry
+goes inert once the baseline moves anyway.
 
 The check compiles `ess/` and admits the change only while the outcome compiles to that same
-object, behind the same outcomes. A later outcome with the same name is refused if it has a
-different condition, a different answer (error, subject, events, payload or field updates) or a
-different position. The refusal names the entry and lists each differing field, `preceded_by`
-included, as reviewed and as the model has it now. The ready entry carries both as they compile
-now. No other entry may carry `outcome` or `preceded_by`. For `UpdateGoal`'s `satisfied` refusal:
+object, among the same outcomes in the same order. A later outcome with the same name is refused
+if it has a different condition or a different answer (error, subject, events, payload or field
+updates). It is also refused if the command's outcome list differs. The refusal names the entry
+and lists each differing field, `command_outcomes` included, as reviewed and as the model has it
+now. The ready entry carries both as they compile now. No other entry may carry `outcome` or
+`command_outcomes`. For `UpdateGoal`'s `satisfied` refusal:
 
 ```json
 "outcome": {
@@ -147,7 +155,7 @@ now. No other entry may carry `outcome` or `preceded_by`. For `UpdateGoal`'s `sa
   "emits": [],
   "error": "controlplane.host.GoalStateConflict"
 },
-"preceded_by": ["applied"]
+"command_outcomes": ["applied", "satisfied", "cancelled", "not-found"]
 ```
 
 An entry applies only while the gate's baseline equals its `baseline`. Once the baseline moves,

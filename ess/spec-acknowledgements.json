@@ -38,8 +38,11 @@
         "emits": [],
         "error": "controlplane.host.GoalStateConflict"
       },
-      "preceded_by": [
-        "applied"
+      "command_outcomes": [
+        "applied",
+        "satisfied",
+        "cancelled",
+        "not-found"
       ],
       "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
       "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Satisfied goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
@@ -65,9 +68,11 @@
         "emits": [],
         "error": "controlplane.host.GoalStateConflict"
       },
-      "preceded_by": [
+      "command_outcomes": [
         "applied",
-        "satisfied"
+        "satisfied",
+        "cancelled",
+        "not-found"
       ],
       "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
       "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Cancelled goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."

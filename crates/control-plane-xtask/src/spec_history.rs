@@ -11,10 +11,10 @@
 //!
 //! ESS prints an added outcome's `change` with the outcome's name only, so the acknowledgement of
 //! an `outcome-added` change also records the outcome itself, exactly as `ess specify compile`
-//! printed it when it was reviewed, and its position: the names of the outcomes its command
-//! declares before it (see [`AddedOutcome`]). The gate compiles `ess/` and admits the change only
-//! while the outcome compiles to the same object, the same condition and the same answer (error,
-//! subject, events, payload and field updates), behind the same outcomes.
+//! printed it when it was reviewed, and the names of all the outcomes its command declares, in
+//! order (see [`AddedOutcome`]). The gate compiles `ess/` and admits the change only while the
+//! outcome compiles to the same object, the same condition and the same answer (error, subject,
+//! events, payload and field updates), among the same outcomes in the same order.
 //!
 //! The baseline is the merge base of `HEAD` with `origin/main` (`main` in a clone without that
 //! remote) when that commit holds `ess/ess-inputs.yaml`, otherwise the commit the acknowledgement
@@ -48,16 +48,25 @@ struct Acknowledgement {
     baseline: String,
 }
 
-/// An added outcome as reviewed (the entry's `outcome` and `preceded_by`), or as the model compiles
-/// it now. A command answers with the first of its outcomes, in declaration order, whose
-/// condition holds, so the outcomes declared before it decide which calls it answers. ESS orders
-/// only the outcomes both revisions declare and reports no move of an added one.
+/// An added outcome as reviewed (the entry's `outcome` and `command_outcomes`), or as the model
+/// compiles it now.
+///
+/// Which calls an outcome answers depends on the command's other outcomes, and not only on the
+/// ones declared before it. ESS evaluates by kind of condition first and declaration order second.
+/// Input-guarded refusals answer before the addressed row is read, wherever they are declared. Then
+/// come subject-guarded branches, accepting branches and the default (ess-synth
+/// `rust/behaviour.rs`, "The order of evaluation"). Adding, dropping or moving any outcome can
+/// therefore narrow or widen an added one without changing its compiled object. ESS orders only
+/// the outcomes both revisions declare and reports no move of an added one. The entry therefore
+/// binds the command's whole ordered outcome list. Any change to that list re-opens every
+/// added-outcome entry of the command, including a swap of two outcomes that cannot both hold.
+/// That over-binds on purpose: an entry goes inert once the baseline moves.
 #[derive(PartialEq)]
 struct AddedOutcome {
     /// The outcome exactly as `ess specify compile --format json` prints it.
     outcome: Value,
-    /// The names of the outcomes the command declares before it, in order.
-    preceded_by: Vec<String>,
+    /// The names of all the outcomes the command declares, in order, the added one included.
+    command_outcomes: Vec<String>,
 }
 
 /// The command and the outcome name of a command's `outcome-added` change.
@@ -130,7 +139,7 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
                 "id",
                 "change",
                 "outcome",
-                "preceded_by",
+                "command_outcomes",
                 "reason",
                 "baseline",
             ],
@@ -168,14 +177,14 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
                     "the acknowledgement of {id} records an `outcome` that is not `{name}`; record the \
                      reviewed outcome exactly as `ess specify compile --path ess --format json` prints it"
                 );
-                let preceded_by = entry.get("preceded_by").with_context(|| {
+                let command_outcomes = entry.get("command_outcomes").with_context(|| {
                     format!(
-                        "the acknowledgement of {id} must record as `preceded_by` the names of the outcomes \
-                         {command} declares before `{name}`, in order, as `ess specify compile --path ess \
+                        "the acknowledgement of {id} must record as `command_outcomes` the names of all the \
+                         outcomes {command} declares, in order, as `ess specify compile --path ess \
                          --format json` lists them"
                     )
                 })?;
-                let preceded_by = preceded_by
+                let command_outcomes = command_outcomes
                     .as_array()
                     .and_then(|names| {
                         names
@@ -185,17 +194,26 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
                     })
                     .with_context(|| {
                         format!(
-                            "the acknowledgement of {id} records a `preceded_by` that is not a list of \
+                            "the acknowledgement of {id} records a `command_outcomes` that is not a list of \
                              outcome names"
                         )
                     })?;
+                ensure!(
+                    command_outcomes
+                        .iter()
+                        .filter(|listed| *listed == name)
+                        .count()
+                        == 1,
+                    "the acknowledgement of {id} records a `command_outcomes` that does not list `{name}` \
+                     exactly once"
+                );
                 Some(AddedOutcome {
                     outcome: outcome.clone(),
-                    preceded_by,
+                    command_outcomes,
                 })
             }
             None => {
-                for (article, field) in [("an", "outcome"), ("a", "preceded_by")] {
+                for (article, field) in [("an", "outcome"), ("a", "command_outcomes")] {
                     ensure!(
                         !entry.contains_key(field),
                         "the acknowledgement of {id} records {article} `{field}`, but only a command's \
@@ -545,8 +563,8 @@ fn compile(root: &Path) -> Result<Value> {
     serde_json::from_slice(&output.stdout).context("ess specify compile did not print JSON")
 }
 
-/// The outcome `name` of `command` in the compiled model, and its position. The outcome is the
-/// whole object, which holds its condition (`condition`), its answer (`error`,
+/// The outcome `name` of `command` in the compiled model, and the command's ordered outcome names.
+/// The outcome is the whole object, which holds its condition (`condition`), its answer (`error`,
 /// `complete_refusal`, `subject`, `emits`, `payload`, `sets`) and whatever else the compiler
 /// records for it. An acknowledgement binds all of it, so an outcome field a later ESS adds is
 /// bound too, not silently ignored.
@@ -554,15 +572,7 @@ fn compiled_outcome(model: &Value, command: &str, name: &str) -> Result<AddedOut
     let outcomes = model["commands"][command]["outcomes"]
         .as_array()
         .with_context(|| format!("ess specify compile printed no outcomes for {command}"))?;
-    let position = outcomes.iter().position(|outcome| outcome["name"] == name).with_context(|| {
-        format!("ess specify compile printed no outcome `{name}` for {command}, which ess verify diff reports added")
-    })?;
-    let (before, after) = outcomes.split_at(position);
-    ensure!(
-        after[0].is_object() && after[1..].iter().all(|outcome| outcome["name"] != name),
-        "ess specify compile printed outcome `{name}` of {command} more than once or not as an object"
-    );
-    let preceded_by = before
+    let command_outcomes: Vec<String> = outcomes
         .iter()
         .map(|outcome| {
             outcome["name"]
@@ -573,9 +583,17 @@ fn compiled_outcome(model: &Value, command: &str, name: &str) -> Result<AddedOut
                 })
         })
         .collect::<Result<_>>()?;
+    let mut named = outcomes.iter().filter(|outcome| outcome["name"] == name);
+    let outcome = named.next().with_context(|| {
+        format!("ess specify compile printed no outcome `{name}` for {command}, which ess verify diff reports added")
+    })?;
+    ensure!(
+        named.next().is_none() && outcome.is_object(),
+        "ess specify compile printed outcome `{name}` of {command} more than once or not as an object"
+    );
     Ok(AddedOutcome {
-        outcome: after[0].clone(),
-        preceded_by,
+        outcome: outcome.clone(),
+        command_outcomes,
     })
 }
 
@@ -695,12 +713,12 @@ pub fn check(root: &Path) -> Result<String> {
             (Some(entry), Some((command, name)), Some(now)) => {
                 let reviewed = entry.added.as_ref().context("reviewed outcome")?;
                 let mut differences = outcome_difference(&reviewed.outcome, &now.outcome)?;
-                if reviewed.preceded_by != now.preceded_by {
+                if reviewed.command_outcomes != now.command_outcomes {
                     writeln!(
                         differences,
-                        "      preceded_by: reviewed {}, the model now says {}",
-                        json!(reviewed.preceded_by),
-                        json!(now.preceded_by)
+                        "      command_outcomes: reviewed {}, the model now says {}",
+                        json!(reviewed.command_outcomes),
+                        json!(now.command_outcomes)
                     )?;
                 }
                 write!(
@@ -716,7 +734,7 @@ pub fn check(root: &Path) -> Result<String> {
             "baseline": baseline.commit, "reason": "<why stored history still replays>"});
         if let Some(now) = compiled {
             ready["outcome"] = now.outcome;
-            ready["preceded_by"] = json!(now.preceded_by);
+            ready["command_outcomes"] = json!(now.command_outcomes);
         }
         writeln!(unacknowledged, "    acknowledge after review: {ready}")?;
     }
@@ -1048,6 +1066,11 @@ mod tests {
     const SWAPPED_CONDITIONS: &str = "  - name: satisfied\n    when_subject_state: Cancelled\n    error: controlplane.host.GoalStateConflict\n  - name: cancelled\n    when_subject_state: Satisfied\n    error: controlplane.host.GoalStateConflict\n";
     /// The same outcome names and states, `satisfied` now answering another error.
     const OTHER_ERROR: &str = "  - name: satisfied\n    when_subject_state: Satisfied\n    error: controlplane.host.GoalNotFound\n  - name: cancelled\n    when_subject_state: Cancelled\n    error: controlplane.host.GoalStateConflict\n";
+    /// `UpdateGoal`'s outcomes in this specification, as `ess specify compile` lists them.
+    const UPDATE_GOAL_OUTCOMES: [&str; 4] = ["applied", "satisfied", "cancelled", "not-found"];
+    /// An input-guarded refusal, declared after the terminal refusals. ESS answers it before the
+    /// goal is read, so it narrows `satisfied` and `cancelled` wherever it is declared.
+    const WORKER_LIMIT: &str = "  - name: too-many-workers\n    when: max_workers > 100\n    error: controlplane.host.GoalNotFound\n";
 
     /// The `change` ESS prints for an outcome `UpdateGoal` added: the outcome's name, nothing else.
     fn update_goal_outcome_added(outcome: &str) -> Value {
@@ -1062,19 +1085,13 @@ mod tests {
             "test_strategy": "construct_input_in_state", "emits": [], "error": error})
     }
 
-    /// An acknowledgement of the added `outcome`, reviewed as refusing in `state` and declared
-    /// after the outcomes `preceded_by` names.
-    fn reviewed_refusal(
-        id: &str,
-        outcome: &str,
-        state: &str,
-        preceded_by: &[&str],
-        baseline: &str,
-    ) -> Value {
+    /// An acknowledgement of the added `outcome`, reviewed as refusing in `state` among the
+    /// outcomes `UpdateGoal` declares in this specification.
+    fn reviewed_refusal(id: &str, outcome: &str, state: &str, baseline: &str) -> Value {
         let mut reviewed = entry(id, update_goal_outcome_added(outcome), baseline);
         reviewed["outcome"] =
             compiled_refusal(outcome, state, "controlplane.host.GoalStateConflict");
-        reviewed["preceded_by"] = json!(preceded_by);
+        reviewed["command_outcomes"] = json!(UPDATE_GOAL_OUTCOMES);
         reviewed
     }
 
@@ -1107,14 +1124,8 @@ mod tests {
             &baseline,
             vec![
                 entry(APPLIED, applied, &baseline),
-                reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &["applied"], &baseline),
-                reviewed_refusal(
-                    CANCELLED,
-                    "cancelled",
-                    "Cancelled",
-                    &["applied", "satisfied"],
-                    &baseline,
-                ),
+                reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &baseline),
+                reviewed_refusal(CANCELLED, "cancelled", "Cancelled", &baseline),
             ],
         )?;
         Ok((dir, baseline))
@@ -1184,15 +1195,31 @@ mod tests {
         Ok(())
     }
 
-    /// Outcomes are tried in declaration order, and ESS orders only the outcomes both revisions
-    /// declare, so an added outcome can move without any change being reported and without its
-    /// compiled object changing. The entry records the outcomes declared before it; declared
-    /// elsewhere, it is refused, naming the reviewed and the current neighbours.
+    /// ESS does not answer in declaration order alone: input-guarded refusals answer first,
+    /// wherever they are declared, then the subject-guarded and accepting branches. Any outcome of
+    /// the command, declared before or after an added one, can therefore decide which calls the
+    /// added one answers. ESS orders only the outcomes both revisions declare, so outcomes can be
+    /// added, dropped or moved without a change reported against the added one and without its
+    /// compiled object changing. The entry binds the command's whole ordered outcome list. Any
+    /// change to it is refused, naming the list as reviewed and as compiled now. That includes a
+    /// swap of two outcomes that cannot both hold, which over-binds on purpose.
     #[test]
     fn added_outcome_acknowledgement_binds_its_position() -> Result<()> {
         let (dir, _) = terminal_refusals_reviewed()?;
         let root = dir.path();
         check(root)?;
+        let reviewed = json!(UPDATE_GOAL_OUTCOMES);
+        let refused_with = |error: &str, now: &Value| {
+            for (id, outcome) in [(SATISFIED, "satisfied"), (CANCELLED, "cancelled")] {
+                assert!(
+                    error.contains(&format!(
+                        "the acknowledgement of {id} reviewed outcome `{outcome}` of controlplane.host.UpdateGoal, which the model now compiles differently:\n      command_outcomes: reviewed {reviewed}, the model now says {now}\n"
+                    )),
+                    "{error}"
+                );
+            }
+            assert!(!error.contains("condition: reviewed"), "{error}");
+        };
 
         // `cancelled` now declared before `satisfied`; conditions and errors unchanged.
         let (satisfied, cancelled) = TERMINAL_REFUSALS.split_at(
@@ -1202,33 +1229,41 @@ mod tests {
         );
         edit(root, TERMINAL_REFUSALS, &format!("{cancelled}{satisfied}"))?;
         let error = format!("{:#}", check(root).unwrap_err());
-        for (id, outcome, reviewed, now) in [
-            (
-                SATISFIED,
+        let now = json!(["applied", "cancelled", "satisfied", "not-found"]);
+        refused_with(&error, &now);
+        // The refusal offers the list the model has now, for a review that accepts it.
+        assert!(
+            error.contains(&format!("\"command_outcomes\":{now}")),
+            "{error}"
+        );
+        eprintln!("{error}");
+        edit(root, &format!("{cancelled}{satisfied}"), TERMINAL_REFUSALS)?;
+        check(root)?;
+
+        // An input-guarded refusal declared after both: it answers first, so it narrows them.
+        edit(
+            root,
+            TERMINAL_REFUSALS,
+            &format!("{TERMINAL_REFUSALS}{WORKER_LIMIT}"),
+        )?;
+        let error = format!("{:#}", check(root).unwrap_err());
+        refused_with(
+            &error,
+            &json!([
+                "applied",
                 "satisfied",
-                json!(["applied"]),
-                json!(["applied", "cancelled"]),
-            ),
-            (
-                CANCELLED,
                 "cancelled",
-                json!(["applied", "satisfied"]),
-                json!(["applied"]),
-            ),
-        ] {
-            assert!(
-                error.contains(&format!(
-                    "the acknowledgement of {id} reviewed outcome `{outcome}` of controlplane.host.UpdateGoal, which the model now compiles differently:\n      preceded_by: reviewed {reviewed}, the model now says {now}\n"
-                )),
-                "{error}"
-            );
-        }
-        assert!(!error.contains("condition: reviewed"), "{error}");
-        // The refusal offers the position the model has now, for a review that accepts it.
-        assert!(error.contains("\"preceded_by\":[\"applied\"]"), "{error}");
+                "too-many-workers",
+                "not-found"
+            ]),
+        );
         eprintln!("{error}");
 
-        edit(root, &format!("{cancelled}{satisfied}"), TERMINAL_REFUSALS)?;
+        edit(
+            root,
+            &format!("{TERMINAL_REFUSALS}{WORKER_LIMIT}"),
+            TERMINAL_REFUSALS,
+        )?;
         let summary = check(root)?;
         assert!(summary.contains("3 acknowledged"), "{summary}");
         Ok(())
@@ -1247,26 +1282,39 @@ mod tests {
                 .map(|error| format!("{error:#}"))
         };
         let current = "control-plane-spec-acknowledgements/2";
-        let reviewed =
-            reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &["applied"], baseline);
+        let reviewed = reviewed_refusal(SATISFIED, "satisfied", "Satisfied", baseline);
         assert_eq!(parse(current, reviewed.clone()), None);
 
         let mut unplaced = reviewed.clone();
-        unplaced.as_object_mut().unwrap().remove("preceded_by");
+        unplaced.as_object_mut().unwrap().remove("command_outcomes");
         let error = parse(current, unplaced).expect("an added outcome without a position passed");
         assert!(
             error.contains(&format!(
-                "the acknowledgement of {SATISFIED} must record as `preceded_by` the names of the outcomes controlplane.host.UpdateGoal declares before `satisfied`"
+                "the acknowledgement of {SATISFIED} must record as `command_outcomes` the names of all the outcomes controlplane.host.UpdateGoal declares"
             )),
             "{error}"
         );
         for malformed in [json!("applied"), json!([1]), json!(null)] {
             let mut unreadable = reviewed.clone();
-            unreadable["preceded_by"] = malformed;
+            unreadable["command_outcomes"] = malformed;
             let error = parse(current, unreadable).expect("a malformed position passed");
             assert!(
                 error.contains(&format!(
-                    "the acknowledgement of {SATISFIED} records a `preceded_by` that is not a list of outcome names"
+                    "the acknowledgement of {SATISFIED} records a `command_outcomes` that is not a list of outcome names"
+                )),
+                "{error}"
+            );
+        }
+        for unlisted in [
+            json!(["applied", "cancelled", "not-found"]),
+            json!(["applied", "satisfied", "satisfied", "not-found"]),
+        ] {
+            let mut unreadable = reviewed.clone();
+            unreadable["command_outcomes"] = unlisted;
+            let error = parse(current, unreadable).expect("a list without the outcome passed");
+            assert!(
+                error.contains(&format!(
+                    "the acknowledgement of {SATISFIED} records a `command_outcomes` that does not list `satisfied` exactly once"
                 )),
                 "{error}"
             );
@@ -1302,11 +1350,11 @@ mod tests {
             "{error}"
         );
         let mut misplaced = entry(REPAIR, repair_without_blocked(), baseline);
-        misplaced["preceded_by"] = json!([]);
+        misplaced["command_outcomes"] = json!([]);
         let error = parse(current, misplaced).expect("a position on a route change passed");
         assert!(
             error.contains(&format!(
-                "the acknowledgement of {REPAIR} records a `preceded_by`, but only a command's `outcome-added` change takes one"
+                "the acknowledgement of {REPAIR} records a `command_outcomes`, but only a command's `outcome-added` change takes one"
             )),
             "{error}"
         );
