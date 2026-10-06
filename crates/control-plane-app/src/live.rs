@@ -16,7 +16,7 @@ pub async fn workspace_events(State(state): State<AppState>, Path(id): Path<Stri
     connect(state, Some(id)).await
 }
 
-async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, String)> {
+async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, Value)> {
     let view = match workspace {
         Some(id) => state.workspace_detail(id).await?,
         None => state.snapshot().await?,
@@ -26,13 +26,31 @@ async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, S
         view["committed_version"]
             .as_u64()
             .context("missing committed version")?,
-        serde_json::to_string(&compact(view))?,
+        compact(view),
     ))
 }
 
 pub async fn console(State(state): State<AppState>) -> Response {
     let view = async { with_history(&state, state.snapshot().await?).await }.await;
-    api_answer(view.map(compact))
+    api_answer(view.map(|view| clocked(compact(view))))
+}
+
+/// Add `server_time`, the server clock as the projection is sent, as RFC 3339 UTC with exactly
+/// three fractional digits (`2026-10-06T10:00:00.250Z`), which is also ECMAScript's date
+/// format. A connection adds it after comparing the view, so time alone sends no frame.
+fn clocked(mut view: Value) -> Value {
+    let now = time::OffsetDateTime::now_utc();
+    view["server_time"] = json!(format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        now.year(),
+        u8::from(now.month()),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second(),
+        now.millisecond()
+    ));
+    view
 }
 
 /// The goals' activity history comes from the store; bounded receipts do not repeat it.
@@ -43,6 +61,18 @@ async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
 
 /// Keep raw model/tool receipts behind the evidence endpoint. Browser projections
 /// carry bounded operational observations, never the accumulated model transcript.
+///
+/// Besides the committed rows, a projection carries these fields, each derived from records
+/// that already exist. No field name contains `receipt`, and none carries receipt contents.
+///
+/// | Field | Type | Present |
+/// |---|---|---|
+/// | `server_time` (top level) | string: RFC 3339, UTC, three fractional digits | On every SSE frame and every `/api/console` answer: the server clock as it was sent ([`clocked`]). |
+/// | `id` on every activity object (goal `last_activity`, `planner_activity`, `activity[]` and `fleet{}`) | string | Always. The id recorded with the entry; an entry recorded without one gets `entry-` and 16 hex digits hashing its goal and content ([`Entries`]). The same entry has the same id wherever it appears, in every projection of one store state, and after later entries are appended. |
+/// | goal `planner_activity` | activity object, or null | The newest entry recorded by the planner's progress path: one without an `assignment_id`, so roles `planner` and `critic`. Worker entries always carry their assignment and appear under `fleet`. Null when no planner entry is among the goal's retained history (its newest 64 entries). `last_activity` stays the newest entry of any role. |
+/// | goal `waiting` | `{role, model, since}`, or null | While the goal is Running and a planner model call is open at the goal's revision ([`waiting`]): `role` of the call, `model` the goal's model for that role, `since` the `at` of its `model.requested` entry, or null once streamed events have pushed that entry out of the retained history. Null otherwise, and for every worker call. |
+/// | goal `acceptance_recorded` | bool | Always: true when the goal is Satisfied with a recorded satisfaction receipt. |
+/// | assignment `merged_at` | string, or null | The `observed_at` of a Merged assignment's merge receipt (`fleet.rs` `observe_merge`); null otherwise. |
 fn compact(mut view: Value) -> Value {
     view.as_object_mut().unwrap().remove("server_observed_at");
     view.as_object_mut().unwrap().remove("committed_version");
@@ -70,18 +100,33 @@ fn compact(mut view: Value) -> Value {
             receipt.activity = history["activity"].clone();
             receipt.fleet = history["fleet"].clone();
         }
-        goal["last_activity"] = observation(&receipt.last_activity);
+        let goal_id = field(goal, "goal_id").to_owned();
+        let entries = Entries::new(&goal_id, &receipt.activity);
+        goal["last_activity"] = entries.observe(&receipt.last_activity);
         goal["activity"] = Value::Array(
-            receipt
-                .activity
-                .as_array()
-                .into_iter()
-                .flatten()
+            entries
+                .listed
+                .iter()
                 .rev()
                 .take(24)
-                .map(observation)
+                .map(|(event, id)| observation(event, id))
                 .collect(),
         );
+        // Newest first; `last_activity` is the newest entry and normally also the last listed.
+        let planner = || {
+            std::iter::once(&receipt.last_activity)
+                .chain(entries.listed.iter().rev().map(|(event, _)| *event))
+                .filter(|event| event.is_object() && field(event, "assignment_id").is_empty())
+        };
+        let planner_activity = planner()
+            .next()
+            .map_or(Value::Null, |event| entries.observe(event));
+        let wait = waiting(goal, planner());
+        let accepted =
+            field(goal, "state") == "Satisfied" && !field(goal, "satisfaction_receipt").is_empty();
+        goal["planner_activity"] = planner_activity;
+        goal["waiting"] = wait;
+        goal["acceptance_recorded"] = json!(accepted);
         let fleet = receipt
             .fleet
             .as_object()
@@ -91,13 +136,17 @@ fn compact(mut view: Value) -> Value {
                     .filter(|(id, _)| {
                         assignment_owners
                             .get(*id)
-                            .is_some_and(|owner| owner == field(goal, "goal_id"))
+                            .is_some_and(|owner| *owner == goal_id)
                     })
-                    .map(|(id, event)| (id.clone(), observation(event)))
+                    .map(|(id, event)| (id.clone(), entries.observe(event)))
                     .collect()
             })
             .unwrap_or_default();
         goal["fleet"] = Value::Object(fleet);
+    }
+    for assignment in view["assignments"].as_array_mut().into_iter().flatten() {
+        let merged = merged_at(assignment);
+        assignment["merged_at"] = merged;
     }
     for kind in ["goals", "assignments", "publications"] {
         for row in view[kind].as_array_mut().into_iter().flatten() {
@@ -118,11 +167,129 @@ struct Shown {
     fleet: Value,
 }
 
-fn observation(value: &Value) -> Value {
+/// A goal's retained activity, oldest first, each entry with the id it is projected under.
+///
+/// An entry's id is the one recorded with it. Entries recorded before the runtime gave each
+/// one an id get `entry-` and 16 hex digits of a 64-bit FNV-1a hash of the goal id and the
+/// entry's JSON; a later byte-identical entry in the same history gets `-2`, `-3` and so on,
+/// counted from the oldest retained entry. Appending an entry therefore changes no earlier id;
+/// only the retained history (64 entries) dropping an identical older one can.
+struct Entries<'a> {
+    goal: &'a str,
+    listed: Vec<(&'a Value, String)>,
+}
+
+impl<'a> Entries<'a> {
+    fn new(goal: &'a str, activity: &'a Value) -> Self {
+        let mut seen = std::collections::HashMap::<String, usize>::new();
+        let listed = activity
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|event| {
+                let id = entry_id(goal, event);
+                let count = seen.entry(id.clone()).or_default();
+                *count += 1;
+                let id = match *count {
+                    1 => id,
+                    count => format!("{id}-{count}"),
+                };
+                (event, id)
+            })
+            .collect();
+        Self { goal, listed }
+    }
+
+    /// An entry shown outside the list (`last_activity`, `planner_activity`, `fleet`) has the
+    /// id of the newest identical listed entry, so it reads as the same entry in both places.
+    fn observe(&self, event: &Value) -> Value {
+        let id = self
+            .listed
+            .iter()
+            .rev()
+            .find(|(listed, _)| *listed == event)
+            .map_or_else(|| entry_id(self.goal, event), |(_, id)| id.clone());
+        observation(event, &id)
+    }
+}
+
+fn entry_id(goal: &str, event: &Value) -> String {
+    if let Some(id) = event["id"].as_str().filter(|id| !id.is_empty()) {
+        return id.chars().take(240).collect();
+    }
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in goal.bytes().chain([0]).chain(event.to_string().bytes()) {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("entry-{hash:016x}")
+}
+
+/// The planner's open model call, from its entries newest first, as `{role, model, since}`.
+///
+/// engine.rs `Planning::respond` records `model.requested` before each planner or plan-critic
+/// call, `loom.event` entries while the call streams, and `model.completed` or `model.failed`
+/// after it. A call is open while the newest planner entry other than `loom.event` is its
+/// `model.requested`, the goal is Running and the entry is at the goal's revision. When only
+/// `loom.event` entries of the call remain retained, it is still open and `since` is null. The
+/// model is the goal's model for the call's role: `planner_model` for `planner`,
+/// `reviewer_model` for `critic`, null for any other role. Worker calls are not derived: the
+/// fleet records `model.request`, `review.request` and `goal.review` but no completion.
+fn waiting<'a>(goal: &Value, mut planner: impl Iterator<Item = &'a Value>) -> Value {
+    if field(goal, "state") != "Running" {
+        return Value::Null;
+    }
+    let mut streamed = None;
+    let (call, since) = loop {
+        match planner.next() {
+            Some(event) if field(event, "action") == "loom.event" => {
+                streamed.get_or_insert(event);
+            }
+            Some(event) if field(event, "action") == "model.requested" => {
+                break (
+                    event,
+                    json!(field(event, "at").chars().take(240).collect::<String>()),
+                );
+            }
+            Some(_) => return Value::Null,
+            None => match streamed {
+                Some(event) => break (event, Value::Null),
+                None => return Value::Null,
+            },
+        }
+    };
+    if goal["revision"].is_null() || call["goal_revision"] != goal["revision"] {
+        return Value::Null;
+    }
+    let role: String = field(call, "role").chars().take(240).collect();
+    let model = match role.as_str() {
+        "planner" => goal["planner_model"].clone(),
+        "critic" => goal["reviewer_model"].clone(),
+        _ => Value::Null,
+    };
+    json!({"role":role,"model":model,"since":since})
+}
+
+/// When a Merged assignment's merge receipt observed the merge. Only `observed_at` is read.
+fn merged_at(assignment: &Value) -> Value {
+    #[derive(serde::Deserialize)]
+    struct Observed {
+        observed_at: String,
+    }
+    if field(assignment, "state") != "Merged" {
+        return Value::Null;
+    }
+    serde_json::from_str::<Observed>(field(assignment, "merge_receipt"))
+        .map_or(Value::Null, |receipt| {
+            json!(receipt.observed_at.chars().take(64).collect::<String>())
+        })
+}
+
+fn observation(value: &Value, id: &str) -> Value {
     if !value.is_object() {
         return Value::Null;
     }
     let mut result = json!({});
+    result["id"] = json!(id);
     for key in ["at", "action", "role", "status", "worktree"] {
         result[key] = json!(field(value, key).chars().take(240).collect::<String>());
     }
@@ -185,18 +352,20 @@ async fn connect(state: AppState, workspace: Option<String>) -> Response {
             connection.committed.borrow_and_update();
             connection.runtime_error.borrow_and_update();
             match projection(&connection.state, connection.workspace.as_deref()).await {
-                Ok((version, html)) => {
-                    if connection.previous.as_ref() == Some(&html) {
+                Ok((version, view)) => {
+                    let shown = view.to_string();
+                    if connection.previous.as_ref() == Some(&shown) {
                         continue;
                     }
                     // Reconnection always gets the complete current projection, including
-                    // when Last-Event-ID names an old process. No replay is promised.
+                    // when Last-Event-ID names an old process. No replay is promised. The
+                    // clock joins the frame after the comparison above.
                     let event = Event::default()
                         .event("operations")
                         .id(version.to_string())
                         .retry(Duration::from_secs(1))
-                        .data(&html);
-                    connection.previous = Some(html);
+                        .data(clocked(view).to_string());
+                    connection.previous = Some(shown);
                     return Some((Ok::<_, Infallible>(event), connection));
                 }
                 Err(_) => {
@@ -503,5 +672,536 @@ mod tests {
                     .is_empty()
             );
         }
+    }
+
+    /// Run one supervisor command; it must apply.
+    async fn supervise(state: &AppState, command: &str, body: Value) -> Value {
+        let result = state
+            .store
+            .lock()
+            .await
+            .execute(command, body, Actor::Supervisor)
+            .await
+            .unwrap();
+        assert!(
+            matches!(result["outcome"].as_str(), Some("applied" | "created")),
+            "{command}: {result}"
+        );
+        result
+    }
+    /// A started goal whose roles use distinct models, with its revision.
+    async fn running_goal(state: &AppState, workspace: &str) -> (String, Value) {
+        let created = state.command("CreateGoal", json!({"workspace_id":workspace,"objective":"projection goal","acceptance":"verified","max_workers":2,"max_attempts":2,"max_minutes":10,"planner_model":"planner-model","implementor_model":"implementor-model","reviewer_model":"reviewer-model","merge_authority":true})).await.unwrap();
+        let id: String = created["published"][0]["payload"]["goal_id"]
+            .as_str()
+            .unwrap()
+            .into();
+        state
+            .command("StartGoal", json!({"goal_id":id}))
+            .await
+            .unwrap();
+        let goals = state.store.lock().await.query("GoalList").unwrap();
+        let revision = goals
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|goal| goal["goal_id"] == id)
+            .unwrap()["revision"]
+            .clone();
+        (id, revision)
+    }
+    /// Record one activity through the planner's progress path, as `RecordPlanningProgress`.
+    async fn record_planner(state: &AppState, goal: &str, revision: &Value, entry: Value) {
+        supervise(state, "RecordPlanningProgress", json!({"goal_id":goal,"planning_revision":revision,"planning_fingerprint":"fingerprint","planning_repository":"","planning_worktree_id":"tree","planning_worktree_path":"tree","planning_phase":"Planning","planning_reason":"","planning_receipt":json!({"last_activity":entry}).to_string()})).await;
+    }
+    /// A planner entry shaped as the supervisor records it: its own id and no assignment.
+    async fn planner_event(
+        state: &AppState,
+        goal: &str,
+        revision: &Value,
+        action: &str,
+        at: &str,
+    ) -> Value {
+        let entry = json!({"id":uuid::Uuid::new_v4().to_string(),"action":action,"role":"planner","status":"running","detail":format!("{action} observed"),"at":at,"worktree":"tree","goal_revision":revision});
+        record_planner(state, goal, revision, entry.clone()).await;
+        entry
+    }
+    /// A Git repository registered in the workspace directory `parent`.
+    async fn repository(state: &AppState, parent: &std::path::Path, workspace: &str) -> String {
+        let path = parent.join("repository");
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--initial-branch=main"])
+                .arg(&path)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+        let result = state
+            .store
+            .lock()
+            .await
+            .execute(
+                "RegisterRepository",
+                json!({"workspace_id":workspace,"name":"repository","path":path,"common_dir":"","base_branch":"main","test_command":"true","publish_command":"true"}),
+                Actor::Operator,
+            )
+            .await
+            .unwrap();
+        result["published"][0]["payload"]["repository_id"]
+            .as_str()
+            .unwrap()
+            .into()
+    }
+    /// An assignment queued at the goal's current revision.
+    async fn queued(
+        state: &AppState,
+        goal: &str,
+        revision: &Value,
+        repository: &str,
+        story: &str,
+    ) -> String {
+        let result = supervise(state, "QueueAssignment", json!({"goal_id":goal,"repository_id":repository,"story_id":story,"case_id":format!("{story}/case"),"worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":revision})).await;
+        result["published"][0]["payload"]["assignment_id"]
+            .as_str()
+            .unwrap()
+            .into()
+    }
+    /// The supervisor whose fleet progress path records worker activity.
+    fn supervisor(state: &AppState) -> control_plane_runtime::Supervisor {
+        struct Unused;
+        impl control_plane_runtime::AgentModel for Unused {
+            fn respond(&self, _: &control_plane_runtime::ModelRequest) -> anyhow::Result<Value> {
+                anyhow::bail!("progress recording does not call the model")
+            }
+        }
+        control_plane_runtime::Supervisor::new(
+            state.store.clone(),
+            Arc::new(Notify::new()),
+            control_plane_runtime::RuntimeConfig::default(),
+            Arc::new(Unused),
+        )
+    }
+    /// One worker activity of `assignment`, recorded through the fleet's progress path.
+    async fn worker_event(state: &AppState, goal: &str, revision: &Value, assignment: &str) {
+        supervisor(state)
+            .record_progress(
+                &json!({"goal_id":goal,"assignment_id":assignment,"goal_revision":revision,"worktree_id":"cp-impl-projection"}),
+                "tool.run",
+                "implementor",
+                json!({"program":"cargo","args":["test"]}),
+            )
+            .await
+            .unwrap();
+    }
+    fn row<'a>(view: &'a Value, kind: &str, key: &str, id: &str) -> &'a Value {
+        view[kind]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row[key] == id)
+            .unwrap_or_else(|| panic!("{kind} has no {id}"))
+    }
+    fn ids(goal: &Value) -> Vec<String> {
+        goal["activity"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["id"].as_str().expect("activity id").to_owned())
+            .collect()
+    }
+    /// A planner event, then a worker event of one assignment, on one goal: the goal as the
+    /// browser receives it, the assignment id and the planner entry.
+    async fn planner_then_worker() -> (Value, String, Value) {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "lanes").await;
+        let repo = repository(&state, &temp.path().join("lanes"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:worker").await;
+        let planner = planner_event(
+            &state,
+            &goal,
+            &revision,
+            "planner.intent",
+            "2026-10-06T10:00:00Z",
+        )
+        .await;
+        worker_event(&state, &goal, &revision, &assignment).await;
+        let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        let view = data(&frame(&mut body).await);
+        (
+            row(&view, "goals", "goal_id", &goal).clone(),
+            assignment,
+            planner,
+        )
+    }
+
+    #[tokio::test]
+    async fn planner_activity_is_the_planner_event() {
+        let (goal, _, planner) = planner_then_worker().await;
+        assert_eq!(goal["planner_activity"]["id"], planner["id"]);
+        assert_eq!(goal["planner_activity"]["action"], "planner.intent");
+        assert_eq!(goal["planner_activity"]["role"], "planner");
+        assert_eq!(
+            goal["planner_activity"]["detail"],
+            "planner.intent observed"
+        );
+        // `last_activity` keeps its meaning: the newest entry of any role.
+        assert_eq!(goal["last_activity"]["action"], "tool.run");
+    }
+
+    #[tokio::test]
+    async fn worker_event_is_listed_under_its_assignment() {
+        let (goal, assignment, planner) = planner_then_worker().await;
+        let worker = &goal["fleet"][&assignment];
+        assert_eq!(worker["action"], "tool.run");
+        assert_eq!(worker["role"], "implementor");
+        assert_eq!(worker["detail"], "cargo");
+        let id = worker["id"].as_str().expect("worker entry id");
+        assert_eq!(goal["activity"][0]["id"], id);
+        assert_ne!(goal["planner_activity"]["id"], id);
+        assert_eq!(goal["planner_activity"]["id"], planner["id"]);
+    }
+
+    #[tokio::test]
+    async fn model_wait_is_projected() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "model-wait").await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        let mut waiting = async || {
+            let view = data(&frame(&mut body).await);
+            row(&view, "goals", "goal_id", &goal)["waiting"].clone()
+        };
+        assert_eq!(waiting().await, Value::Null);
+        let entry = |action: &str, role: &str, detail: &str, at: &str| json!({"id":uuid::Uuid::new_v4().to_string(),"action":action,"role":role,"detail":detail,"status":"running","at":at,"worktree":"tree","goal_revision":revision});
+        // engine.rs `Planning::respond` records these around every model call it makes.
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            entry(
+                "model.requested",
+                "planner",
+                "Waiting for planner response from planner-model",
+                "2026-10-06T10:00:00Z",
+            ),
+        )
+        .await;
+        let planner_wait =
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"});
+        assert_eq!(waiting().await, planner_wait);
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            entry(
+                "loom.event",
+                "planner",
+                "planner model turn started",
+                "2026-10-06T10:00:04Z",
+            ),
+        )
+        .await;
+        assert_eq!(waiting().await, planner_wait);
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            entry(
+                "model.completed",
+                "planner",
+                "planner response received",
+                "2026-10-06T10:00:09Z",
+            ),
+        )
+        .await;
+        assert_eq!(waiting().await, Value::Null);
+        // The plan critic waits for the reviewer model; a failed call also ends its wait.
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            entry(
+                "model.requested",
+                "critic",
+                "Waiting for critic response from reviewer-model",
+                "2026-10-06T10:00:10Z",
+            ),
+        )
+        .await;
+        assert_eq!(
+            waiting().await,
+            json!({"role":"critic","model":"reviewer-model","since":"2026-10-06T10:00:10Z"})
+        );
+        record_planner(
+            &state,
+            &goal,
+            &revision,
+            entry(
+                "model.failed",
+                "critic",
+                "critic: provider unavailable",
+                "2026-10-06T10:00:12Z",
+            ),
+        )
+        .await;
+        assert_eq!(waiting().await, Value::Null);
+    }
+
+    #[tokio::test]
+    async fn model_wait_outlasts_worker_events_and_its_request_leaving_history() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "long-wait").await;
+        let repo = repository(&state, &temp.path().join("long-wait"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:worker").await;
+        let console = async || {
+            let response = subscribe(&state, "/api/console", None).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let view: Value = serde_json::from_slice(&bytes).unwrap();
+            row(&view, "goals", "goal_id", &goal)["waiting"].clone()
+        };
+        record_planner(&state, &goal, &revision, json!({"id":"request","action":"model.requested","role":"planner","detail":"Waiting for planner response from planner-model","status":"running","at":"2026-10-06T10:00:00Z","worktree":"tree","goal_revision":revision})).await;
+        // A worker's activity does not end the planner's wait.
+        worker_event(&state, &goal, &revision, &assignment).await;
+        assert_eq!(
+            console().await,
+            json!({"role":"planner","model":"planner-model","since":"2026-10-06T10:00:00Z"})
+        );
+        // Streamed model events push the request out of the retained history (64 entries);
+        // the call is still in progress, and its start is no longer known.
+        for index in 0..70 {
+            record_planner(&state, &goal, &revision, json!({"id":format!("stream-{index}"),"action":"loom.event","role":"planner","detail":format!("Receiving model response ({index} streamed events)"),"status":"running","at":"2026-10-06T10:01:00Z","worktree":"tree","goal_revision":revision})).await;
+        }
+        assert_eq!(
+            console().await,
+            json!({"role":"planner","model":"planner-model","since":null})
+        );
+        // A paused goal waits for nothing.
+        state
+            .command("PauseGoal", json!({"goal_id":goal}))
+            .await
+            .unwrap();
+        assert_eq!(console().await, Value::Null);
+    }
+
+    #[tokio::test]
+    async fn projection_carries_server_clock() {
+        use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+        let (temp, state) = fixture().await;
+        let within = |frame: &str, before: OffsetDateTime| {
+            let clock = data(frame)["server_time"]
+                .as_str()
+                .expect("server_time")
+                .to_owned();
+            let clock = OffsetDateTime::parse(&clock, &Rfc3339).unwrap();
+            // Whole milliseconds: the clock may round down below `before`.
+            assert!(
+                clock >= before - time::Duration::milliseconds(1),
+                "{clock} < {before}"
+            );
+            assert!(
+                clock <= OffsetDateTime::now_utc(),
+                "{clock} is in the future"
+            );
+        };
+        let before = OffsetDateTime::now_utc();
+        let mut body = subscribe(&state, "/events", None).await.into_body();
+        within(&frame(&mut body).await, before);
+        let before = OffsetDateTime::now_utc();
+        let ws = workspace(&state, temp.path(), "clocked").await;
+        within(&frame(&mut body).await, before);
+        let before = OffsetDateTime::now_utc();
+        let mut scoped = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        within(&frame(&mut scoped).await, before);
+        let before = OffsetDateTime::now_utc();
+        goal(&state, &ws, "clocked-goal").await;
+        within(&frame(&mut scoped).await, before);
+    }
+
+    #[tokio::test]
+    async fn recorded_acceptance_reaches_the_browser() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "accepted").await;
+        let (goal, _) = running_goal(&state, &ws).await;
+        let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        let running = data(&frame(&mut body).await);
+        assert_eq!(
+            row(&running, "goals", "goal_id", &goal)["acceptance_recorded"],
+            false
+        );
+        let receipt = json!({"kind":"goal_acceptance","review":"ACCEPTANCE-RECEIPT-PRIVATE"});
+        supervise(
+            &state,
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":receipt.to_string()}),
+        )
+        .await;
+        let update = frame(&mut body).await;
+        assert!(!update.contains("ACCEPTANCE-RECEIPT-PRIVATE"));
+        assert!(!update.contains("receipt"));
+        let view = data(&update);
+        let satisfied = row(&view, "goals", "goal_id", &goal);
+        assert_eq!(satisfied["state"], "Satisfied");
+        assert_eq!(satisfied["acceptance_recorded"], true);
+    }
+
+    #[tokio::test]
+    async fn merge_time_reaches_the_browser() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "merged").await;
+        let repo = repository(&state, &temp.path().join("merged"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:merged").await;
+        let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        let queued_view = data(&frame(&mut body).await);
+        assert_eq!(
+            row(&queued_view, "assignments", "assignment_id", &assignment)["merged_at"],
+            Value::Null
+        );
+        let with = |mut body: Value| {
+            body["assignment_id"] = json!(assignment);
+            body
+        };
+        for (command, body) in [
+            (
+                "ClaimAssignment",
+                json!({"worktree_id":"tree","implementor_run":"implementor-run","base_revision":"base"}),
+            ),
+            (
+                "ReviewAssignment",
+                json!({"candidate":"candidate","test_revision":"candidate"}),
+            ),
+            (
+                "ReadyAssignment",
+                json!({"reviewer_run":"reviewer-run","review_revision":"candidate"}),
+            ),
+        ] {
+            supervise(&state, command, with(body)).await;
+        }
+        let prepared = supervise(
+            &state,
+            "PreparePublication",
+            with(json!({"candidate":"candidate","target":"main","expected_base":"base"})),
+        )
+        .await;
+        let publication = prepared["published"][0]["payload"]["publication_id"].clone();
+        supervise(&state, "MergeAssignment", with(json!({}))).await;
+        // fleet.rs `observe_merge` writes this receipt shape.
+        let receipt = json!({"kind":"git_merge_observation","operation_id":publication,"candidate":"candidate","expected_base":"base","target":"main","observed_head":"candidate","origin":"MERGE-RECEIPT-PRIVATE","observed_at":"2026-10-06T11:22:33Z"}).to_string();
+        supervise(
+            &state,
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":receipt}),
+        )
+        .await;
+        supervise(
+            &state,
+            "CompleteAssignment",
+            with(json!({"merge_receipt":receipt})),
+        )
+        .await;
+        // Bursts coalesce: read until the committed merge reaches the stream.
+        let update = loop {
+            let update = frame(&mut body).await;
+            if row(&data(&update), "assignments", "assignment_id", &assignment)["state"] == "Merged"
+            {
+                break update;
+            }
+        };
+        assert!(!update.contains("MERGE-RECEIPT-PRIVATE"));
+        assert!(!update.contains("receipt"));
+        let view = data(&update);
+        assert_eq!(
+            row(&view, "assignments", "assignment_id", &assignment)["merged_at"],
+            "2026-10-06T11:22:33Z"
+        );
+    }
+
+    #[tokio::test]
+    async fn activity_entries_have_distinct_ids() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "distinct").await;
+        let repo = repository(&state, &temp.path().join("distinct"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:distinct").await;
+        let second = "2026-10-06T10:00:00Z";
+        // Recorded in one second, each with the id the runtime gives it ...
+        planner_event(&state, &goal, &revision, "planner.intent", second).await;
+        planner_event(&state, &goal, &revision, "planner.observation", second).await;
+        // ... and recorded in one second without one, as entries were before ids existed.
+        for action in ["tool.run", "tool.run.completed"] {
+            record_planner(&state, &goal, &revision, json!({"action":action,"role":"implementor","status":"running","detail":"same second","at":second,"assignment_id":assignment,"goal_revision":revision})).await;
+        }
+        // Through the fleet's own path, twice in quick succession.
+        worker_event(&state, &goal, &revision, &assignment).await;
+        worker_event(&state, &goal, &revision, &assignment).await;
+        let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
+            .await
+            .into_body();
+        let view = data(&frame(&mut body).await);
+        let ids = ids(row(&view, "goals", "goal_id", &goal));
+        assert_eq!(ids.len(), 6);
+        assert!(ids.iter().all(|id| !id.is_empty()));
+        let distinct: std::collections::BTreeSet<_> = ids.iter().collect();
+        assert_eq!(distinct.len(), 6, "{ids:?}");
+    }
+
+    #[tokio::test]
+    async fn activity_ids_are_stable_across_projections() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "stable").await;
+        let repo = repository(&state, &temp.path().join("stable"), &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        let assignment = queued(&state, &goal, &revision, &repo, "story:stable").await;
+        let at = "2026-10-06T10:00:00Z";
+        let planner = planner_event(&state, &goal, &revision, "planner.intent", at).await;
+        // Entries without a recorded id, one recorded twice with identical content.
+        let unnamed = |action: &str| json!({"action":action,"role":"planner","status":"running","detail":"unnamed","at":at,"goal_revision":revision});
+        for action in [
+            "planning.Planning",
+            "planner.observation",
+            "planning.Planning",
+        ] {
+            record_planner(&state, &goal, &revision, unnamed(action)).await;
+        }
+        worker_event(&state, &goal, &revision, &assignment).await;
+        let path = format!("/workspaces/{ws}/events");
+        let mut first = subscribe(&state, &path, None).await.into_body();
+        let one = data(&frame(&mut first).await);
+        let mut second = subscribe(&state, &path, None).await.into_body();
+        let two = data(&frame(&mut second).await);
+        let (one, two) = (
+            row(&one, "goals", "goal_id", &goal).clone(),
+            row(&two, "goals", "goal_id", &goal).clone(),
+        );
+        let before = ids(&one);
+        assert_eq!(before.len(), 5);
+        assert_eq!(before, ids(&two));
+        let distinct: std::collections::BTreeSet<_> = before.iter().collect();
+        assert_eq!(distinct.len(), 5, "{before:?}");
+        assert_eq!(before[4], planner["id"].as_str().unwrap());
+        // The same entry carries the same id wherever the projection shows it.
+        assert_eq!(one["last_activity"]["id"], one["activity"][0]["id"]);
+        assert_eq!(one["fleet"][&assignment]["id"], one["activity"][0]["id"]);
+        assert_eq!(one["planner_activity"]["id"], one["activity"][1]["id"]);
+        planner_event(&state, &goal, &revision, "planner.accept-story", at).await;
+        let three = data(&frame(&mut first).await);
+        let after = ids(row(&three, "goals", "goal_id", &goal));
+        assert_eq!(after.len(), 6);
+        assert_eq!(after[1..], before[..]);
     }
 }
