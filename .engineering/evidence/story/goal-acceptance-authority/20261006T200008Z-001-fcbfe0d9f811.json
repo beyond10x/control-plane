@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T20:00:08Z",
+  "actor": "human:timo",
+  "artifact": "story:goal-acceptance-authority",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo test --locked -p control-plane-runtime --test fleet goal_edit_during_acceptance_is_not_satisfied, at base 9691f41's guard and at unit head 0e5ff4b",
+    "reference": "VERIFIED: with the base guard restored the goal ended Satisfied at revision 2 holding a revision-1 receipt (red 3 of 3 runs, implementor report 11:44); at 0e5ff4b it stays Running at revision 2 with no receipt and is re-planned; fleet 26, attack 2 and pass-2 attack 3, planner 36 passed with ESS 0.53.0 (coordinator run 22:00)"
+  }
+}
