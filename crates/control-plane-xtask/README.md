@@ -6,6 +6,7 @@ Run these from the repository:
 cargo run --locked -p control-plane-xtask -- generated-check
 cargo run --locked -p control-plane-xtask -- conformance
 cargo run --locked -p control-plane-xtask -- foundation-check
+cargo run --locked -p control-plane-xtask -- spec-history-check
 cargo test --locked -p control-plane-xtask
 ```
 
@@ -52,6 +53,57 @@ to embedded Loom SDK and its internal Commission/governor/executor/intake librar
 Eventlog, LLM libraries and ESS runtime/primitives. Standalone higher-level repositories and
 Loom service entrypoints are rejected. Process adapters to repository-configured CLI tools do
 not introduce Cargo runtime dependencies.
+
+## Stored history
+
+`Store::open` replays every recorded decision through current generated behavior and refuses to
+start when a recorded outcome differs. Two checks keep a specification change from doing that
+silently.
+
+`spec-history-check`, a `task check` step, compares the specification at a baseline commit with
+`ess/`. `ess/spec-acknowledgements.json` names the baseline as a full commit id. The check copies
+that commit's `ess/` tree into `.scratch/` and runs
+`ess verify diff --compatibility --format json`. It fails on every change whose `history` verdict
+is `breaking` or `unknown`, unless the file acknowledges the change's id with a reason. It also
+fails on an acknowledgement that names no such change. Caller and reader verdicts do not gate,
+because stored history is what blocks startup. Removing `Blocked` from `Assignment.repair.from`
+produces `entity/controlplane.host.Assignment/transition-route-changed/repair` with history
+`unknown`. The same edit's `RepairAssignment` outcome-subject change is history `compatible`:
+
+```json
+{
+  "format": "control-plane-spec-acknowledgements/1",
+  "baseline": "<full commit id>",
+  "acknowledged": [
+    {
+      "id": "entity/controlplane.host.Assignment/transition-route-changed/repair",
+      "reason": "stored Blocked repairs are migrated by <change>"
+    }
+  ]
+}
+```
+
+Acknowledge a change only after stored history has a migration or cannot contain the affected
+decision. Move the baseline deliberately to a released or published commit, and empty the
+acknowledgements in the same change. The baseline must be in the clone, so CI checks out full
+history.
+
+`crates/control-plane-core/tests/recorded_history.rs` opens a committed history,
+`crates/control-plane-core/tests/fixtures/recorded-history.db`, and compares every view with
+`recorded-history.views.json`. It also requires the history to apply every generated command at
+least once. A second test changes one stored `applied` outcome in a copy and requires
+`Store::open` to refuse it. No test or gate writes the fixture. Re-record it only on purpose:
+
+```console
+cargo run --locked -p control-plane-xtask -- record-history --work-dir /dev/shm/control-plane-history
+```
+
+`record-history` runs a scripted operator and supervisor through `Store::execute` against real Git
+repositories in the new work directory. That directory must be outside every home directory and
+Git work tree: recorded paths are committed, and the Security gate rejects personal paths. The
+command refuses to replace a committed history that no longer replays. If replay fails after a
+specification change, write a migration; do not re-record. Re-record only to cover a new command,
+and review the views diff.
 
 ## Evidence and negative controls
 
