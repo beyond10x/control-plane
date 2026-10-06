@@ -126,6 +126,10 @@ impl Host {
             Ok(())
         })
     }
+    fn members(&self, goal: &Value) -> Result<Members> {
+        self.handle
+            .block_on(async { members(&*self.store.lock().await, goal) })
+    }
     /// The goal's newest acceptance record, which its progress journal keeps.
     fn acceptance(&self, goal: &Value) -> Result<Value> {
         let goal = text(goal, "goal_id")?;
@@ -221,6 +225,27 @@ impl Host {
         }
         Ok(())
     }
+}
+/// A goal workspace's registered repositories and directories: the store facts goal acceptance
+/// observed and must still find when it records satisfaction.
+type Members = (Vec<Value>, Vec<Value>);
+fn members(store: &control_plane_core::Store, goal: &Value) -> Result<Members> {
+    let registered = |view: &str| -> Result<Vec<Value>> {
+        Ok(store
+            .query(view)?
+            .as_array()
+            .context("view not an array")?
+            .iter()
+            .filter(|row| {
+                row["workspace_id"] == goal["workspace_id"] && row["state"] == "Registered"
+            })
+            .cloned()
+            .collect())
+    };
+    Ok((
+        registered("RepositoryRegistrationList")?,
+        registered("WorkspaceDirectoryList")?,
+    ))
 }
 /// Record one runtime progress event of an assignment on its goal's planning receipt.
 /// The decision carries this activity alone; the host journal keeps the goal's history and
@@ -1972,6 +1997,10 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
             .filter(|d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered")
             .collect::<Vec<_>>();
         goal["directories"] = json!(directories);
+        let expected: Members = (
+            repos.iter().map(|repo| (*repo).clone()).collect(),
+            directories.clone(),
+        );
         let prior = host.acceptance(&goal)?;
         if acceptance_is_unchanged(&goal, &prior, &repositories, &assignments, &host.runner) {
             continue;
@@ -2086,18 +2115,8 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 current_goal["state"] == "Running" && current_goal["revision"] == goal["revision"],
                 "goal changed during final review"
             );
-            let current_repos = host
-                .rows("RepositoryRegistrationList")?
-                .into_iter()
-                .filter(|r| r["workspace_id"] == goal["workspace_id"] && r["state"] == "Registered")
-                .collect::<Vec<_>>();
-            let current_directories = host
-                .rows("WorkspaceDirectoryList")?
-                .into_iter()
-                .filter(|d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered")
-                .collect::<Vec<_>>();
             ensure!(
-                json!(current_repos) == json!(repos) && current_directories == directories,
+                host.members(&goal)? == expected,
                 "workspace membership or repository configuration changed during acceptance"
             );
             for repo in &repos {
@@ -2114,14 +2133,48 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                     "target changed during goal acceptance review"
                 );
             }
+            host.remaining()?;
+            ensure!(
+                !host.runner.cancel.is_cancelled(),
+                "goal acceptance cancelled"
+            );
             let receipt=json!({"kind":"goal_acceptance","goal_revision":goal["revision"],"observations":observations,"review_context":reviewer,"review":review}).to_string();
-            // The store is released between the check above and this command. Admission refuses
-            // a receipt whose `goal_revision` is no longer the goal's; an edit in between then
-            // leaves the goal Running, and the error arm below leaves it to the edit's planning.
-            host.execute(
-                "SatisfyGoal",
-                json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),
-            )?;
+            // The checks above release the store while the targets are observed. Every store fact
+            // acceptance relied on is compared again under the lock that admits SatisfyGoal, so
+            // an operator change cannot land between the last comparison and the command.
+            host.handle.block_on(async {
+                let mut store = host.store.lock().await;
+                let current_goal = store
+                    .query("GoalList")?
+                    .as_array()
+                    .context("goals view")?
+                    .iter()
+                    .find(|row| row["goal_id"] == goal["goal_id"])
+                    .context("fleet entity no longer exists")?
+                    .clone();
+                ensure!(
+                    current_goal["state"] == "Running"
+                        && current_goal["revision"] == goal["revision"],
+                    "goal changed before its acceptance was recorded"
+                );
+                ensure!(
+                    members(&store, &goal)? == expected,
+                    "workspace membership or repository configuration changed before acceptance \
+                     was recorded"
+                );
+                let outcome = store
+                    .execute(
+                        "SatisfyGoal",
+                        json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),
+                        Actor::Supervisor,
+                    )
+                    .await?;
+                ensure!(
+                    outcome["outcome"] == "applied",
+                    "SatisfyGoal refused: {outcome}"
+                );
+                anyhow::Ok(())
+            })?;
             host.progress(
                 current[0],
                 "goal.acceptance.completed",
@@ -2141,18 +2194,32 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 satisfied += 1;
             }
             Err(error) => {
-                let reason = format!("Goal acceptance blocked: {error:#}");
+                let now = host.row("GoalList", "goal_id", &goal["goal_id"])?;
+                // An edit, a pause, a service stop or a workspace change interrupts acceptance;
+                // it is recorded without the `failed` status, which latches acceptance and
+                // planning until an input changes. Only acceptance against unchanged inputs fails.
+                let interrupted = now["revision"] != goal["revision"]
+                    || now["state"] != "Running"
+                    || host.runner.cancel.is_cancelled()
+                    || host.members(&goal)? != expected;
+                let reason = if interrupted {
+                    format!("Goal acceptance interrupted: {error:#}")
+                } else {
+                    format!("Goal acceptance blocked: {error:#}")
+                };
                 // A concurrent operator revision owns its own progress; never overwrite it.
-                if host.row("GoalList", "goal_id", &goal["goal_id"])?["revision"]
-                    == goal["revision"]
-                {
-                    host.acceptance_progress(&goal, &fingerprint, "failed", &reason)?;
-                    host.progress(
-                        current[0],
-                        "blocked",
-                        "goal_reviewer",
-                        json!({"reason":reason}),
-                    )?;
+                if now["revision"] == goal["revision"] {
+                    if interrupted {
+                        host.acceptance_progress(&goal, &fingerprint, "interrupted", &reason)?;
+                    } else {
+                        host.acceptance_progress(&goal, &fingerprint, "failed", &reason)?;
+                        host.progress(
+                            current[0],
+                            "blocked",
+                            "goal_reviewer",
+                            json!({"reason":reason}),
+                        )?;
+                    }
                 }
                 blockers.push(reason);
             }

@@ -882,11 +882,11 @@ fn hand_over(store: &SharedStore, mut held: tokio::sync::OwnedMutexGuard<Store>)
     }
 }
 
-/// An operator edit that lands inside goal acceptance after its final revision check and before
-/// `SatisfyGoal` (`satisfy_goals`, fleet.rs). The goal reviewer's turn takes the store, so after
-/// the review the acceptance thread's first store access, the final check, waits for it. The
-/// editor hands the store over (nobody else uses it in this test, so the taker is that check)
-/// and at once queues for it again. tokio's `Mutex` is fair: the final check sees the reviewed
+/// An operator edit that lands inside goal acceptance after its post-review revision check and
+/// before `SatisfyGoal` (`satisfy_goals`, fleet.rs). The goal reviewer's turn takes the store,
+/// so after the review the acceptance thread's first store access, that check, waits for it.
+/// The editor hands the store over (nobody else uses it in this test, so the taker is that
+/// check) and at once queues for it again. tokio's `Mutex` is fair: the check sees the reviewed
 /// revision, then the edit runs, while acceptance re-reads the workspace and observes each
 /// target with `git ls-remote`, before its `SatisfyGoal`.
 struct EditAfterFinalCheck {
@@ -949,12 +949,14 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
     assert_eq!(goal["state"], "Running", "{goal}");
     assert_eq!(goal["revision"], 2, "{goal}");
     assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
-    // The edit landed after the final check, so the admission check refused the stale receipt.
+    // The edit landed after the post-review check; the check that runs under the same store lock
+    // as SatisfyGoal found it.
     let report = report.unwrap();
     assert!(
-        report.blockers.iter().any(|reason| reason.contains(
-            "goal satisfaction receipt names goal revision 1 but the goal is at revision 2"
-        )),
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("goal changed before its acceptance was recorded")),
         "{report:?}"
     );
     assert!(
@@ -981,6 +983,89 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
     let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
     assert_eq!(goal["planning_revision"], 2, "{goal}");
     assert_eq!(goal["state"], "Running", "{goal}");
+}
+
+/// Stops the service while the goal reviewer runs: cancels the service's shutdown token and
+/// returns its approval only once that cancellation has reached the review turn.
+struct ShutdownDuringGoalReview {
+    inner: Scripted,
+    shutdown: tokio_util::sync::CancellationToken,
+    stopped: std::sync::atomic::AtomicBool,
+}
+impl AgentModel for ShutdownDuringGoalReview {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        self.inner.respond(request)
+    }
+    fn respond_in(
+        &self,
+        request: &ModelRequest,
+        environment: &control_plane_runtime::ModelEnvironment,
+    ) -> Result<Value> {
+        if request.role == "goal_reviewer" && !self.stopped.swap(true, Ordering::SeqCst) {
+            self.shutdown.cancel();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while !environment.cancel.is_cancelled() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "shutdown never reached the goal review"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+        self.respond(request)
+    }
+}
+
+/// A service stop during goal acceptance interrupts it; it does not reject the goal. The
+/// interrupted acceptance is recorded without the `failed` status that latches acceptance and
+/// planning, so a restarted service accepts the unchanged goal.
+#[tokio::test]
+async fn shutdown_during_goal_review_does_not_latch_acceptance() {
+    let fixture = fixture(1).await;
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let model = Arc::new(ShutdownDuringGoalReview {
+        inner: Scripted::new(),
+        shutdown: shutdown.clone(),
+        stopped: std::sync::atomic::AtomicBool::new(false),
+    });
+    let service = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    service.run(shutdown).await.unwrap();
+    drop(service);
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Running", "{goal}");
+    let acceptance = history(&fixture.store).await["acceptance"].clone();
+    assert_eq!(acceptance["status"], "interrupted", "{acceptance}");
+    assert!(
+        acceptance["reason"]
+            .as_str()
+            .unwrap()
+            .contains("goal acceptance cancelled"),
+        "{acceptance}"
+    );
+    let restarted = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        model.clone(),
+    );
+    restarted.tick().await.unwrap();
+    restarted.fleet_tick().await.unwrap();
+    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["state"], "Satisfied", "{goal}");
+    let goal_reviews = model
+        .inner
+        .contexts
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(role, _)| role == "goal_reviewer")
+        .count();
+    assert_eq!(goal_reviews, 2);
 }
 
 #[tokio::test]
