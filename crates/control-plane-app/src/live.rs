@@ -1123,7 +1123,7 @@ mod tests {
     async fn recorded_acceptance_reaches_the_browser() {
         let (temp, state) = fixture().await;
         let ws = workspace(&state, temp.path(), "accepted").await;
-        let (goal, _) = running_goal(&state, &ws).await;
+        let (goal, revision) = running_goal(&state, &ws).await;
         let mut body = subscribe(&state, &format!("/workspaces/{ws}/events"), None)
             .await
             .into_body();
@@ -1132,7 +1132,7 @@ mod tests {
             row(&running, "goals", "goal_id", &goal)["acceptance_recorded"],
             false
         );
-        let receipt = json!({"kind":"goal_acceptance","review":"ACCEPTANCE-RECEIPT-PRIVATE"});
+        let receipt = json!({"kind":"goal_acceptance","goal_revision":revision,"review":"ACCEPTANCE-RECEIPT-PRIVATE"});
         supervise(
             &state,
             "SatisfyGoal",
