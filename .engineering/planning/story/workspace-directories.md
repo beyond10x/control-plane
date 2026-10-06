@@ -17,7 +17,7 @@ scope:
   path: ess
 - confidence: inferred
   path: generated
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:11:59Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T21:11:59Z", actor: "human:timo", revision: 4}
@@ -33,7 +33,7 @@ WorkspaceDirectory is declared in ess/domains/host.yaml before this story: direc
 
 ## Acceptance
 
-Named conformance and operational scenarios: multiple_workspaces_keep_directory_membership_isolated, non_git_directory_survives_restart, duplicate_directory_registration_is_idempotent, overlapping_directories_preserve_shared_repositories, active_assignment_prevents_directory_removal, startup_registers_current_directory_once. Run against actual Store, API and CLI handlers, with real temporary directories and Git discovery. Regenerate and execute every generated conformance scenario.
+Named conformance and operational scenarios: multiple_workspaces_keep_directory_membership_isolated, non_git_directory_survives_restart_and_canonical_duplicates_are_idempotent, overlapping_directories_preserve_shared_repositories, active_assignment_prevents_directory_removal, startup_registers_current_directory_once. Run against actual Store, API and CLI handlers, with real temporary directories and Git discovery. Regenerate and execute every generated conformance scenario.
 
 ## Implementation contract
 

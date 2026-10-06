@@ -21,7 +21,7 @@ scope:
   path: crates/control-plane-runtime/src/process.rs
 - confidence: inferred
   path: crates/control-plane-runtime/tests
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-review-session"}
 - {from: "proposed", to: "active", at: "2026-10-06T02:29:50Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-review-session"}
@@ -47,7 +47,7 @@ The publish command receives the named credentials and runs in the candidate wor
 - `processes_start_from_allowlisted_environment`: a parent variable outside the allowlist is absent from `env` run through ProcessRunner.
 - `publish_command_receives_only_named_credentials`: a variable named by the new serve flag reaches the publish command.
 - `named_credentials_stay_out_of_other_commands`: the same variable does not reach the test command or an implementor-run command.
-- `native_tools_run_with_cleared_environment`: the existing planner and fleet native tests (git, aep, ess, worktree, go) pass unchanged.
+- The existing planner and fleet native tests (git, aep, ess, worktree, go) pass unchanged with the cleared environment.
 - README.md states the narrowing above.
 
 ## Scope

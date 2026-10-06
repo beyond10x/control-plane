@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:31:09Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-05T21:31:09Z", actor: "human:timo", revision: 5}
@@ -24,7 +24,7 @@ Isolated implementation, independent review and verified merges, as part of the 
 Use ess/system.yaml and ess/domains/host.yaml (ess/22). Contracts are generated before implementation. Record a red acceptance test before filling adapters; add domain declarations before introducing any noun. Never edit generated output.
 
 ## Acceptance
-Named conformance and adapter scenarios: repository_execution_is_exclusive, review_is_independent, changed_revision_invalidates_evidence, merge_requires_current_authority, restart_reconciles_effects, pause_and_limits_stop_dispatch. Each must run against the real implementation with scripted model and integration ports, and be part of task check.
+Named conformance and adapter scenarios: repository_execution_is_exclusive, review_is_independent_and_two_repositories_reach_observed_goal_completion, changed_revision_invalidates_evidence, merge_requires_current_authority, restart_reconciles_effects, pause_and_limits_stop_dispatch. Each must run against the real implementation with scripted model and integration ports, and be part of task check.
 
 ## Scope
 Inferred: crates/control-plane-runtime. Shared root manifests, specifications, generated files and planning artifacts belong to the coordinator. Runtime planner and fleet share one implementation lane because their surfaces overlap.

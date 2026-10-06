@@ -39,7 +39,7 @@ scope:
   path: ess/
 - confidence: cited
   path: frontend/
-revision: 22
+revision: 23
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 3, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
 - {from: "proposed", to: "active", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 4, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
@@ -62,14 +62,14 @@ Resolve foundation gaps through their repositories first: a demonstrated governe
 
 ## Acceptance
 
-- shared-governed-executor
-- missing-file-refusal-roundtrip
+- Not yet a named test: every agent runs through one shared governed executor.
+- missing_reads_are_observations_and_planning_can_continue (missing-file refusal round trip)
 - no-change-is-not-progress
-- stale-authority-before-effect
+- pause_during_model_call_prevents_further_effects and merge_requires_current_authority (stale authority before an effect, in part)
 - session-budget-restart
 - storage-failure-stops-effects
-- visible-runtime-events
-- current-review-and-publication
+- Not yet a named test: runtime events are visible to the operator.
+- native_loom_delivers_candidate_through_checks_review_and_observed_publication and review_and_publication_require_current_independent_evidence (current review and publication)
 
 The architecture artifact defines each scenario's observable result. First specify any changed public entities/contracts in their owning ESS domain, then implement the named regressions using the actual SDK and scripted provider responses. Production dependency/architecture checks reject direct model-loop implementation in control-plane after migration. A single bounded real external eval follows those passing checks; failed runs remain failed.
 

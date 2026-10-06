@@ -15,7 +15,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:17:16Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 - {from: "proposed", to: "active", at: "2026-10-05T22:17:16Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}}
@@ -28,7 +28,7 @@ Conformance, build gates and two-repository qualification, as part of the approv
 Use ess/system.yaml and ess/domains/host.yaml (ess/22). Contracts are generated before implementation. Record a red acceptance test before filling adapters; add domain declarations before introducing any noun. Never edit generated output.
 
 ## Acceptance
-Named conformance and adapter scenarios: generated_contracts_do_not_drift, real_adapter_conformance, two_repository_goal_delivery. Each must run against the real implementation with scripted model and integration ports, and be part of task check.
+Named conformance and adapter scenarios: generated_contracts_do_not_drift, real_adapter_conformance, and two-repository delivery in review_is_independent_and_two_repositories_reach_observed_goal_completion. Each must run against the real implementation with scripted model and integration ports, and be part of task check.
 
 ## Scope
 Inferred: crates/control-plane-xtask. Shared root manifests, specifications, generated files and planning artifacts belong to the coordinator. Runtime planner and fleet share one implementation lane because their surfaces overlap.

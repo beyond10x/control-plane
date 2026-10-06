@@ -20,7 +20,7 @@ scope:
   path: ess/
 - confidence: inferred
   path: generated/
-revision: 16
+revision: 17
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -34,9 +34,9 @@ The operator can remove cancelled goals while retaining workspaces, and judge th
 ## Acceptance
 
 - ESS DeleteGoal applied, paused, running, satisfied and not-found scenarios execute through the generated contract. Durable regression proves a cancelled goal disappears after reopen while its workspace remains.
-- Go CLI: greet-name, reject-missing-name, documented-setup.
+- Go CLI (labels of the eval verifier checks in crates/control-plane-xtask/src/eval.rs, not test names): greet-name, the missing-name rejection, documented-setup.
 - JSON HTTP: healthy-server, echo-json, malformed-json, documented-setup.
-- Auth web: healthy-server, login-frontend, unauthenticated-denied, invalid-login, authenticated-identity, authenticated-frontend, invalid-session, logout-revokes-session, documented-setup.
+- Auth web (eval verifier check labels): healthy-server, login-frontend, unauthenticated-denied, invalid-login, authenticated-identity, authenticated-frontend, invalid-session, the logout session revocation, documented-setup.
 - Each external repository has a local origin. Go/local commits require explicit eval-root configuration; other repositories retain Rust/bot rules.
 - The trusted Rust verifier lives outside candidate scope, requires executed Go tests, and checks actual HTTP behavior. Blank seeds fail. Runs are sequential, one worker, one attempt, ten minutes, with failures retained and no silent retries.
 

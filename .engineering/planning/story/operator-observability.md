@@ -17,7 +17,7 @@ scope:
   path: crates/control-plane-runtime
 - confidence: cited
   path: docs/vision.md
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T21:48:32Z", actor: "human:timo", revision: 4}
@@ -33,7 +33,7 @@ Use the already declared Workspace, Goal and Assignment views, Goal.planning_pha
 
 ## Acceptance
 
-Named executable scenarios: model_wait_is_visible_before_response; planner_activity_survives_restart; live_dashboard_updates_without_resetting_forms; dashboard_distinguishes_idle_blocked_and_disconnected; workspace_activity_is_scoped; concurrent_worker_activity_is_not_lost. Observe real commands, model-call entry/exit, checks and publication results; no synthetic work events or invented percentages. A browser run must see automatic updates while a form's entered value remains intact. Show actionable blockers, elapsed time, role, repository and worktree context. Raw evidence belongs behind drill-down controls.
+Named executable scenarios: model_wait_is_visible_before_response_and_activity_survives_restart; concurrent_workers_and_blocked_stopped_states_are_distinct (concurrent worker activity, blocked and stopped states); live_activity_is_durable_scoped_and_does_not_inline_model_receipts and workspace_stream_filters_foreign_changes_and_recovers_durable_progress (workspace scoping). Not yet a named test: a live update keeps a form's entered value, and the console tells idle from disconnected (story:console-status-and-attention derives both). Observe real commands, model-call entry/exit, checks and publication results; no synthetic work events or invented percentages. A browser run must see automatic updates while a form's entered value remains intact. Show actionable blockers, elapsed time, role, repository and worktree context. Raw evidence belongs behind drill-down controls.
 
 ## Scope
 
