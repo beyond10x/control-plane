@@ -142,6 +142,59 @@ pub fn excerpt(text: &str, limit: usize) -> String {
     )
 }
 
+/// A copy of `value` whose serialization stays near `budget` bytes, for durable progress
+/// evidence. Smaller values are kept as they are; a larger string keeps its beginning and a
+/// `[truncated: …]` marker, and larger arrays and objects keep bounded members in order.
+pub fn bounded(value: &Value, budget: usize) -> Value {
+    const MEMBER: usize = 64;
+    let size = value.to_string().len();
+    if size <= budget {
+        return value.clone();
+    }
+    match value {
+        Value::String(text) => Value::String(control_plane_core::bounded_text(
+            text,
+            budget.saturating_sub(2),
+        )),
+        Value::Array(items) => {
+            let share = (budget / items.len()).max(MEMBER);
+            let mut kept = Vec::new();
+            let mut used = 2;
+            for item in items {
+                let item = bounded(item, share);
+                let length = item.to_string().len() + 1;
+                if used + length > budget {
+                    kept.push(json!(format!(
+                        "[{} more items omitted]",
+                        items.len() - kept.len()
+                    )));
+                    break;
+                }
+                used += length;
+                kept.push(item);
+            }
+            Value::Array(kept)
+        }
+        Value::Object(fields) => {
+            let share = (budget / fields.len()).max(MEMBER);
+            let mut kept = serde_json::Map::new();
+            let mut used = 2;
+            for (key, item) in fields {
+                let item = bounded(item, share);
+                let length = key.len() + item.to_string().len() + 4;
+                if used + length > budget {
+                    kept.insert("omitted_fields".into(), json!(fields.len() - kept.len()));
+                    break;
+                }
+                used += length;
+                kept.insert(key.clone(), item);
+            }
+            Value::Object(kept)
+        }
+        _ => value.clone(),
+    }
+}
+
 pub fn index(label: &str, raw: &str) -> String {
     format!("{label}:\n{}", excerpt(raw, ENTRY_BYTES))
 }
@@ -301,6 +354,35 @@ mod tests {
                 .unwrap()
                 .contains("End of file page.")
         );
+    }
+
+    #[test]
+    fn bounded_evidence_keeps_small_values_and_stays_near_its_budget() {
+        let small = json!({"action":"read","paths":["README.md"]});
+        assert_eq!(bounded(&small, 4096), small);
+        let wide = Value::Object(
+            (0..500)
+                .map(|index| (format!("key{index}"), json!("v".repeat(100))))
+                .collect(),
+        );
+        for value in [
+            json!({"action":"write_specification","path":"ess/system.yaml","contents":"界".repeat(50_000)}),
+            json!({"transcript":(0..200).map(|index| format!("observation {index} {}", "x".repeat(900))).collect::<Vec<_>>()}),
+            wide,
+        ] {
+            let kept = bounded(&value, 4096);
+            assert!(
+                kept.to_string().len() <= 4096 + 64,
+                "{}",
+                kept.to_string().len()
+            );
+        }
+        let intent = bounded(
+            &json!({"action":"write_specification","path":"ess/system.yaml","contents":"y".repeat(50_000)}),
+            4096,
+        );
+        assert_eq!(intent["action"], "write_specification");
+        assert_eq!(intent["path"], "ess/system.yaml");
     }
 
     #[test]

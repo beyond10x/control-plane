@@ -157,6 +157,294 @@ fn structured_worker_details_show_bounded_commands_and_paths_without_receipts() 
     assert!(html.contains("cargo test --locked"));
 }
 
+#[tokio::test]
+async fn adversary_recorded_tool_run_keeps_the_command_the_dashboard_shows() {
+    // The case above shows what the dashboard renders for a structured tool run, from a
+    // hand-built view. This sends the same kind of event through the runtime's progress path.
+    use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
+    struct NoModel;
+    impl AgentModel for NoModel {
+        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            anyhow::bail!("progress recording does not call the model")
+        }
+    }
+    let (temp, state) = fixture().await;
+    let path = temp.path().join("tool-run");
+    std::fs::create_dir(&path).unwrap();
+    let created = state
+        .add_workspace(WorkspaceInput {
+            path: path.to_string_lossy().into_owned(),
+            name: "tool-run".into(),
+        })
+        .await
+        .unwrap();
+    let ws = created["published"][0]["payload"]["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let created = state.command("CreateGoal",json!({"workspace_id":ws,"objective":"tool run","acceptance":"verified","max_workers":1,"max_attempts":1,"max_minutes":10,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false})).await.unwrap();
+    let id = created["published"][0]["payload"]["goal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    state
+        .command("StartGoal", json!({"goal_id":id}))
+        .await
+        .unwrap();
+    // The detail fleet records for an admitted `cargo test` over the members of a large
+    // workspace: `{"program":program,"args":args}`, here just over 1 KiB.
+    let mut args = vec![json!("test"), json!("--locked")];
+    for index in 0..40 {
+        args.push(json!("--package"));
+        args.push(json!(format!("workspace-member-{index:02}")));
+    }
+    let detail = json!({"program":"cargo","args":args});
+    assert!(detail.to_string().len() > 1024);
+    let shown = "cargo test --locked --package workspace-member-00";
+    let event = json!({"at":"2026-10-06T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":detail});
+    let hand_built = json!({"server_observed_at":"2026-10-06T09:00:01Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Queued","planning_receipt":json!({"last_activity":event}).to_string()}]});
+    assert!(
+        dashboard::operations(&hand_built).unwrap().contains(shown),
+        "control: the dashboard shows the command of this event"
+    );
+    let supervisor = Supervisor::new(
+        state.store.clone(),
+        Arc::new(Notify::new()),
+        RuntimeConfig::default(),
+        Arc::new(NoModel),
+    );
+    let assignment = json!({"goal_id":id,"assignment_id":uuid::Uuid::new_v4().to_string(),"goal_revision":1,"worktree_id":"cp-impl-tool-run"});
+    supervisor
+        .record_progress(&assignment, "tool.run", "implementor", detail)
+        .await
+        .unwrap();
+    let view = state.snapshot().await.unwrap();
+    let html = dashboard::operations(&view).unwrap();
+    let receipt = view["goals"][0]["planning_receipt"].as_str().unwrap();
+    assert!(
+        html.contains(shown),
+        "the recorded tool run lost its arguments; recorded detail: {}",
+        serde_json::from_str::<Value>(receipt).unwrap()["last_activity"]["detail"]
+    );
+}
+
+#[tokio::test]
+async fn dashboard_and_evidence_read_activity_history_from_the_store() {
+    let (temp, state) = fixture().await;
+    let ws = state
+        .store
+        .lock()
+        .await
+        .execute(
+            "RegisterWorkspace",
+            json!({"path":temp.path(),"name":"history"}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .clone();
+    let created = state.command("CreateGoal",json!({"workspace_id":ws,"objective":"history","acceptance":"verified","max_workers":1,"max_attempts":1,"max_minutes":10,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false})).await.unwrap();
+    let id = created["published"][0]["payload"]["goal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    state
+        .command("StartGoal", json!({"goal_id":id}))
+        .await
+        .unwrap();
+    for (index, step) in ["first step", "second step", "third step"]
+        .into_iter()
+        .enumerate()
+    {
+        state.store.lock().await.record_activity(&id, json!({"id":index.to_string(),"assignment_id":"a","goal_revision":1,"at":format!("2026-10-06T09:00:0{index}Z"),"action":"tool.run","role":"implementor","status":"running","detail":step})).await.unwrap();
+    }
+    let mut view = state.snapshot().await.unwrap();
+    // The recorded receipt carries the newest activity only.
+    assert!(!field(&view["goals"][0], "planning_receipt").contains("first step"));
+    dashboard::attach_history(&*state.store.lock().await, &mut view["goals"]).unwrap();
+    let html = dashboard::operations(&view).unwrap();
+    for step in ["first step", "second step", "third step"] {
+        assert!(
+            html.contains(step),
+            "{step} missing from the activity history"
+        );
+    }
+    let evidence: Value = serde_json::from_str(
+        &body(
+            router(state.clone())
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/goals/{id}/evidence"))
+                        .header("host", "127.0.0.1:8787")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap(),
+        )
+        .await,
+    )
+    .unwrap();
+    let activity = evidence["history"]["activity"].as_array().unwrap();
+    assert_eq!(activity.len(), 3);
+    assert_eq!(activity[0]["detail"], "first step");
+    assert_eq!(evidence["history"]["fleet"]["a"]["detail"], "third step");
+}
+
+/// A running goal in a fresh workspace, for the adversary cases below.
+async fn adversary_running_goal(state: &AppState, path: &std::path::Path) -> String {
+    let ws = state
+        .store
+        .lock()
+        .await
+        .execute(
+            "RegisterWorkspace",
+            json!({"path":path,"name":"adversary"}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .clone();
+    let created = state.command("CreateGoal",json!({"workspace_id":ws,"objective":"adversary","acceptance":"verified","max_workers":1,"max_attempts":1,"max_minutes":10,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false})).await.unwrap();
+    let id = created["published"][0]["payload"]["goal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    state
+        .command("StartGoal", json!({"goal_id":id}))
+        .await
+        .unwrap();
+    id
+}
+
+fn adversary_step(index: usize) -> Value {
+    json!({"id":format!("step-{index:02}"),"assignment_id":"a","goal_revision":1,"at":format!("2026-10-06T09:{index:02}:00Z"),"action":"tool.run","role":"implementor","status":"running","detail":format!("step {index:02}")})
+}
+
+#[tokio::test]
+async fn adversary_evidence_shows_one_state_of_the_goal() {
+    // GET /goals/{id}/evidence takes the goal (and its attached activity_history) from
+    // AppState::snapshot under one store lock, then takes the lock again for "history"
+    // (dashboard.rs:31). A progress decision committed between the two is in "history" and
+    // in neither the goal's recorded receipt nor its attached history.
+    let (temp, state) = fixture().await;
+    let id = adversary_running_goal(&state, temp.path()).await;
+    state
+        .store
+        .lock()
+        .await
+        .record_activity(&id, adversary_step(0))
+        .await
+        .unwrap();
+    let held = state.store.lock().await;
+    let request = tokio::spawn(
+        router(state.clone()).oneshot(
+            Request::builder()
+                .uri(format!("/goals/{id}/evidence"))
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        ),
+    );
+    // The evidence request now waits for the store; a progress decision queues behind it.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let writer = {
+        let state = state.clone();
+        let id = id.clone();
+        tokio::spawn(async move {
+            state
+                .store
+                .lock()
+                .await
+                .record_activity(&id, adversary_step(1))
+                .await
+                .unwrap();
+        })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    drop(held);
+    writer.await.unwrap();
+    let evidence: Value =
+        serde_json::from_str(&body(request.await.unwrap().unwrap()).await).unwrap();
+    let recorded: Value =
+        serde_json::from_str(evidence["goal"]["planning_receipt"].as_str().unwrap()).unwrap();
+    let attached = evidence["goal"]["activity_history"]["activity"]
+        .as_array()
+        .unwrap()
+        .last()
+        .cloned();
+    let history = evidence["history"]["activity"]
+        .as_array()
+        .unwrap()
+        .last()
+        .cloned();
+    assert_eq!(
+        (history.clone(), attached.clone()),
+        (
+            Some(recorded["last_activity"].clone()),
+            Some(recorded["last_activity"].clone())
+        ),
+        "one evidence response: history ends with {}, the goal's attached history with {}, \
+         its recorded receipt with {}",
+        history.unwrap_or_default()["detail"],
+        attached.unwrap_or_default()["detail"],
+        recorded["last_activity"]["detail"]
+    );
+}
+
+#[tokio::test]
+async fn adversary_state_api_and_dashboard_keep_history_after_restart() {
+    // console_activity_survives_bounding covers the SSE projection after a restart; /api/state
+    // and the server-rendered dashboard read the same history through AppState::snapshot.
+    let (temp, state) = fixture().await;
+    let id = adversary_running_goal(&state, temp.path()).await;
+    for index in 0..30 {
+        state
+            .store
+            .lock()
+            .await
+            .record_activity(&id, adversary_step(index))
+            .await
+            .unwrap();
+    }
+    drop(state);
+    let reopened = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let state = AppState::new(
+        Arc::new(Mutex::new(reopened)),
+        "127.0.0.1:8787".parse().unwrap(),
+        Arc::new(Notify::new()),
+    );
+    let get = |path: String| {
+        router(state.clone()).oneshot(
+            Request::builder()
+                .uri(path)
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        )
+    };
+    let api: Value =
+        serde_json::from_str(&body(get("/api/state".into()).await.unwrap()).await).unwrap();
+    let goal = api["goals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|goal| goal["goal_id"] == id.as_str())
+        .unwrap();
+    assert_eq!(
+        goal["activity_history"]["activity"],
+        json!((0..30).map(adversary_step).collect::<Vec<_>>())
+    );
+    assert_eq!(goal["activity_history"]["fleet"]["a"], adversary_step(29));
+    let html = body(get("/".into()).await.unwrap()).await;
+    for index in [10, 20, 29] {
+        assert!(
+            html.contains(&format!("step {index:02}")),
+            "step {index:02} missing from the dashboard after restart"
+        );
+    }
+}
+
 async fn fixture() -> (tempfile::TempDir, AppState) {
     let root = std::path::PathBuf::from(std::env::var_os("HOME").unwrap())
         .join(".cache/control-plane-console");

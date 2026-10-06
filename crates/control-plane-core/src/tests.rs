@@ -1111,3 +1111,399 @@ async fn legacy_backfill_still_propagates_storage_failure() {
             .is_empty()
     );
 }
+
+/// Write a recorded host history verbatim, below `Store`, as an older build appended it.
+async fn recorded_history(database: &Path, events: &str) {
+    let log = SqliteEventStore::open(database.to_str().unwrap(), "control_plane")
+        .await
+        .unwrap();
+    let stream = StreamId::new(TenantId::new("local").unwrap(), "host", "state").unwrap();
+    for (index, line) in events.lines().enumerate() {
+        let data: Value = serde_json::from_str(line).unwrap();
+        let id = format!("recorded-{index}");
+        let meta = CommandMeta {
+            idempotency_key: id.clone(),
+            request_hash: eventlog_core::request_hash(&data).unwrap(),
+            subject: "local-operator".into(),
+            actor: data["actor"].as_str().unwrap().into(),
+            request_id: id.clone(),
+            trace_id: id,
+            causation_id: None,
+            causation_depth: 0,
+            occurred_at: time::OffsetDateTime::now_utc(),
+            claim: None,
+        };
+        let expected = if index == 0 {
+            Expected::NoStream
+        } else {
+            Expected::Exact(index as u64)
+        };
+        log.append(
+            &stream,
+            expected,
+            &[NewEvent::new("HostDecision", 1, data).unwrap()],
+            &meta,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn existing_receipts_still_open() {
+    // Written by a09cff6's own progress paths (planner record, fleet progress, acceptance):
+    // every receipt carries its whole activity history, fleet map and planner evidence.
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/progress-receipts-a09cff6");
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    recorded_history(
+        &database,
+        &std::fs::read_to_string(fixture.join("events.jsonl")).unwrap(),
+    )
+    .await;
+    let expected: Value =
+        serde_json::from_str(&std::fs::read_to_string(fixture.join("views.json")).unwrap())
+            .unwrap();
+    let store = Store::open(&database).await.unwrap();
+    for view in [
+        "WorkspaceList",
+        "GoalList",
+        "AssignmentList",
+        "PublicationIntentList",
+    ] {
+        assert_eq!(store.query(view).unwrap(), expected[view], "{view}");
+    }
+}
+
+#[tokio::test]
+async fn first_bounded_progress_continues_an_existing_receipt_history() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/progress-receipts-a09cff6");
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    recorded_history(
+        &database,
+        &std::fs::read_to_string(fixture.join("events.jsonl")).unwrap(),
+    )
+    .await;
+    let mut store = Store::open(&database).await.unwrap();
+    let goal = store.query("GoalList").unwrap()[0].clone();
+    let goal_id = goal["goal_id"].as_str().unwrap().to_owned();
+    let legacy: Value = serde_json::from_str(goal["planning_receipt"].as_str().unwrap()).unwrap();
+    let event = json!({"id":"next","assignment_id":"new-assignment","goal_revision":1,"action":"tool.run","role":"implementor","at":"2026-10-06T12:00:00Z","worktree":"tree","status":"running","detail":"next"});
+    let before = store.appended_event_bytes();
+    store
+        .record_activity(&goal_id, event.clone())
+        .await
+        .unwrap();
+    assert!(store.appended_event_bytes() - before < 4096);
+    let rows = store.query("GoalList").unwrap();
+    let row = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|goal| goal["goal_id"] == goal_id.as_str())
+        .unwrap();
+    let receipt: Value = serde_json::from_str(row["planning_receipt"].as_str().unwrap()).unwrap();
+    assert_eq!(receipt["last_activity"], event);
+    assert!(receipt.get("activity").is_none() && receipt.get("planner").is_none());
+    let history = store.activity_history(&goal_id).unwrap();
+    let mut activity = legacy["activity"].as_array().unwrap().clone();
+    activity.push(event.clone());
+    assert_eq!(history["activity"], json!(activity));
+    assert_eq!(history["planner"], legacy["planner"]);
+    assert_eq!(history["acceptance"], legacy["acceptance"]);
+    let mut fleet = legacy["fleet"].as_object().unwrap().clone();
+    fleet.insert("new-assignment".into(), event);
+    assert_eq!(history["fleet"], Value::Object(fleet));
+    drop(store);
+    let reopened = Store::open(&database).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap(), rows);
+    assert_eq!(reopened.activity_history(&goal_id).unwrap(), history);
+}
+
+#[tokio::test]
+async fn unchanged_planner_evidence_is_recorded_once() {
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let goal = goal(&mut store, &ws).await;
+    let evidence = json!({"namespace":"plan","transcript":["observed ".repeat(8192)]});
+    let mut appended = Vec::new();
+    for index in 0..3 {
+        let event = json!({"id":index.to_string(),"action":"planning.Planning","role":"planner","status":"running","detail":format!("step {index}")});
+        let receipt = json!({"planner":evidence,"last_activity":event,"activity":[event]});
+        let before = store.appended_event_bytes();
+        store.execute("RecordPlanningProgress",json!({"goal_id":goal,"planning_revision":1,"planning_fingerprint":"f","planning_repository":"","planning_worktree_id":"t","planning_worktree_path":"t","planning_phase":"Planning","planning_reason":"","planning_receipt":receipt.to_string()}),Actor::Supervisor).await.unwrap();
+        appended.push(store.appended_event_bytes() - before);
+    }
+    assert!(appended[0] > 2 * 65536, "{appended:?}");
+    assert!(appended[1] < 4096 && appended[2] < 4096, "{appended:?}");
+    let history = store.activity_history(&goal).unwrap();
+    assert_eq!(history["planner"], evidence);
+    assert_eq!(history["activity"].as_array().unwrap().len(), 3);
+    drop(store);
+    let reopened = Store::open(&database).await.unwrap();
+    assert_eq!(reopened.activity_history(&goal).unwrap(), history);
+}
+
+#[test]
+fn recorded_activity_bounds_are_stable() {
+    let large =
+        json!({"summary":"界".repeat(900),"event":{"kind":"model-stream","text":"x".repeat(4096)}});
+    let unnamed = json!({"program":"cargo","path":"src/lib.rs","output":"y".repeat(4096)});
+    let wide = Value::Object(
+        (0..40)
+            .map(|index| (format!("member{index:02}"), json!("v".repeat(100))))
+            .chain([("program".to_owned(), json!("cargo"))])
+            .collect(),
+    );
+    for detail in [
+        json!("z".repeat(2048)),
+        large,
+        unnamed,
+        wide,
+        json!({"small":true}),
+    ] {
+        let activity = json!({"id":"a","action":"tool.run","role":"implementor","status":"running","at":"now","worktree":"w".repeat(1024),"unlisted":"dropped","detail":detail});
+        let once = memory::bounded_activity(&activity);
+        assert_eq!(memory::bounded_activity(&once), once);
+        assert!(once.to_string().len() < 4096, "{once}");
+        assert!(once.get("unlisted").is_none());
+    }
+    // Every member of a larger detail is kept, bounded, with the original size.
+    let unnamed = memory::bounded_activity(
+        &json!({"detail":{"program":"cargo","path":"src/lib.rs","output":"y".repeat(4096)}}),
+    );
+    assert_eq!(unnamed["detail"]["program"], "cargo");
+    assert_eq!(unnamed["detail"]["path"], "src/lib.rs");
+    assert_eq!(unnamed["detail"]["output"].as_str().unwrap().len(), 240);
+    assert!(unnamed["detail"]["_bounded"]["bytes"].as_u64().unwrap() > 4096);
+    // Still over 1 KiB, it keeps what readers show and names what it left out.
+    let wide = memory::bounded_activity(&json!({"detail":Value::Object(
+        (0..40)
+            .map(|index| (format!("member{index:02}"), json!("v".repeat(100))))
+            .chain([("program".to_owned(), json!("cargo"))])
+            .collect(),
+    )}));
+    assert_eq!(wide["detail"]["program"], "cargo");
+    assert!(wide["detail"].get("member00").is_none());
+    assert_eq!(wide["detail"]["_bounded"]["dropped_count"], 40);
+    assert_eq!(wide["detail"]["_bounded"]["dropped"][0], "member00");
+}
+
+/// A running goal for the adversary cases below.
+async fn adversary_goal(store: &mut Store, path: &Path) -> String {
+    let ws = workspace(store, path).await;
+    let goal = goal(store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    goal
+}
+
+#[tokio::test]
+async fn adversary_progress_after_a_long_planning_reason_stays_under_16_kib() {
+    // story:bounded-progress-records outcome: recording runtime progress costs at most 16 KiB
+    // of event data per progress decision. The supervisor records a blocked planning attempt
+    // with `planning_reason = format!("{error:#}")`; a failed command's ProcessExit displays its
+    // whole stdout and stderr. Fleet progress on the same goal (record_activity) copies every
+    // planning_* field into each decision, and the core caps none of them.
+    let temp = scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let goal = adversary_goal(&mut store, temp.path()).await;
+    let output = "test fleet_fixture::requested_answer ... FAILED\n".repeat(400);
+    let reason =
+        format!("git [\"commit\", \"-m\", \"plan\"] exited Some(1):\nstdout:\n{output}\nstderr:\n");
+    let blocked = store.execute("RecordPlanningProgress",json!({"goal_id":goal,"planning_revision":1,"planning_fingerprint":"f","planning_repository":"","planning_worktree_id":"t","planning_worktree_path":"t","planning_phase":"Blocked","planning_reason":reason,"planning_receipt":"{}"}),Actor::Supervisor).await.unwrap();
+    assert_eq!(blocked["outcome"], "applied");
+    let mut added = Vec::new();
+    for index in 0..3 {
+        let before = store.appended_event_bytes();
+        store
+            .record_activity(
+                &goal,
+                json!({"id":format!("a{index}"),"assignment_id":"queued-before-planning-blocked","goal_revision":1,"action":"tool.run","role":"implementor","status":"running","detail":format!("step {index}")}),
+            )
+            .await
+            .unwrap();
+        added.push(store.appended_event_bytes() - before);
+    }
+    assert!(
+        added.iter().all(|bytes| *bytes <= 16 * 1024),
+        "progress decisions after a blocked planning attempt: {added:?} bytes"
+    );
+}
+
+#[tokio::test]
+async fn adversary_goal_list_shows_the_receipt_the_command_recorded() {
+    // ess/domains/host.yaml: RecordPlanningProgress `sets planning_receipt:
+    // input.planning_receipt` and publishes it in PlanningProgressRecorded; GoalList's
+    // planning_receipt is the Goal's field. The view must show what was recorded.
+    let temp = scratch();
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let goal = adversary_goal(&mut store, temp.path()).await;
+    let mut recorded = Value::Null;
+    for index in 0..2 {
+        let outcome = store
+            .record_activity(
+                &goal,
+                json!({"id":format!("a{index}"),"action":"tool.run","role":"implementor","status":"running","detail":format!("step {index}")}),
+            )
+            .await
+            .unwrap();
+        recorded = outcome["published"][0]["payload"]["planning_receipt"].clone();
+    }
+    assert!(recorded.is_string(), "no recorded receipt in the outcome");
+    let row = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(row["planning_receipt"], recorded);
+}
+
+#[test]
+fn adversary_structured_detail_bounds_every_member_it_keeps() {
+    // The projection of a structured detail over 1 KiB copies `omitted_bytes` verbatim,
+    // whatever its type and size.
+    let detail = json!({"summary":"governor state","omitted_bytes":"artifact ".repeat(8 * 1024),"artifacts":"x".repeat(2048)});
+    let activity = json!({"id":"a","action":"governor-state","role":"runtime","status":"running","at":"now","detail":detail});
+    let once = memory::bounded_activity(&activity);
+    assert!(
+        once.to_string().len() < 4096,
+        "bounded activity is {} bytes",
+        once.to_string().len()
+    );
+}
+
+#[tokio::test]
+async fn adversary_journal_keeps_the_newest_64_once_each_across_restart() {
+    // Pins the history the evidence view showed before bounding (newest 64 activities, newest
+    // per assignment) through re-records that repeat the current last activity, as acceptance
+    // and unchanged planner phases do. No existing case records more than 24 activities and
+    // checks the history length, or re-records an unchanged last activity.
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let goal = adversary_goal(&mut store, temp.path()).await;
+    let mut sent = Vec::new();
+    for index in 0..100 {
+        let event = json!({"id":format!("event-{index:03}"),"assignment_id":format!("assignment-{}",index%3),"goal_revision":1,"action":"tool.run","role":"implementor","status":"running","detail":format!("step {index}")});
+        store.record_activity(&goal, event.clone()).await.unwrap();
+        sent.push(event);
+        if index % 10 == 9 {
+            let current = store.query("GoalList").unwrap()[0].clone();
+            let mut receipt: Value =
+                serde_json::from_str(current["planning_receipt"].as_str().unwrap()).unwrap();
+            receipt["acceptance"] = json!({"status":"running","reason":format!("check {index}")});
+            let mut body = current.as_object().unwrap().clone();
+            body.retain(|key, _| key.starts_with("planning_") || key == "goal_id");
+            body.insert("planning_receipt".into(), json!(receipt.to_string()));
+            let outcome = store
+                .execute(
+                    "RecordPlanningProgress",
+                    Value::Object(body),
+                    Actor::Supervisor,
+                )
+                .await
+                .unwrap();
+            assert_eq!(outcome["outcome"], "applied");
+        }
+    }
+    // Correction F2: GoalList shows the recorded receipt; the history it no longer repeats
+    // (activity, fleet, acceptance) is read from Store::activity_history.
+    let shown = |store: &Store| -> Value {
+        let row = store.query("GoalList").unwrap()[0].clone();
+        let receipt: Value =
+            serde_json::from_str(row["planning_receipt"].as_str().unwrap()).unwrap();
+        let mut shown = store
+            .activity_history(row["goal_id"].as_str().unwrap())
+            .unwrap();
+        shown["last_activity"] = receipt["last_activity"].clone();
+        shown
+    };
+    let live = shown(&store);
+    assert_eq!(live["activity"], json!(sent[36..].to_vec()));
+    assert_eq!(live["last_activity"], sent[99]);
+    for assignment in 0..3 {
+        let newest = sent
+            .iter()
+            .rev()
+            .find(|event| event["assignment_id"] == format!("assignment-{assignment}"))
+            .unwrap();
+        assert_eq!(live["fleet"][format!("assignment-{assignment}")], *newest);
+    }
+    assert_eq!(live["acceptance"]["reason"], "check 99");
+    drop(store);
+    assert_eq!(shown(&Store::open(&database).await.unwrap()), live);
+}
+
+#[tokio::test]
+async fn adversary_rejected_acceptance_is_recorded_once_and_survives_restart() {
+    // The fleet records a rejected goal review on the receipt it reads from GoalList
+    // (fleet.rs:114-123, reason capped with bounded_text at 8 KiB); later progress copies that
+    // receipt. The acceptance record must not be repeated by those decisions, and the latch
+    // input (Store::activity_history's acceptance) must survive a restart. No earlier case
+    // measures a decision recorded after an acceptance record.
+    let temp = scratch();
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let goal = adversary_goal(&mut store, temp.path()).await;
+    store
+        .record_activity(
+            &goal,
+            json!({"id":"before","action":"goal.review","role":"goal_reviewer","status":"running","detail":"reviewing"}),
+        )
+        .await
+        .unwrap();
+    let reason = format!(
+        "Goal acceptance blocked: final goal review rejected: {}",
+        json!({"approved":false,"reason":"Obligation is not demonstrated.\n".repeat(400)})
+    );
+    let acceptance = json!({"fingerprint":"fp","status":"failed","reason":bounded_text(&reason, 8 * 1024),"at":"2026-10-06T10:00:00Z","goal_revision":1});
+    let current = store.query("GoalList").unwrap()[0].clone();
+    let mut receipt: Value =
+        serde_json::from_str(current["planning_receipt"].as_str().unwrap()).unwrap();
+    receipt["acceptance"] = acceptance.clone();
+    let mut body = current.as_object().unwrap().clone();
+    body.retain(|key, _| key.starts_with("planning_") || key == "goal_id");
+    body.insert("planning_receipt".into(), json!(receipt.to_string()));
+    let before = store.appended_event_bytes();
+    store
+        .execute(
+            "RecordPlanningProgress",
+            Value::Object(body),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let recorded = store.appended_event_bytes() - before;
+    assert!(recorded > 2 * 8 * 1024, "{recorded}");
+    let mut later = Vec::new();
+    for index in 0..3 {
+        let before = store.appended_event_bytes();
+        store
+            .record_activity(
+                &goal,
+                json!({"id":format!("after-{index}"),"assignment_id":"a","goal_revision":1,"action":"blocked","role":"goal_reviewer","status":"failed","detail":{"reason":reason}}),
+            )
+            .await
+            .unwrap();
+        later.push(store.appended_event_bytes() - before);
+    }
+    assert!(
+        later.iter().all(|bytes| *bytes < 4096),
+        "decisions after the acceptance record: {later:?}"
+    );
+    let row = store.query("GoalList").unwrap()[0].clone();
+    let stored: Value = serde_json::from_str(row["planning_receipt"].as_str().unwrap()).unwrap();
+    assert!(stored.get("acceptance").is_none(), "{stored}");
+    assert_eq!(
+        store.activity_history(&goal).unwrap()["acceptance"],
+        acceptance
+    );
+    drop(store);
+    let reopened = Store::open(&database).await.unwrap();
+    assert_eq!(
+        reopened.activity_history(&goal).unwrap()["acceptance"],
+        acceptance
+    );
+}

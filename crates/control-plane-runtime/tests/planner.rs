@@ -11,6 +11,27 @@ use tokio::sync::Notify;
 
 struct Scripted(Mutex<VecDeque<Value>>);
 
+/// What the operator inspects for the goal: its recorded receipt and the progress history
+/// (`Store::activity_history`) that bounded receipts no longer repeat.
+async fn evidence(store: &tokio::sync::Mutex<Store>) -> String {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0].clone();
+    let history = store
+        .activity_history(goal["goal_id"].as_str().unwrap())
+        .unwrap();
+    format!("{}\n{history}", goal["planning_receipt"].as_str().unwrap())
+}
+
+/// The goal's newest activities, oldest first.
+async fn activity(store: &tokio::sync::Mutex<Store>) -> Vec<Value> {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0]["goal_id"].clone();
+    store.activity_history(goal.as_str().unwrap()).unwrap()["activity"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
 #[tokio::test]
 async fn missing_reads_are_observations_and_planning_can_continue() {
     let (_, store, config, _, _) = setup(true).await;
@@ -26,11 +47,9 @@ async fn missing_reads_are_observations_and_planning_can_continue() {
         .await
         .unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
-    let goals = store.lock().await.query("GoalList").unwrap();
     assert!(
-        goals[0]["planning_receipt"]
-            .as_str()
-            .unwrap()
+        evidence(&store)
+            .await
             .contains("File not found: ess/domains/not-created.yaml")
     );
 }
@@ -342,13 +361,7 @@ async fn planner_can_read_aep_help_then_finish_existing_work() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert!(model.0.lock().unwrap().is_empty());
-    let goals = store.lock().await.query("GoalList").unwrap();
-    assert!(
-        goals[0]["planning_receipt"]
-            .as_str()
-            .unwrap()
-            .contains("Usage: aep plan artifact")
-    );
+    assert!(evidence(&store).await.contains("Usage: aep plan artifact"));
 }
 
 #[tokio::test]
@@ -414,8 +427,7 @@ async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert!(model.0.lock().unwrap().is_empty());
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     assert!(receipt.contains("AEP syntax feedback"));
     assert!(receipt.contains("operator-console"));
 }
@@ -457,12 +469,8 @@ async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert_eq!(*model.0.lock().unwrap(), 4);
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt: Value =
-        serde_json::from_str(goals[0]["planning_receipt"].as_str().unwrap()).unwrap();
-    let failed = receipt["activity"]
-        .as_array()
-        .unwrap()
+    let history = activity(&store).await;
+    let failed = history
         .iter()
         .filter(|event| event["action"] == "aep.syntax_rejected")
         .collect::<Vec<_>>();
@@ -1024,12 +1032,9 @@ async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
         }
     }
     let before = store.lock().await.query("GoalList").unwrap();
-    let receipt: Value =
-        serde_json::from_str(before[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    let history = activity(&store).await;
     assert!(
-        receipt["activity"]
-            .as_array()
-            .unwrap()
+        history
             .iter()
             .any(|a| a["action"] == "model.completed" && a["role"] == "critic")
     );
@@ -1041,6 +1046,7 @@ async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
         .await
         .unwrap();
     assert_eq!(reopened.query("GoalList").unwrap(), before);
+    assert_eq!(activity(&tokio::sync::Mutex::new(reopened)).await, history);
 }
 impl AgentModel for PausingModel {
     fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
@@ -1513,7 +1519,7 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
     assert_eq!(report.queued, 1, "{report:?}");
     assert_eq!(provider.calls.load(Ordering::SeqCst), 10);
     let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     let planning_tree = goals[0]["planning_worktree_path"].as_str().unwrap();
     assert!(
         !Path::new(planning_tree)
@@ -1548,8 +1554,7 @@ async fn planner_input_refusals_reach_the_model() {
         .await
         .unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     for code in [
         "write_outside_specification_root",
         "duplicate_story_selection",
@@ -1558,4 +1563,211 @@ async fn planner_input_refusals_reach_the_model() {
     ] {
         assert!(receipt.contains(code), "{code} did not reach the planner");
     }
+}
+
+#[tokio::test]
+async fn planner_progress_does_not_repeat_the_transcript() {
+    /// Reads six 10 KiB files, then finishes; notes the event data recorded before each turn.
+    struct Reader {
+        store: Arc<tokio::sync::Mutex<Store>>,
+        appended: Mutex<Vec<u64>>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let appended = tokio::runtime::Handle::current()
+                .block_on(async { self.store.lock().await.appended_event_bytes() });
+            let mut seen = self.appended.lock().unwrap();
+            seen.push(appended);
+            Ok(match (request.role.as_str(), seen.len()) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 6 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=6 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(380)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        store: store.clone(),
+        appended: Mutex::new(Vec::new()),
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    let appended = model.appended.lock().unwrap().clone();
+    assert_eq!(appended.len(), 8, "{appended:?}");
+    // Between two planner turns: the response, the read intent, its observation, governance
+    // events and the next request. Each of them repeated the growing transcript and activity
+    // history before progress was bounded, so every read cost more than the one before.
+    let turns = appended
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect::<Vec<_>>();
+    assert!(
+        turns[1..6].iter().all(|bytes| *bytes < 48 * 1024),
+        "{turns:?}"
+    );
+    assert!(
+        turns[5] <= turns[1] + 1024,
+        "progress grows with the transcript: {turns:?}"
+    );
+    assert!(
+        evidence(&store).await.contains("# Note 6"),
+        "the validated plan keeps its observations"
+    );
+}
+
+#[tokio::test]
+async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
+    // story:bounded-progress-records, as narrowed by the coordinator (correction round 2, P1):
+    // the 16 KiB bound is for per-event progress decisions. The validated plan is planning
+    // evidence recorded once per planning attempt (supervisor.rs:435, the engine's output
+    // receipt with its transcript and action history, in the decision's body and again in its
+    // outcome); it is at most 128 KiB here and no later decision repeats it.
+    //
+    // The planner reads nine 12 KiB pages, the 96 KiB working set its transcript keeps. An
+    // observer samples (committed version, appended event data, planning phase) every
+    // millisecond; two samples one version apart give the exact size of the decision between
+    // them. The validated-plan decision runs between two processes (`aep plan artifact
+    // validate` before it, the plan commit after it), so it is sampled on both sides.
+    struct Reader {
+        marks: Mutex<usize>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut marks = self.marks.lock().unwrap();
+            *marks += 1;
+            Ok(match (request.role.as_str(), *marks) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 9 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=9 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(450)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        marks: Mutex::new(0),
+    });
+    async fn sample(store: &tokio::sync::Mutex<Store>) -> (u64, u64, Value) {
+        let store = store.lock().await;
+        let version = *store.subscribe().borrow();
+        let phase = store.query("GoalList").unwrap()[0]["planning_phase"].clone();
+        (version, store.appended_event_bytes(), phase)
+    }
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observer = tokio::spawn({
+        let store = store.clone();
+        let stop = stop.clone();
+        async move {
+            let mut samples = Vec::new();
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                samples.push(sample(&store).await);
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+            samples
+        }
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut samples = observer.await.unwrap();
+    samples.push(sample(&store).await);
+    samples.dedup_by_key(|(version, _, _)| *version);
+    assert_eq!(report.queued, 1, "{report:?}");
+    let validated = samples
+        .windows(2)
+        .find(|pair| pair[0].2 != "Validated" && pair[1].2 == "Validated")
+        .expect("the validated plan was recorded");
+    assert_eq!(
+        validated[1].0 - validated[0].0,
+        1,
+        "the validated-plan decision was not sampled on both sides: {validated:?}"
+    );
+    let size = validated[1].1 - validated[0].1;
+    assert!(
+        size <= 128 * 1024,
+        "the validated-plan decision (version {}) is {size} bytes of event data",
+        validated[1].0
+    );
+    // Every decision after it in this run stays within the per-event bound. Two samples more
+    // than one version apart bound each decision between them by their average.
+    let start = samples
+        .iter()
+        .position(|sample| sample.0 == validated[1].0)
+        .unwrap();
+    let after = samples[start..]
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0, pair[1].1 - pair[0].1))
+        .collect::<Vec<_>>();
+    assert!(!after.is_empty(), "no decision was recorded after the plan");
+    assert!(
+        after
+            .iter()
+            .all(|(decisions, bytes)| *bytes <= 16 * 1024 * decisions),
+        "decisions after the validated plan, as (decisions, bytes): {after:?}"
+    );
+    // The transcript stays in the plan's own record: the goal's last recorded receipt does not
+    // carry it, and its history shows the evidence once.
+    let goal = store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["planning_phase"], "Queued");
+    let receipt = goal["planning_receipt"].as_str().unwrap();
+    assert!(
+        !receipt.contains("observed repository detail"),
+        "the last recorded receipt repeats the transcript ({} bytes)",
+        receipt.len()
+    );
+    assert!(evidence(&store).await.contains("# Note 9"));
 }

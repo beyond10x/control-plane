@@ -13,6 +13,9 @@ use std::{
 use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 
+/// Serialized bytes of planner evidence one progress event may record.
+const EVIDENCE_BYTES: usize = 4 * 1024;
+
 pub struct Supervisor {
     store: SharedStore,
     wake: Arc<Notify>,
@@ -86,12 +89,19 @@ impl Supervisor {
                 rows(&self.store, "AssignmentList").await?,
             );
             let rejected_goal = goal.clone();
+            let acceptance = self
+                .store
+                .lock()
+                .await
+                .activity_history(text(&goal, "goal_id")?)?["acceptance"]
+                .clone();
             let rejected_repositories = repositories.clone();
             let rejected_assignments = assignments.clone();
             let runner = self.runner();
             if tokio::task::spawn_blocking(move || {
                 crate::fleet::acceptance_is_unchanged(
                     &rejected_goal,
+                    &acceptance,
                     &rejected_repositories,
                     &rejected_assignments,
                     &runner,
@@ -181,6 +191,22 @@ impl Supervisor {
             }
         }
         Ok(report)
+    }
+    /// Record one runtime progress event of an assignment through the fleet's progress path.
+    /// The assignment's goal must still be Running at the assignment's goal revision.
+    pub async fn record_progress(
+        &self,
+        assignment: &Value,
+        action: &str,
+        role: &str,
+        detail: Value,
+    ) -> Result<()> {
+        let mut store = self.store.lock().await;
+        check_goal(
+            &store,
+            &json!({"goal_id":assignment["goal_id"],"revision":assignment["goal_revision"]}),
+        )?;
+        crate::fleet::record_progress(&mut store, assignment, action, role, detail).await
     }
     pub async fn fleet_tick(&self) -> Result<TickReport> {
         let _exclusive = self.tick_lock.lock().await;
@@ -352,6 +378,9 @@ impl Supervisor {
         let hook: ProgressHook = Arc::new(move |kind, receipt| {
             ensure!(!attempt_cancel.is_cancelled(), "planning attempt cancelled");
             let mut progress = metadata.clone();
+            // Each hook event becomes the goal's newest planner evidence; it is recorded once,
+            // so it stays bounded. Full file contents and request bodies are not progress.
+            let receipt = crate::context::bounded(receipt, EVIDENCE_BYTES);
             progress["planning_receipt"] =
                 json!(json!({"kind":kind,"receipt":receipt,"activity_id":uuid::Uuid::new_v4().to_string()}).to_string());
             handle.block_on(async {
