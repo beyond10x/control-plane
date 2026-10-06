@@ -39,7 +39,7 @@ scope:
   path: ess/
 - confidence: cited
   path: frontend/
-revision: 21
+revision: 22
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 3, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
 - {from: "proposed", to: "active", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 4, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
@@ -219,3 +219,21 @@ Coordinator review checked typed-error classification, full-list preflight, fail
 Full task check passed after integration: strict ESS/AEP validation, deterministic embedded Vue drift, formatting, denied-warning Clippy, 157 Rust tests, generated contracts, 167 durable conformance scenarios with zero failures/errors/unsupported/skips, and foundation dependency qualification. The live executable digest equals the new build. Restart retained six workspaces, both failed/cancelled eval goals and the paused round-6 goal. Chromium observed Live SSE, six workspace links, zero iframes and no JavaScript errors.
 
 Round 6 now runs from another fresh external seed, retaining all previous evidence and the round-4 published application. One worker, one attempt, gpt-5.6-sol and the ten-minute total cutoff remain unchanged. Its real-provider outcome is pending; component success is not application delivery.
+
+## Round 6 outcome and next proposed correction
+
+Round 6 ran on the integrated code published as e0d75c91d0dadee09683e80b18ebab08e27e8eea. Its exact source CI checks succeeded. The round stopped after 217.075 seconds with 25 provider turns: 15 planner, one independent plan critic and nine implementor. Observed totals were 134,292 input tokens, 7,799 output tokens and 28,288 cached input tokens; dollar cost unavailable. Implementation used 43,237 input tokens across nine turns with 9,242 total user-message bytes. The previous duplicate planning receipt is absent. Because autonomous delivery stopped before review/publication, this is not a successful end-to-end cost comparison.
+
+Planning and independent plan review passed. The implementor read relative files and wrote cmd/server/main.go, internal/app/app.go, internal/app/app_test.go, web/assets.go and README.md. It then proposed gofmt -w with those four Go files. inspection_arguments admits no gofmt program and refused the command before process execution. ImplementationPhase mapped the command-policy rejection to EffectError and the real runtime suspended for ExternalAvailability. The monitor cancelled the failed goal to prevent unintended further spend; all worktrees, sessions, pre-stop state and uncommitted application source remain intact.
+
+The coordinator ran the trusted external go-auth-web verifier against the retained implementation: PASS go-auth-web. This establishes working generated application behavior in that checkout, not an independently reviewed/published candidate or satisfied goal. No manual application changes, commits, publication or fabricated success were substituted. The diagnostic native Loom/Commission replay reproduces the exact unsupported-command suspension in 3.48 seconds. Temporary test registration is removed; external results retain source and log.
+
+The read-path correction was too narrow to resolve the broader adapter contract issue: ordinary command-admission refusals are still classified as inability to answer. Supported EffectOutcome::Refused already provides the needed foundation behavior; this is not a missing Loom capability.
+
+Proposed next correction, awaiting operator approval:
+
+1. Make the existing admitted program/argument grammar explicit to the implementor, including the isolated Go commands. Keep this tied to the actual validator so guidance cannot silently promise unimplemented commands.
+2. Represent rejected model command proposals with a typed, bounded admission refusal through existing Commission/Loom continuation. No process is launched on refusal. Do not broaden the executable/option allowlist or admit arbitrary formatting writes. Genuine launch/I/O failures, cancelled or stale authority, confinement, persistence and provider failures remain fatal.
+3. Bound repeated command refusals and test the captured gofmt -w proposal followed by corrective behavior through the native runtime, real checks, independent review and observed publication. Preserve negative tests for write-capable inspection arguments and external/symlink writes. Run repository gates and another fresh isolated Go eval under the same one-worker/one-attempt/ten-minute budget, retaining the already-working round-6 source and all evidence.
+
+The operator's approval is required before implementing these proposed changes. If approved, delegate one bounded worker, integrate and review it, then run the next eval. Do not report the autonomous delivery goal complete from the retained app's verifier result.
