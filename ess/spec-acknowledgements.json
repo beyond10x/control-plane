@@ -1,5 +1,5 @@
 {
-  "format": "control-plane-spec-acknowledgements/1",
+  "format": "control-plane-spec-acknowledgements/2",
   "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
   "acknowledged": [
     {
@@ -27,6 +27,23 @@
           "outcome": "satisfied"
         }
       },
+      "outcome": {
+        "name": "satisfied",
+        "condition": {
+          "kind": "subject_state",
+          "state": "Satisfied",
+          "predicate": null
+        },
+        "test_strategy": "construct_input_in_state",
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict"
+      },
+      "command_outcomes": [
+        "applied",
+        "satisfied",
+        "cancelled",
+        "not-found"
+      ],
       "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
       "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Satisfied goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
     },
@@ -40,6 +57,23 @@
           "outcome": "cancelled"
         }
       },
+      "outcome": {
+        "name": "cancelled",
+        "condition": {
+          "kind": "subject_state",
+          "state": "Cancelled",
+          "predicate": null
+        },
+        "test_strategy": "construct_input_in_state",
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict"
+      },
+      "command_outcomes": [
+        "applied",
+        "satisfied",
+        "cancelled",
+        "not-found"
+      ],
       "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
       "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Cancelled goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
     }

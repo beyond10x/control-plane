@@ -100,7 +100,7 @@ one entry:
 
 ```json
 {
-  "format": "control-plane-spec-acknowledgements/1",
+  "format": "control-plane-spec-acknowledgements/2",
   "baseline": "<full commit id>",
   "acknowledged": [
     {
@@ -120,6 +120,42 @@ one entry:
     }
   ]
 }
+```
+
+ESS prints an added outcome's `change` with the outcome's name only. An `outcome-added` entry
+therefore also records two things from `ess specify compile --path ess --format json`:
+
+- `outcome`: the outcome exactly as the compiler prints it under the command's `outcomes`.
+- `command_outcomes`: the names of all the command's outcomes there, in order, the added one
+  included.
+
+ESS does not answer in declaration order alone. Input-guarded refusals answer first, before the
+addressed record is read, wherever they are declared. Subject-guarded branches, accepting branches
+and the default follow. So any other outcome of the command, declared before or after the added
+one, can decide which calls the added one answers. ESS reports order changes only among outcomes
+that both revisions declare. Outcomes can therefore be added, dropped or moved without any change
+reported against the added outcome and without its compiled object changing. The entry binds the
+whole list for that reason. Any change to the list re-opens every added-outcome entry of the
+command, even a swap of two outcomes that cannot both hold. That over-binds on purpose: an entry
+goes inert once the baseline moves anyway.
+
+The check compiles `ess/` and admits the change only while the outcome compiles to that same
+object, among the same outcomes in the same order. A later outcome with the same name is refused
+if it has a different condition or a different answer (error, subject, events, payload or field
+updates). It is also refused if the command's outcome list differs. The refusal names the entry
+and lists each differing field, `command_outcomes` included, as reviewed and as the model has it
+now. The ready entry carries both as they compile now. No other entry may carry `outcome` or
+`command_outcomes`. For `UpdateGoal`'s `satisfied` refusal:
+
+```json
+"outcome": {
+  "name": "satisfied",
+  "condition": { "kind": "subject_state", "state": "Satisfied", "predicate": null },
+  "test_strategy": "construct_input_in_state",
+  "emits": [],
+  "error": "controlplane.host.GoalStateConflict"
+},
+"command_outcomes": ["applied", "satisfied", "cancelled", "not-found"]
 ```
 
 An entry applies only while the gate's baseline equals its `baseline`. Once the baseline moves,
