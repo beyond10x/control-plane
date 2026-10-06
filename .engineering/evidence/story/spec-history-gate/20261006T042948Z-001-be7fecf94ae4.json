@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T04:29:48Z",
+  "actor": "human:timo",
+  "artifact": "story:spec-history-gate",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo run -p control-plane-xtask -- spec-history-check with Blocked removed from Assignment.repair.from (unit head 7177419)",
+    "reference": "VERIFIED: treatment exit 1 naming entity/controlplane.host.Assignment/transition-route-changed/repair; baseline a09cff6 has no such gate step"
+  }
+}

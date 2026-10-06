@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spec-history-gate
 kind: story
-status: active
+status: implemented
 title: Specification changes that could break stored history fail the gate
 relations:
 - decomposes: epic:unattended-operation
@@ -11,16 +11,25 @@ relations:
 scope:
 - confidence: cited
   path: Taskfile.yml
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-core/tests
-- confidence: inferred
-  path: crates/control-plane-xtask/src
-- confidence: inferred
-  path: ess
-revision: 8
+- confidence: cited
+  path: crates/control-plane-xtask/README.md
+- confidence: cited
+  path: crates/control-plane-xtask/src/history.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/main.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/spec_history.rs
+- confidence: cited
+  path: crates/control-plane-xtask/tests
+- confidence: cited
+  path: ess/spec-acknowledgements.json
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":1}}, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-06T05:08:35Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":1,"review_outcome":3,"verification":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 

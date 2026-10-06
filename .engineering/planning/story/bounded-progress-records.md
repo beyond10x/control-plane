@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:bounded-progress-records
 kind: story
-status: active
+status: implemented
 title: Progress records stay bounded and restart replay stays fast
 relations:
 - decomposes: epic:unattended-operation
@@ -11,19 +11,36 @@ relations:
 - depends_on: story:model-input-refusals
 scope:
 - confidence: cited
+  path: crates/control-plane-app/src/dashboard.rs
+- confidence: cited
+  path: crates/control-plane-app/src/lib.rs
+- confidence: cited
   path: crates/control-plane-app/src/live.rs
 - confidence: cited
+  path: crates/control-plane-app/src/tests.rs
+- confidence: cited
+  path: crates/control-plane-core/fixtures
+- confidence: cited
   path: crates/control-plane-core/src/lib.rs
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-core/src/memory.rs
+- confidence: cited
+  path: crates/control-plane-core/src/tests.rs
+- confidence: cited
+  path: crates/control-plane-runtime/src/context.rs
+- confidence: cited
+  path: crates/control-plane-runtime/src/engine.rs
 - confidence: cited
   path: crates/control-plane-runtime/src/fleet.rs
 - confidence: cited
   path: crates/control-plane-runtime/src/supervisor.rs
-revision: 8
+- confidence: cited
+  path: crates/control-plane-runtime/tests
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":5}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T03:05:53Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":5}}, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-06T05:08:35Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":9,"verification":1}}, executor: "agent:claude-wave-coordinator"}
 ---
 ## Outcome
 
@@ -55,3 +72,8 @@ Cited: crates/control-plane-runtime/src/fleet.rs (`progress`), crates/control-pl
 ## Out of scope
 
 Deleting or compacting the existing live store by hand: the migration must keep it openable, and removing history is the operator's decision.
+
+
+## Narrowing decided during wave 1 (2026-10-06)
+
+The 16 KiB bound applies to per-event progress decisions (Loom and fleet activity). Adversary pass 2 (review-result:adversary-bounded-progress-records-pass-2, P1) measured the validated-plan decision at 108,904 bytes: it is planning evidence recorded once per planning attempt, read by the evidence page and planner tests, and no later decision repeats it. The coordinator kept it, bounded it at 128 KiB, and required every later progress decision in the run to stay at or under 16 KiB. The acceptance record is capped at 5 KiB so its decision stays under 16 KiB (P2).
