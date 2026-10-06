@@ -123,13 +123,21 @@ one entry:
 ```
 
 ESS prints an added outcome's `change` with the outcome's name only. An `outcome-added` entry
-therefore also records `outcome`: the outcome exactly as `ess specify compile --path ess --format
-json` prints it under the command's `outcomes`. The check compiles `ess/` and admits the change
-only while the outcome compiles to that same object. A later outcome with the same name but a
-different condition or answer (error, subject, events, payload or field updates) is refused. The
-refusal names the entry and lists each differing field as reviewed and as the model has it now.
-The ready entry carries the outcome as it compiles now. No other entry may carry `outcome`. For
-`UpdateGoal`'s `satisfied` refusal:
+therefore also records two things from `ess specify compile --path ess --format json`:
+
+- `outcome`: the outcome exactly as the compiler prints it under the command's `outcomes`.
+- `preceded_by`: the names of the outcomes listed before it there, in order.
+
+A command answers with the first outcome whose condition holds, so the outcomes before an added
+outcome decide which calls it answers. ESS reports order changes only among outcomes that both
+revisions declare. An added outcome can therefore move without any reported change.
+
+The check compiles `ess/` and admits the change only while the outcome compiles to that same
+object, behind the same outcomes. A later outcome with the same name is refused if it has a
+different condition, a different answer (error, subject, events, payload or field updates) or a
+different position. The refusal names the entry and lists each differing field, `preceded_by`
+included, as reviewed and as the model has it now. The ready entry carries both as they compile
+now. No other entry may carry `outcome` or `preceded_by`. For `UpdateGoal`'s `satisfied` refusal:
 
 ```json
 "outcome": {
@@ -138,7 +146,8 @@ The ready entry carries the outcome as it compiles now. No other entry may carry
   "test_strategy": "construct_input_in_state",
   "emits": [],
   "error": "controlplane.host.GoalStateConflict"
-}
+},
+"preceded_by": ["applied"]
 ```
 
 An entry applies only while the gate's baseline equals its `baseline`. Once the baseline moves,

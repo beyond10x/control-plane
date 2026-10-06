@@ -11,9 +11,10 @@
 //!
 //! ESS prints an added outcome's `change` with the outcome's name only, so the acknowledgement of
 //! an `outcome-added` change also records the outcome itself, exactly as `ess specify compile`
-//! printed it when it was reviewed (see [`compiled_outcome`]). The gate compiles `ess/` and admits
-//! the change only while the outcome compiles to the same object: the same condition and the same
-//! answer (error, subject, events, payload and field updates).
+//! printed it when it was reviewed, and its position: the names of the outcomes its command
+//! declares before it (see [`AddedOutcome`]). The gate compiles `ess/` and admits the change only
+//! while the outcome compiles to the same object, the same condition and the same answer (error,
+//! subject, events, payload and field updates), behind the same outcomes.
 //!
 //! The baseline is the merge base of `HEAD` with `origin/main` (`main` in a clone without that
 //! remote) when that commit holds `ess/ess-inputs.yaml`, otherwise the commit the acknowledgement
@@ -40,11 +41,23 @@ struct Acknowledgement {
     id: String,
     /// The `change` object `ess verify diff` printed for the reviewed change.
     change: Value,
-    /// For an `outcome-added` change, and only for one, the added outcome as reviewed: the object
-    /// `ess specify compile` printed for it. The `change` names the outcome and nothing else.
-    outcome: Option<Value>,
+    /// For an `outcome-added` change, and only for one, the added outcome as reviewed. The
+    /// `change` names the outcome and nothing else.
+    added: Option<AddedOutcome>,
     /// The gate's baseline when the change was reviewed; the entry applies only against it.
     baseline: String,
+}
+
+/// An added outcome as reviewed (the entry's `outcome` and `preceded_by`), or as the model compiles
+/// it now. A command answers with the first of its outcomes, in declaration order, whose
+/// condition holds, so the outcomes declared before it decide which calls it answers. ESS orders
+/// only the outcomes both revisions declare and reports no move of an added one.
+#[derive(PartialEq)]
+struct AddedOutcome {
+    /// The outcome exactly as `ess specify compile --format json` prints it.
+    outcome: Value,
+    /// The names of the outcomes the command declares before it, in order.
+    preceded_by: Vec<String>,
 }
 
 /// The command and the outcome name of a command's `outcome-added` change.
@@ -113,7 +126,14 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
         let entry = closed(
             entry,
             "an acknowledgement",
-            &["id", "change", "outcome", "reason", "baseline"],
+            &[
+                "id",
+                "change",
+                "outcome",
+                "preceded_by",
+                "reason",
+                "baseline",
+            ],
         )?;
         let id = text(entry, "an acknowledgement", "id")?;
         text(entry, "an acknowledgement", "reason")?;
@@ -135,24 +155,55 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
                      `ess verify diff --compatibility --format json` printed it"
                 )
             })?;
-        let outcome = match (added_outcome(change), entry.get("outcome")) {
-            (Some((command, name)), None) => bail!(
-                "the acknowledgement of {id} must record the reviewed outcome `{name}` of {command} as \
-                 `outcome`, exactly as `ess specify compile --path ess --format json` prints it"
-            ),
-            (Some((_, name)), Some(outcome)) => {
+        let added = match added_outcome(change) {
+            Some((command, name)) => {
+                let outcome = entry.get("outcome").with_context(|| {
+                    format!(
+                        "the acknowledgement of {id} must record the reviewed outcome `{name}` of {command} as \
+                         `outcome`, exactly as `ess specify compile --path ess --format json` prints it"
+                    )
+                })?;
                 ensure!(
                     outcome.is_object() && outcome["name"] == name,
                     "the acknowledgement of {id} records an `outcome` that is not `{name}`; record the \
                      reviewed outcome exactly as `ess specify compile --path ess --format json` prints it"
                 );
-                Some(outcome.clone())
+                let preceded_by = entry.get("preceded_by").with_context(|| {
+                    format!(
+                        "the acknowledgement of {id} must record as `preceded_by` the names of the outcomes \
+                         {command} declares before `{name}`, in order, as `ess specify compile --path ess \
+                         --format json` lists them"
+                    )
+                })?;
+                let preceded_by = preceded_by
+                    .as_array()
+                    .and_then(|names| {
+                        names
+                            .iter()
+                            .map(|name| name.as_str().map(str::to_owned))
+                            .collect::<Option<Vec<_>>>()
+                    })
+                    .with_context(|| {
+                        format!(
+                            "the acknowledgement of {id} records a `preceded_by` that is not a list of \
+                             outcome names"
+                        )
+                    })?;
+                Some(AddedOutcome {
+                    outcome: outcome.clone(),
+                    preceded_by,
+                })
             }
-            (None, Some(_)) => bail!(
-                "the acknowledgement of {id} records an `outcome`, but only a command's \
-                 `outcome-added` change takes one"
-            ),
-            (None, None) => None,
+            None => {
+                for (article, field) in [("an", "outcome"), ("a", "preceded_by")] {
+                    ensure!(
+                        !entry.contains_key(field),
+                        "the acknowledgement of {id} records {article} `{field}`, but only a command's \
+                         `outcome-added` change takes one"
+                    );
+                }
+                None
+            }
         };
         ensure!(
             acknowledged
@@ -163,7 +214,7 @@ fn parse_acknowledgements(bytes: &[u8], origin: &str) -> Result<Acknowledgements
         acknowledged.push(Acknowledgement {
             id: id.to_owned(),
             change: change.clone(),
-            outcome,
+            added,
             baseline: reviewed.to_owned(),
         });
     }
@@ -494,23 +545,38 @@ fn compile(root: &Path) -> Result<Value> {
     serde_json::from_slice(&output.stdout).context("ess specify compile did not print JSON")
 }
 
-/// The outcome `name` of `command` in the compiled model: the whole object, which holds its
-/// condition (`condition`), its answer (`error`, `complete_refusal`, `subject`, `emits`,
-/// `payload`, `sets`) and whatever else the compiler records for it. An acknowledgement binds
-/// all of it, so an outcome field a later ESS adds is bound too, not silently ignored.
-fn compiled_outcome<'a>(model: &'a Value, command: &str, name: &str) -> Result<&'a Value> {
+/// The outcome `name` of `command` in the compiled model, and its position. The outcome is the
+/// whole object, which holds its condition (`condition`), its answer (`error`,
+/// `complete_refusal`, `subject`, `emits`, `payload`, `sets`) and whatever else the compiler
+/// records for it. An acknowledgement binds all of it, so an outcome field a later ESS adds is
+/// bound too, not silently ignored.
+fn compiled_outcome(model: &Value, command: &str, name: &str) -> Result<AddedOutcome> {
     let outcomes = model["commands"][command]["outcomes"]
         .as_array()
         .with_context(|| format!("ess specify compile printed no outcomes for {command}"))?;
-    let mut named = outcomes.iter().filter(|outcome| outcome["name"] == name);
-    let outcome = named.next().with_context(|| {
+    let position = outcomes.iter().position(|outcome| outcome["name"] == name).with_context(|| {
         format!("ess specify compile printed no outcome `{name}` for {command}, which ess verify diff reports added")
     })?;
+    let (before, after) = outcomes.split_at(position);
     ensure!(
-        named.next().is_none() && outcome.is_object(),
+        after[0].is_object() && after[1..].iter().all(|outcome| outcome["name"] != name),
         "ess specify compile printed outcome `{name}` of {command} more than once or not as an object"
     );
-    Ok(outcome)
+    let preceded_by = before
+        .iter()
+        .map(|outcome| {
+            outcome["name"]
+                .as_str()
+                .map(str::to_owned)
+                .with_context(|| {
+                    format!("ess specify compile printed an outcome of {command} without a name")
+                })
+        })
+        .collect::<Result<_>>()?;
+    Ok(AddedOutcome {
+        outcome: after[0].clone(),
+        preceded_by,
+    })
 }
 
 /// One line per top-level field in which the reviewed outcome and the compiled one differ.
@@ -604,9 +670,7 @@ pub fn check(root: &Path) -> Result<String> {
             (Some((command, name)), Some(model)) => Some(compiled_outcome(model, command, name)?),
             _ => None,
         };
-        if entry.is_some_and(|entry| {
-            entry.change == change.change && entry.outcome.as_ref() == compiled
-        }) {
+        if entry.is_some_and(|entry| entry.change == change.change && entry.added == compiled) {
             acknowledged += 1;
             continue;
         }
@@ -622,20 +686,28 @@ pub fn check(root: &Path) -> Result<String> {
         for restatement in restating(change) {
             writeln!(unacknowledged, "    restated by {restatement}")?;
         }
-        match (entry, added_outcome(&change.change), compiled) {
+        match (entry, added_outcome(&change.change), &compiled) {
             (Some(entry), _, _) if entry.change != change.change => writeln!(
                 unacknowledged,
                 "    the acknowledgement of this id reviewed a different change: {}",
                 entry.change
             )?,
             (Some(entry), Some((command, name)), Some(now)) => {
-                let reviewed = entry.outcome.as_ref().context("reviewed outcome")?;
+                let reviewed = entry.added.as_ref().context("reviewed outcome")?;
+                let mut differences = outcome_difference(&reviewed.outcome, &now.outcome)?;
+                if reviewed.preceded_by != now.preceded_by {
+                    writeln!(
+                        differences,
+                        "      preceded_by: reviewed {}, the model now says {}",
+                        json!(reviewed.preceded_by),
+                        json!(now.preceded_by)
+                    )?;
+                }
                 write!(
                     unacknowledged,
                     "    the acknowledgement of {} reviewed outcome `{name}` of {command}, which the \
-                     model now compiles differently:\n{}",
+                     model now compiles differently:\n{differences}",
                     entry.id,
-                    outcome_difference(reviewed, now)?
                 )?;
             }
             _ => {}
@@ -643,7 +715,8 @@ pub fn check(root: &Path) -> Result<String> {
         let mut ready = json!({"id": change.id, "change": change.change,
             "baseline": baseline.commit, "reason": "<why stored history still replays>"});
         if let Some(now) = compiled {
-            ready["outcome"] = now.clone();
+            ready["outcome"] = now.outcome;
+            ready["preceded_by"] = json!(now.preceded_by);
         }
         writeln!(unacknowledged, "    acknowledge after review: {ready}")?;
     }
@@ -989,11 +1062,19 @@ mod tests {
             "test_strategy": "construct_input_in_state", "emits": [], "error": error})
     }
 
-    /// An acknowledgement of the added `outcome`, reviewed as refusing in `state`.
-    fn reviewed_refusal(id: &str, outcome: &str, state: &str, baseline: &str) -> Value {
+    /// An acknowledgement of the added `outcome`, reviewed as refusing in `state` and declared
+    /// after the outcomes `preceded_by` names.
+    fn reviewed_refusal(
+        id: &str,
+        outcome: &str,
+        state: &str,
+        preceded_by: &[&str],
+        baseline: &str,
+    ) -> Value {
         let mut reviewed = entry(id, update_goal_outcome_added(outcome), baseline);
         reviewed["outcome"] =
             compiled_refusal(outcome, state, "controlplane.host.GoalStateConflict");
+        reviewed["preceded_by"] = json!(preceded_by);
         reviewed
     }
 
@@ -1026,8 +1107,14 @@ mod tests {
             &baseline,
             vec![
                 entry(APPLIED, applied, &baseline),
-                reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &baseline),
-                reviewed_refusal(CANCELLED, "cancelled", "Cancelled", &baseline),
+                reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &["applied"], &baseline),
+                reviewed_refusal(
+                    CANCELLED,
+                    "cancelled",
+                    "Cancelled",
+                    &["applied", "satisfied"],
+                    &baseline,
+                ),
             ],
         )?;
         Ok((dir, baseline))
@@ -1097,6 +1184,56 @@ mod tests {
         Ok(())
     }
 
+    /// Outcomes are tried in declaration order, and ESS orders only the outcomes both revisions
+    /// declare, so an added outcome can move without any change being reported and without its
+    /// compiled object changing. The entry records the outcomes declared before it; declared
+    /// elsewhere, it is refused, naming the reviewed and the current neighbours.
+    #[test]
+    fn added_outcome_acknowledgement_binds_its_position() -> Result<()> {
+        let (dir, _) = terminal_refusals_reviewed()?;
+        let root = dir.path();
+        check(root)?;
+
+        // `cancelled` now declared before `satisfied`; conditions and errors unchanged.
+        let (satisfied, cancelled) = TERMINAL_REFUSALS.split_at(
+            TERMINAL_REFUSALS
+                .find("  - name: cancelled")
+                .expect("cancelled"),
+        );
+        edit(root, TERMINAL_REFUSALS, &format!("{cancelled}{satisfied}"))?;
+        let error = format!("{:#}", check(root).unwrap_err());
+        for (id, outcome, reviewed, now) in [
+            (
+                SATISFIED,
+                "satisfied",
+                json!(["applied"]),
+                json!(["applied", "cancelled"]),
+            ),
+            (
+                CANCELLED,
+                "cancelled",
+                json!(["applied", "satisfied"]),
+                json!(["applied"]),
+            ),
+        ] {
+            assert!(
+                error.contains(&format!(
+                    "the acknowledgement of {id} reviewed outcome `{outcome}` of controlplane.host.UpdateGoal, which the model now compiles differently:\n      preceded_by: reviewed {reviewed}, the model now says {now}\n"
+                )),
+                "{error}"
+            );
+        }
+        assert!(!error.contains("condition: reviewed"), "{error}");
+        // The refusal offers the position the model has now, for a review that accepts it.
+        assert!(error.contains("\"preceded_by\":[\"applied\"]"), "{error}");
+        eprintln!("{error}");
+
+        edit(root, &format!("{cancelled}{satisfied}"), TERMINAL_REFUSALS)?;
+        let summary = check(root)?;
+        assert!(summary.contains("3 acknowledged"), "{summary}");
+        Ok(())
+    }
+
     /// An `outcome-added` acknowledgement must carry the outcome it reviewed, an `outcome` belongs
     /// to no other change, and a file in the format that could not record it is refused.
     #[test]
@@ -1110,8 +1247,30 @@ mod tests {
                 .map(|error| format!("{error:#}"))
         };
         let current = "control-plane-spec-acknowledgements/2";
-        let reviewed = reviewed_refusal(SATISFIED, "satisfied", "Satisfied", baseline);
+        let reviewed =
+            reviewed_refusal(SATISFIED, "satisfied", "Satisfied", &["applied"], baseline);
         assert_eq!(parse(current, reviewed.clone()), None);
+
+        let mut unplaced = reviewed.clone();
+        unplaced.as_object_mut().unwrap().remove("preceded_by");
+        let error = parse(current, unplaced).expect("an added outcome without a position passed");
+        assert!(
+            error.contains(&format!(
+                "the acknowledgement of {SATISFIED} must record as `preceded_by` the names of the outcomes controlplane.host.UpdateGoal declares before `satisfied`"
+            )),
+            "{error}"
+        );
+        for malformed in [json!("applied"), json!([1]), json!(null)] {
+            let mut unreadable = reviewed.clone();
+            unreadable["preceded_by"] = malformed;
+            let error = parse(current, unreadable).expect("a malformed position passed");
+            assert!(
+                error.contains(&format!(
+                    "the acknowledgement of {SATISFIED} records a `preceded_by` that is not a list of outcome names"
+                )),
+                "{error}"
+            );
+        }
 
         let mut unbound = reviewed.clone();
         unbound.as_object_mut().unwrap().remove("outcome");
@@ -1139,6 +1298,15 @@ mod tests {
         assert!(
             error.contains(&format!(
                 "the acknowledgement of {REPAIR} records an `outcome`, but only a command's `outcome-added` change takes one"
+            )),
+            "{error}"
+        );
+        let mut misplaced = entry(REPAIR, repair_without_blocked(), baseline);
+        misplaced["preceded_by"] = json!([]);
+        let error = parse(current, misplaced).expect("a position on a route change passed");
+        assert!(
+            error.contains(&format!(
+                "the acknowledgement of {REPAIR} records a `preceded_by`, but only a command's `outcome-added` change takes one"
             )),
             "{error}"
         );

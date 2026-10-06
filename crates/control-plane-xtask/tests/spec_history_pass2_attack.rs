@@ -82,6 +82,7 @@ fn acknowledge(root: &Path, baseline: &str, reviewed: &[(&str, Value, String)]) 
             let mut entry = json!({"id": id, "change": change, "baseline": reviewed, "reason": "reviewed in the pass-2 attack test"});
             if change["changed"]["kind"] == "outcome-added" {
                 entry["outcome"] = wrong_state();
+                entry["preceded_by"] = json!(["applied"]);
             }
             entry
         })
