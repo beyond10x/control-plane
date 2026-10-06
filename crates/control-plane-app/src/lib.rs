@@ -78,12 +78,16 @@ impl AppState {
     }
     async fn snapshot(&self) -> Result<Value> {
         let store = self.store.lock().await;
+        // Bounded receipts no longer repeat the activity history; every reader of a
+        // snapshot (dashboard, SSE, state API) gets it from the store, per goal.
+        let mut goals = store.query("GoalList")?;
+        dashboard::attach_history(&store, &mut goals)?;
         Ok(json!({
             "committed_version":*store.subscribe().borrow(),
             "workspaces":store.query("WorkspaceList")?,
             "directories":store.query("WorkspaceDirectoryList")?,
             "repositories":store.query("RepositoryRegistrationList")?,
-            "goals":store.query("GoalList")?,
+            "goals":goals,
             "assignments":store.query("AssignmentList")?,
             "publications":store.query("PublicationIntentList")?,
             "runtime_error":self.runtime_error.borrow().clone(),

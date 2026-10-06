@@ -143,8 +143,8 @@ pub fn excerpt(text: &str, limit: usize) -> String {
 }
 
 /// A copy of `value` whose serialization stays near `budget` bytes, for durable progress
-/// evidence. Smaller values are kept as they are; a larger string keeps its beginning and the
-/// number of omitted bytes, and larger arrays and objects keep bounded members in order.
+/// evidence. Smaller values are kept as they are; a larger string keeps its beginning and a
+/// `[truncated: …]` marker, and larger arrays and objects keep bounded members in order.
 pub fn bounded(value: &Value, budget: usize) -> Value {
     const MEMBER: usize = 64;
     let size = value.to_string().len();
@@ -152,17 +152,10 @@ pub fn bounded(value: &Value, budget: usize) -> Value {
         return value.clone();
     }
     match value {
-        Value::String(text) => {
-            let mut end = budget.saturating_sub(48).min(text.len());
-            while !text.is_char_boundary(end) {
-                end -= 1;
-            }
-            Value::String(format!(
-                "{}…[{} bytes omitted]",
-                &text[..end],
-                text.len() - end
-            ))
-        }
+        Value::String(text) => Value::String(control_plane_core::bounded_text(
+            text,
+            budget.saturating_sub(2),
+        )),
         Value::Array(items) => {
             let share = (budget / items.len()).max(MEMBER);
             let mut kept = Vec::new();

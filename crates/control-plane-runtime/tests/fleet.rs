@@ -27,6 +27,13 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
     );
     String::from_utf8(output.stdout).unwrap()
 }
+/// The goal's progress history (`Store::activity_history`), including its newest acceptance
+/// record, which bounded receipts record once per review.
+async fn history(store: &SharedStore) -> Value {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0]["goal_id"].clone();
+    store.activity_history(goal.as_str().unwrap()).unwrap()
+}
 struct Fixture {
     root: PathBuf,
     store: SharedStore,
@@ -506,8 +513,7 @@ async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change()
     );
     let goals = fixture.store.lock().await.query("GoalList").unwrap();
     assert_eq!(goals[0]["state"], "Running");
-    let receipt: Value =
-        serde_json::from_str(goals[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    let receipt = history(&fixture.store).await;
     assert_eq!(receipt["acceptance"]["status"], "failed");
     assert!(
         receipt["acceptance"]["reason"]
@@ -561,6 +567,57 @@ async fn rejected_goal_acceptance_remains_durable_and_idle_until_inputs_change()
     revise(&fixture, true).await;
     restarted.tick().await.unwrap();
     assert!(model.0.calls.load(Ordering::SeqCst) > calls);
+}
+
+/// A goal reviewer that rejects with one line per unmet obligation, about 2.9 KiB in all.
+struct DetailedGoalRejection(Scripted);
+impl AgentModel for DetailedGoalRejection {
+    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+        if request.role == "goal_reviewer" {
+            let mut reason = String::new();
+            for index in 1..=40 {
+                reason.push_str(&format!(
+                    "Obligation {index:02} is not demonstrated by the observed checks or diff.\n"
+                ));
+            }
+            reason.push_str(
+                "Unmet obligation 41: requested_answer is not shown on the reviewed target.",
+            );
+            return Ok(json!({"approved":false,"reason":reason}));
+        }
+        self.0.respond(request)
+    }
+}
+
+#[tokio::test]
+async fn adversary_rejected_goal_acceptance_keeps_the_reviewers_whole_reason() {
+    // The operator reads why acceptance failed from the goal's durable acceptance record
+    // (its progress history, shown by the evidence page). The reviewer's reason must
+    // reach it whole; the blocked activity keeps only a short summary of it.
+    let fixture = fixture(1).await;
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        fixture.config.clone(),
+        Arc::new(DetailedGoalRejection(Scripted::new())),
+    );
+    supervisor.tick().await.unwrap();
+    let result = supervisor.fleet_tick().await.unwrap();
+    assert!(
+        result
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("Unmet obligation 41")),
+        "{result:?}"
+    );
+    let receipt = history(&fixture.store).await;
+    assert_eq!(receipt["acceptance"]["status"], "failed");
+    let recorded = receipt["acceptance"]["reason"].as_str().unwrap();
+    assert!(
+        recorded.contains("Unmet obligation 41"),
+        "the durable acceptance reason ends: {}",
+        &recorded[recorded.len().saturating_sub(240)..]
+    );
 }
 
 const PUBLISH_CREDENTIAL: &str = "CONTROL_PLANE_PUBLISH_PROBE";

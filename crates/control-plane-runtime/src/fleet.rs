@@ -27,8 +27,9 @@ use std::{
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 
-/// The acceptance record rides along in every later progress decision of its goal.
-const ACCEPTANCE_REASON_BYTES: usize = 2 * 1024;
+/// Bytes kept of a goal review's reason. The acceptance record is recorded once per review;
+/// later progress leaves it to the goal's journal.
+const ACCEPTANCE_REASON_BYTES: usize = 8 * 1024;
 
 #[derive(Clone)]
 struct Host {
@@ -115,13 +116,20 @@ impl Host {
             let current = goals.as_array().context("goals view")?.iter().find(|g|g["goal_id"]==goal["goal_id"]).context("goal missing")?;
             ensure!(current["revision"]==goal["revision"], "goal changed during acceptance");
             let mut receipt: Value = serde_json::from_str(current["planning_receipt"].as_str().unwrap_or("{}"))?;
-            receipt["acceptance"] = json!({"fingerprint":fingerprint,"status":status,"reason":crate::context::excerpt(reason, ACCEPTANCE_REASON_BYTES),"at":now(),"goal_revision":goal["revision"]});
+            receipt["acceptance"] = json!({"fingerprint":fingerprint,"status":status,"reason":control_plane_core::bounded_text(reason, ACCEPTANCE_REASON_BYTES),"at":now(),"goal_revision":goal["revision"]});
             let mut body = current.as_object().context("goal object")?.clone();
             body.retain(|key,_|key.starts_with("planning_")||key=="goal_id");
             body.insert("planning_receipt".into(),json!(receipt.to_string()));
             let outcome=store.execute("RecordPlanningProgress",Value::Object(body),Actor::Supervisor).await?;
             ensure!(outcome["outcome"]=="applied","acceptance progress refused: {outcome}");
             Ok(())
+        })
+    }
+    /// The goal's newest acceptance record, which its progress journal keeps.
+    fn acceptance(&self, goal: &Value) -> Result<Value> {
+        let goal = text(goal, "goal_id")?;
+        self.handle.block_on(async {
+            Ok(self.store.lock().await.activity_history(goal)?["acceptance"].clone())
         })
     }
     fn row(&self, view: &str, key: &str, id: &Value) -> Result<Value> {
@@ -336,9 +344,20 @@ pub async fn run(
             }
             let repositories = discovery.rows("RepositoryRegistrationList")?;
             let assignments = discovery.rows("AssignmentList")?;
-            goals.retain(|goal| {
-                !acceptance_is_unchanged(goal, &repositories, &assignments, &discovery.runner)
-            });
+            let mut open = Vec::new();
+            for goal in goals {
+                let acceptance = discovery.acceptance(&goal)?;
+                if !acceptance_is_unchanged(
+                    &goal,
+                    &acceptance,
+                    &repositories,
+                    &assignments,
+                    &discovery.runner,
+                ) {
+                    open.push(goal);
+                }
+            }
+            let goals = open;
             Ok((
                 goals,
                 repositories,
@@ -679,22 +698,20 @@ fn acceptance_fingerprint(
 /// One durable rejection latch shared by both scheduling paths. Progress and
 /// timestamps cannot unlock it; goal revision, repository configuration, directory
 /// membership or an observed published target must change.
+/// `acceptance` is the goal's newest acceptance record (`Store::activity_history`).
 pub(crate) fn acceptance_is_unchanged(
     goal: &Value,
+    acceptance: &Value,
     repositories: &[Value],
     assignments: &[Value],
     runner: &ProcessRunner,
 ) -> bool {
-    let prior: Value = serde_json::from_str(goal["planning_receipt"].as_str().unwrap_or("{}"))
-        .unwrap_or_else(|_| json!({}));
-    if prior["acceptance"]["status"] != "failed"
-        || prior["acceptance"]["goal_revision"] != goal["revision"]
-    {
+    if acceptance["status"] != "failed" || acceptance["goal_revision"] != goal["revision"] {
         return false;
     }
     let (fingerprint, observed) = acceptance_fingerprint(goal, repositories, assignments, runner);
     // A failed observation is not evidence of a changed repository target.
-    !observed || prior["acceptance"]["fingerprint"] == fingerprint
+    !observed || acceptance["fingerprint"] == fingerprint
 }
 fn fetch(host: &Host, path: &Path, target: &str) -> Result<String> {
     let head = remote_head(host, path, target)?;
@@ -1954,16 +1971,13 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
             .filter(|d| d["workspace_id"] == goal["workspace_id"] && d["state"] == "Registered")
             .collect::<Vec<_>>();
         goal["directories"] = json!(directories);
-        if acceptance_is_unchanged(&goal, &repositories, &assignments, &host.runner) {
+        let prior = host.acceptance(&goal)?;
+        if acceptance_is_unchanged(&goal, &prior, &repositories, &assignments, &host.runner) {
             continue;
         }
         let (fingerprint, _) =
             acceptance_fingerprint(&goal, &repositories, &assignments, &host.runner);
-        let prior: Value = serde_json::from_str(goal["planning_receipt"].as_str().unwrap_or("{}"))
-            .unwrap_or_else(|_| json!({}));
-        if prior["acceptance"]["fingerprint"] == fingerprint
-            && prior["acceptance"]["status"] == "failed"
-        {
+        if prior["fingerprint"] == fingerprint && prior["status"] == "failed" {
             continue;
         }
         host.acceptance_progress(
@@ -2691,9 +2705,11 @@ mod progress_tests {
         let last = receipt["last_activity"]["detail"].as_str().unwrap();
         assert!(last.starts_with("event 09999:"), "{last}");
         assert!(detail(9_999).starts_with(last));
-        assert_eq!(
-            receipt["activity"].as_array().unwrap().last(),
-            Some(&receipt["last_activity"])
-        );
+        let history = reopened
+            .activity_history(goal["goal_id"].as_str().unwrap())
+            .unwrap();
+        let activity = history["activity"].as_array().unwrap();
+        assert_eq!(activity.len(), 64);
+        assert_eq!(activity.last(), Some(&receipt["last_activity"]));
     }
 }

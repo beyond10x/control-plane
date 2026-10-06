@@ -21,6 +21,7 @@ async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, S
         Some(id) => state.workspace_detail(id).await?,
         None => state.snapshot().await?,
     };
+    let view = with_history(state, view).await?;
     Ok((
         view["committed_version"]
             .as_u64()
@@ -30,7 +31,14 @@ async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, S
 }
 
 pub async fn console(State(state): State<AppState>) -> Response {
-    api_answer(state.snapshot().await.map(compact))
+    let view = async { with_history(&state, state.snapshot().await?).await }.await;
+    api_answer(view.map(compact))
+}
+
+/// The goals' activity history comes from the store; bounded receipts do not repeat it.
+async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
+    dashboard::attach_history(&*state.store.lock().await, &mut view["goals"])?;
+    Ok(view)
 }
 
 /// Keep raw model/tool receipts behind the evidence endpoint. Browser projections
@@ -50,9 +58,18 @@ fn compact(mut view: Value) -> Value {
         })
         .collect();
     for goal in view["goals"].as_array_mut().into_iter().flatten() {
-        // Only the fields shown are materialized; planner evidence is skipped unparsed.
-        let receipt: Shown =
+        // Only the fields shown are materialized; planner evidence is skipped unparsed. The
+        // history (with planner evidence) stays behind the evidence endpoint.
+        let mut receipt: Shown =
             serde_json::from_str(field(goal, "planning_receipt")).unwrap_or_default();
+        if let Some(history) = goal
+            .as_object_mut()
+            .and_then(|row| row.remove("activity_history"))
+            .filter(Value::is_object)
+        {
+            receipt.activity = history["activity"].clone();
+            receipt.fleet = history["fleet"].clone();
+        }
         goal["last_activity"] = observation(&receipt.last_activity);
         goal["activity"] = Value::Array(
             receipt

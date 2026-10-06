@@ -26,6 +26,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Bytes kept of each planning field other than the receipt when progress is recorded.
+const PLANNING_FIELD_BYTES: usize = 4 * 1024;
+
+pub use memory::bounded_text;
+
 /// A single service owns a database; its persisted assignments own repositories across workspaces.
 /// The generated actor is selected by trusted Rust code, never decoded from an HTTP request.
 pub struct Store {
@@ -335,7 +340,7 @@ impl Store {
     /// field. The decision stores this activity alone; the goal's journal keeps the history.
     pub async fn record_activity(&mut self, goal_id: &str, activity: Value) -> Result<Value> {
         let goal = self
-            .rows("GoalList")?
+            .query("GoalList")?
             .as_array()
             .context("goals view is not an array")?
             .iter()
@@ -365,10 +370,23 @@ impl Store {
         .await
     }
 
-    /// The host rule for planning receipts recorded from now on: the activity is bounded,
-    /// and history and unchanged planner evidence are left to the goal's journal instead of
-    /// being repeated in every decision. Other receipts are recorded as given.
+    /// The host rule for progress recorded from now on. Every planning field but the receipt
+    /// is capped at 4 KiB. An object receipt is bounded: its activity is bounded, and history,
+    /// fleet entries and unchanged planner evidence and acceptance records are left to the
+    /// goal's journal instead of being repeated in every decision.
     fn bound_progress(&self, body: &mut Value) {
+        let Some(fields) = body.as_object_mut() else {
+            return;
+        };
+        for (key, value) in fields.iter_mut() {
+            if key.starts_with("planning_")
+                && key != "planning_receipt"
+                && let Some(text) = value.as_str()
+                && text.len() > PLANNING_FIELD_BYTES
+            {
+                *value = Value::from(memory::bounded_text(text, PLANNING_FIELD_BYTES));
+            }
+        }
         let Some(goal) = body["goal_id"].as_str() else {
             return;
         };
@@ -382,11 +400,11 @@ impl Store {
         };
         receipt.remove("activity");
         receipt.remove("fleet");
-        if let Some(planner) = receipt.get("planner")
-            && Journal::planner_of(&self.memory, goal, &previous.data.planning_receipt).as_deref()
-                == Some(planner.to_string().as_str())
-        {
-            receipt.remove("planner");
+        let journal = Journal::of(&self.memory, goal, &previous.data.planning_receipt);
+        for key in memory::LATEST {
+            if receipt.get(key).is_some() && receipt.get(key) == journal.latest(key) {
+                receipt.remove(key);
+            }
         }
         if let Some(activity) = receipt.get_mut("last_activity") {
             *activity = memory::bounded_activity(activity);
@@ -398,29 +416,23 @@ impl Store {
         body["planning_receipt"] = json!(Value::Object(receipt).to_string());
     }
 
-    /// Views as ESS defines them. A bounded planning receipt is shown with the history its
-    /// goal's journal keeps, in the shape every receipt had before it was bounded.
-    pub fn query(&self, view: &str) -> Result<Value> {
-        let mut rows = self.rows(view)?;
-        if view.strip_prefix("controlplane.host.").unwrap_or(view) == "GoalList" {
-            for goal in rows.as_array_mut().into_iter().flatten() {
-                if let Some(journal) = goal["goal_id"]
-                    .as_str()
-                    .and_then(|id| self.memory.journals.get(id))
-                    && let Some(expanded) = goal["planning_receipt"]
-                        .as_str()
-                        .and_then(|stored| journal.expand(stored))
-                {
-                    goal["planning_receipt"] = Value::String(expanded);
-                }
-            }
-        }
-        Ok(rows)
+    /// A goal's progress history, which bounded receipts no longer repeat: the newest 64
+    /// activities (oldest first), each assignment's newest activity, and the newest planner
+    /// evidence and acceptance record. For a receipt recorded before bounding, these are the
+    /// receipt's own fields.
+    pub fn activity_history(&self, goal_id: &str) -> Result<Value> {
+        let goal = self
+            .memory
+            .goals
+            .get(goal_id)
+            .context("goal was not found")?;
+        Ok(Journal::of(&self.memory, goal_id, &goal.data.planning_receipt).history())
     }
 
-    /// Generated view rows as recorded, without journal expansion.
-    fn rows(&self, view: &str) -> Result<Value> {
+    /// Views exactly as ESS defines them.
+    pub fn query(&self, view: &str) -> Result<Value> {
         let name = view.strip_prefix("controlplane.host.").unwrap_or(view);
+        // Views read generated rows only; host bookkeeping is not cloned per query.
         let stage = Arc::new(Mutex::new(self.memory.rows()));
         let mut system = System::new(ControlPlane::new(Generated::new(Ports(stage))));
         let response = dispatch(

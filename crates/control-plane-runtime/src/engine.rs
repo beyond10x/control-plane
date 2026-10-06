@@ -304,7 +304,7 @@ impl Planning<'_> {
                 .state
                 .lock()
                 .map_err(|_| anyhow::anyhow!("planner state poisoned"))?;
-            let receipt = json!({"namespace":self.input.namespace,"revision":state.revision,"observation":crate::context::excerpt(&message, OBSERVATION_BYTES)});
+            let receipt = json!({"namespace":self.input.namespace,"revision":state.revision,"observation":control_plane_core::bounded_text(&message, OBSERVATION_BYTES)});
             state.unseen.push(message.clone());
             crate::context::push(&mut state.transcript, message);
             receipt

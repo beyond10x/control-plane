@@ -41,16 +41,18 @@ impl Memory {
 /// Top-level key and value marking a bounded planning receipt.
 pub(crate) const RECEIPT_FORMAT: &str = "receipt_format";
 pub(crate) const BOUNDED_RECEIPT: u64 = 2;
+/// Receipt keys whose newest value the journal keeps, recorded only when they change.
+pub(crate) const LATEST: [&str; 2] = ["planner", "acceptance"];
 /// Activities a goal's journal keeps; readers show the newest 24.
 const HISTORY: usize = 64;
-/// Receipt keys a bounded receipt leaves to the journal instead of repeating them.
-const JOURNALED: [&str; 3] = ["activity", "fleet", "planner"];
 /// Characters of a text activity detail kept: what the console shows.
 const DETAIL_CHARS: usize = 560;
-/// Serialized bytes of a structured detail kept verbatim; a larger one keeps its summary.
+/// Serialized bytes of a structured detail kept as it is.
 const DETAIL_BYTES: usize = 1024;
-/// Bytes kept of every other activity field.
+/// Bytes kept of every activity field and of every string a bounded detail keeps.
 const FIELD_BYTES: usize = 240;
+/// Items kept of an array in a bounded detail: the arguments the dashboard shows.
+const DETAIL_ITEMS: usize = 12;
 const ACTIVITY_FIELDS: [&str; 9] = [
     "id",
     "at",
@@ -62,23 +64,35 @@ const ACTIVITY_FIELDS: [&str; 9] = [
     "goal_revision",
     "detail",
 ];
+/// Detail members the console and dashboard show; a bounded detail keeps them.
+const SHOWN: [&str; 9] = [
+    "summary",
+    "program",
+    "args",
+    "command",
+    "path",
+    "reason",
+    "worktree",
+    "target",
+    "candidate",
+];
+/// Bookkeeping a bounded detail adds: the original size and the members it left out.
+const BOUNDED: &str = "_bounded";
 
 /// The progress history of a goal whose planning receipt is bounded.
 ///
-/// A bounded receipt (`"receipt_format": 2`) stores its newest activity and, only when it
-/// changed, the planner evidence. Replaying those decisions rebuilds what older receipts
-/// repeated in every decision: the newest activities, each assignment's newest activity and
-/// the newest planner evidence. Views expand the stored receipt with them, so readers keep
-/// the receipt shape they always had. Nothing here is stored on its own.
+/// A bounded receipt (`"receipt_format": 2`) stores its newest activity and, only when they
+/// change, the planner evidence and the acceptance record. Replaying those decisions rebuilds
+/// what older receipts repeated in every decision: the newest activities, each assignment's
+/// newest activity and the newest planner evidence and acceptance record. Nothing here is
+/// stored on its own; `Store::activity_history` reads it.
 #[derive(Clone, Default)]
 pub(crate) struct Journal {
-    /// The stored receipt this journal expands; for any other receipt it is stale.
+    /// The stored receipt this journal belongs to; for any other receipt it is stale.
     receipt: Arc<str>,
-    activity: VecDeque<Arc<str>>,
-    fleet: BTreeMap<String, Arc<str>>,
-    planner: Option<Arc<str>>,
-    /// Which of the journaled keys the stored receipt carries itself.
-    inline: [bool; 3],
+    activity: VecDeque<Arc<Value>>,
+    fleet: BTreeMap<String, Arc<Value>>,
+    latest: [Option<Arc<Value>>; 2],
 }
 
 impl Journal {
@@ -95,17 +109,25 @@ impl Journal {
         if let Some(history) = fields.get("activity").and_then(Value::as_array) {
             journal.activity = history[history.len().saturating_sub(HISTORY)..]
                 .iter()
-                .map(|event| serialized(&bounded_activity(event)))
+                .map(|event| Arc::new(bounded_activity(event)))
                 .collect();
         }
         if let Some(fleet) = fields.get("fleet").and_then(Value::as_object) {
             journal.fleet = fleet
                 .iter()
-                .map(|(id, event)| (id.clone(), serialized(&bounded_activity(event))))
+                .map(|(id, event)| (id.clone(), Arc::new(bounded_activity(event))))
                 .collect();
         }
-        journal.planner = fields.get("planner").map(serialized);
+        journal.latest = LATEST.map(|key| fields.get(key).cloned().map(Arc::new));
         journal
+    }
+
+    /// The journal of `goal` while its stored receipt is `stored`.
+    pub fn of(memory: &Memory, goal: &str, stored: &str) -> Self {
+        match memory.journals.get(goal) {
+            Some(journal) if &*journal.receipt == stored => journal.clone(),
+            _ => Self::seed(stored),
+        }
     }
 
     /// Take the journal of `goal` while its stored receipt is `previous`.
@@ -116,12 +138,10 @@ impl Journal {
         }
     }
 
-    /// The planner evidence `goal` shows while its stored receipt is `previous`.
-    pub fn planner_of(memory: &Memory, goal: &str, previous: &str) -> Option<Arc<str>> {
-        match memory.journals.get(goal) {
-            Some(journal) if &*journal.receipt == previous => journal.planner.clone(),
-            _ => Self::seed(previous).planner,
-        }
+    /// The newest value of one of the [`LATEST`] keys.
+    pub fn latest(&self, key: &str) -> Option<&Value> {
+        let index = LATEST.iter().position(|name| *name == key)?;
+        self.latest[index].as_deref()
     }
 
     /// Advance to a newly recorded bounded receipt.
@@ -129,77 +149,57 @@ impl Journal {
         if let Some(activity) = fields
             .get("last_activity")
             .filter(|event| event.is_object())
+            && self.activity.back().map(|event| &**event) != Some(activity)
         {
-            let event = serialized(activity);
-            if self.activity.back() != Some(&event) {
-                if let Some(assignment) = activity.get("assignment_id").and_then(Value::as_str) {
-                    self.fleet.insert(assignment.to_owned(), event.clone());
-                }
-                self.activity.push_back(event);
-                while self.activity.len() > HISTORY {
-                    self.activity.pop_front();
-                }
+            let event = Arc::new(activity.clone());
+            if let Some(assignment) = activity.get("assignment_id").and_then(Value::as_str) {
+                self.fleet.insert(assignment.to_owned(), event.clone());
+            }
+            self.activity.push_back(event);
+            while self.activity.len() > HISTORY {
+                self.activity.pop_front();
             }
         }
-        if let Some(planner) = fields.get("planner") {
-            self.planner = Some(serialized(planner));
+        for (index, key) in LATEST.iter().enumerate() {
+            if let Some(value) = fields.get(*key) {
+                self.latest[index] = Some(Arc::new(value.clone()));
+            }
         }
-        self.inline = JOURNALED.map(|key| fields.contains_key(key));
         self.receipt = receipt.into();
     }
 
-    /// The stored receipt, or that receipt with the history it leaves to the journal.
-    pub fn expand(&self, stored: &str) -> Option<String> {
-        if stored != &*self.receipt {
-            return None;
-        }
-        let open = stored.trim_end().strip_suffix('}')?;
-        let mut text = String::with_capacity(
-            stored.len()
-                + self
-                    .activity
+    /// The history as readers see it: activities oldest first, each assignment's newest
+    /// activity, and the newest planner evidence and acceptance record.
+    pub fn history(&self) -> Value {
+        let mut history = Map::new();
+        history.insert(
+            "activity".into(),
+            Value::Array(
+                self.activity
                     .iter()
-                    .map(|event| event.len() + 1)
-                    .sum::<usize>()
-                + self
-                    .fleet
-                    .values()
-                    .map(|event| event.len() + 48)
-                    .sum::<usize>()
-                + self.planner.as_ref().map_or(0, |planner| planner.len())
-                + 64,
+                    .map(|event| (**event).clone())
+                    .collect(),
+            ),
         );
-        text.push_str(open);
-        if !self.inline[0] && !self.activity.is_empty() {
-            text.push_str(",\"activity\":[");
-            for (index, event) in self.activity.iter().enumerate() {
-                if index > 0 {
-                    text.push(',');
-                }
-                text.push_str(event);
-            }
-            text.push(']');
+        history.insert(
+            "fleet".into(),
+            Value::Object(
+                self.fleet
+                    .iter()
+                    .map(|(id, event)| (id.clone(), (**event).clone()))
+                    .collect(),
+            ),
+        );
+        for (index, key) in LATEST.iter().enumerate() {
+            history.insert(
+                (*key).into(),
+                self.latest[index]
+                    .as_deref()
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            );
         }
-        if !self.inline[1] && !self.fleet.is_empty() {
-            text.push_str(",\"fleet\":{");
-            for (index, (assignment, event)) in self.fleet.iter().enumerate() {
-                if index > 0 {
-                    text.push(',');
-                }
-                text.push_str(&Value::from(assignment.as_str()).to_string());
-                text.push(':');
-                text.push_str(event);
-            }
-            text.push('}');
-        }
-        if !self.inline[2]
-            && let Some(planner) = &self.planner
-        {
-            text.push_str(",\"planner\":");
-            text.push_str(planner);
-        }
-        text.push('}');
-        Some(text)
+        Value::Object(history)
     }
 }
 
@@ -231,60 +231,116 @@ pub(crate) fn bounded_activity(activity: &Value) -> Value {
         };
         let value = match value {
             _ if key == "detail" => bounded_detail(value),
-            Value::String(text) => Value::from(prefix(text, FIELD_BYTES)),
-            Value::Null | Value::Bool(_) | Value::Number(_) => value.clone(),
-            other => bounded_detail(other),
+            other => bounded_member(other),
         };
         bounded.insert(key.into(), value);
     }
     Value::Object(bounded)
 }
 
-/// Text keeps what the console shows. A small structured detail stays as it is; a larger one
-/// keeps the summary the console would show, its kind and how many bytes were left out.
+/// Text keeps what the console shows, and a small structured detail stays as it is. A larger
+/// one keeps every member bounded: strings to 240 bytes, arrays to their first 12 items,
+/// nested values to the start of their JSON text. If that is still over 1 KiB, it keeps the
+/// members readers show and names the ones it left out under `_bounded`.
 fn bounded_detail(detail: &Value) -> Value {
-    match detail {
-        Value::String(text) => Value::from(text.chars().take(DETAIL_CHARS).collect::<String>()),
-        Value::Null | Value::Bool(_) | Value::Number(_) => detail.clone(),
-        _ => {
-            let size = detail.to_string().len();
-            if size <= DETAIL_BYTES {
-                return detail.clone();
-            }
-            let summary = detail
-                .get("summary")
-                .and_then(Value::as_str)
+    let Value::Object(members) = detail else {
+        return match detail {
+            Value::String(text) => Value::from(text.chars().take(DETAIL_CHARS).collect::<String>()),
+            other => bounded_member(other),
+        };
+    };
+    let size = detail.to_string().len();
+    if size <= DETAIL_BYTES {
+        return detail.clone();
+    }
+    let mut kept = members
+        .iter()
+        .filter(|(key, _)| key.as_str() != BOUNDED)
+        .map(|(key, value)| (prefix(key, FIELD_BYTES).to_owned(), bounded_member(value)))
+        .collect::<Map<String, Value>>();
+    // A detail bounded before keeps its first account; the bound is applied once.
+    let earlier = members.get(BOUNDED).and_then(Value::as_object);
+    let mut dropped = earlier
+        .and_then(|account| account.get("dropped"))
+        .and_then(Value::as_array)
+        .map(|names| {
+            names
+                .iter()
+                .filter_map(Value::as_str)
                 .map(str::to_owned)
-                .unwrap_or_else(|| {
-                    ["command", "program", "path", "reason", "candidate"]
-                        .into_iter()
-                        .filter_map(|key| detail.get(key).and_then(Value::as_str))
-                        .map(|part| part.chars().take(180).collect::<String>())
-                        .collect::<Vec<_>>()
-                        .join(" · ")
-                });
-            let mut projected = Map::new();
-            projected.insert(
-                "summary".into(),
-                Value::from(summary.chars().take(DETAIL_CHARS).collect::<String>()),
-            );
-            if let Some(kind) = detail
-                .get("kind")
-                .or_else(|| detail.get("event").and_then(|event| event.get("kind")))
-                .and_then(Value::as_str)
-            {
-                projected.insert("kind".into(), Value::from(prefix(kind, 80)));
-            }
-            projected.insert(
-                "omitted_bytes".into(),
-                detail
-                    .get("omitted_bytes")
-                    .cloned()
-                    .unwrap_or_else(|| json!(size)),
-            );
-            Value::Object(projected)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut count = earlier
+        .and_then(|account| account.get("dropped_count"))
+        .and_then(Value::as_u64)
+        .unwrap_or(dropped.len() as u64);
+    if Value::Object(kept.clone()).to_string().len() > DETAIL_BYTES {
+        let names = kept
+            .keys()
+            .filter(|key| !SHOWN.contains(&key.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for name in names {
+            kept.remove(&name);
+            count += 1;
+            dropped.push(name);
         }
     }
+    let mut account = Map::new();
+    account.insert(
+        "bytes".into(),
+        earlier
+            .and_then(|account| account.get("bytes"))
+            .and_then(Value::as_u64)
+            .map_or_else(|| json!(size), |bytes| json!(bytes)),
+    );
+    if count > 0 {
+        dropped.truncate(DETAIL_ITEMS);
+        account.insert(
+            "dropped".into(),
+            Value::Array(
+                dropped
+                    .iter()
+                    .map(|name| Value::from(prefix(name, 64)))
+                    .collect(),
+            ),
+        );
+        account.insert("dropped_count".into(), json!(count));
+    }
+    kept.insert(BOUNDED.into(), Value::Object(account));
+    Value::Object(kept)
+}
+
+/// One member of a bounded detail.
+fn bounded_member(value: &Value) -> Value {
+    match value {
+        Value::String(text) => Value::from(prefix(text, FIELD_BYTES)),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .take(DETAIL_ITEMS)
+                .map(|item| match item {
+                    Value::Array(_) | Value::Object(_) => {
+                        Value::from(prefix(&item.to_string(), FIELD_BYTES))
+                    }
+                    other => bounded_member(other),
+                })
+                .collect(),
+        ),
+        Value::Object(_) => Value::from(prefix(&value.to_string(), FIELD_BYTES)),
+        Value::Null | Value::Bool(_) | Value::Number(_) => value.clone(),
+    }
+}
+
+/// Text cut to at most `limit` bytes, ending in a marker that says how much was kept.
+pub fn bounded_text(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_owned();
+    }
+    let marker = |kept: usize| format!(" [truncated: {kept} of {} bytes]", text.len());
+    let kept = prefix(text, limit.saturating_sub(marker(limit).len())).len();
+    format!("{}{}", &text[..kept], marker(kept))
 }
 
 fn prefix(text: &str, bytes: usize) -> &str {
@@ -296,10 +352,6 @@ fn prefix(text: &str, bytes: usize) -> &str {
         end -= 1;
     }
     &text[..end]
-}
-
-fn serialized(value: &Value) -> Arc<str> {
-    value.to_string().into()
 }
 
 #[derive(Clone)]

@@ -11,6 +11,27 @@ use tokio::sync::Notify;
 
 struct Scripted(Mutex<VecDeque<Value>>);
 
+/// What the operator inspects for the goal: its recorded receipt and the progress history
+/// (`Store::activity_history`) that bounded receipts no longer repeat.
+async fn evidence(store: &tokio::sync::Mutex<Store>) -> String {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0].clone();
+    let history = store
+        .activity_history(goal["goal_id"].as_str().unwrap())
+        .unwrap();
+    format!("{}\n{history}", goal["planning_receipt"].as_str().unwrap())
+}
+
+/// The goal's newest activities, oldest first.
+async fn activity(store: &tokio::sync::Mutex<Store>) -> Vec<Value> {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0]["goal_id"].clone();
+    store.activity_history(goal.as_str().unwrap()).unwrap()["activity"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
 #[tokio::test]
 async fn missing_reads_are_observations_and_planning_can_continue() {
     let (_, store, config, _, _) = setup(true).await;
@@ -26,11 +47,9 @@ async fn missing_reads_are_observations_and_planning_can_continue() {
         .await
         .unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
-    let goals = store.lock().await.query("GoalList").unwrap();
     assert!(
-        goals[0]["planning_receipt"]
-            .as_str()
-            .unwrap()
+        evidence(&store)
+            .await
             .contains("File not found: ess/domains/not-created.yaml")
     );
 }
@@ -342,13 +361,7 @@ async fn planner_can_read_aep_help_then_finish_existing_work() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert!(model.0.lock().unwrap().is_empty());
-    let goals = store.lock().await.query("GoalList").unwrap();
-    assert!(
-        goals[0]["planning_receipt"]
-            .as_str()
-            .unwrap()
-            .contains("Usage: aep plan artifact")
-    );
+    assert!(evidence(&store).await.contains("Usage: aep plan artifact"));
 }
 
 #[tokio::test]
@@ -414,8 +427,7 @@ async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert!(model.0.lock().unwrap().is_empty());
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     assert!(receipt.contains("AEP syntax feedback"));
     assert!(receipt.contains("operator-console"));
 }
@@ -457,12 +469,8 @@ async fn aep_syntax_feedback_reaches_model_and_recovers_in_same_attempt() {
     let report = supervisor.tick().await.unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
     assert_eq!(*model.0.lock().unwrap(), 4);
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt: Value =
-        serde_json::from_str(goals[0]["planning_receipt"].as_str().unwrap()).unwrap();
-    let failed = receipt["activity"]
-        .as_array()
-        .unwrap()
+    let history = activity(&store).await;
+    let failed = history
         .iter()
         .filter(|event| event["action"] == "aep.syntax_rejected")
         .collect::<Vec<_>>();
@@ -1024,12 +1032,9 @@ async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
         }
     }
     let before = store.lock().await.query("GoalList").unwrap();
-    let receipt: Value =
-        serde_json::from_str(before[0]["planning_receipt"].as_str().unwrap()).unwrap();
+    let history = activity(&store).await;
     assert!(
-        receipt["activity"]
-            .as_array()
-            .unwrap()
+        history
             .iter()
             .any(|a| a["action"] == "model.completed" && a["role"] == "critic")
     );
@@ -1041,6 +1046,7 @@ async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
         .await
         .unwrap();
     assert_eq!(reopened.query("GoalList").unwrap(), before);
+    assert_eq!(activity(&tokio::sync::Mutex::new(reopened)).await, history);
 }
 impl AgentModel for PausingModel {
     fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
@@ -1513,7 +1519,7 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
     assert_eq!(report.queued, 1, "{report:?}");
     assert_eq!(provider.calls.load(Ordering::SeqCst), 10);
     let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     let planning_tree = goals[0]["planning_worktree_path"].as_str().unwrap();
     assert!(
         !Path::new(planning_tree)
@@ -1548,8 +1554,7 @@ async fn planner_input_refusals_reach_the_model() {
         .await
         .unwrap();
     assert_eq!(report.queued, 1, "{report:?}");
-    let goals = store.lock().await.query("GoalList").unwrap();
-    let receipt = goals[0]["planning_receipt"].as_str().unwrap();
+    let receipt = evidence(&store).await;
     for code in [
         "write_outside_specification_root",
         "duplicate_story_selection",
@@ -1632,12 +1637,8 @@ async fn planner_progress_does_not_repeat_the_transcript() {
         turns[5] <= turns[1] + 1024,
         "progress grows with the transcript: {turns:?}"
     );
-    let receipt = store.lock().await.query("GoalList").unwrap()[0]["planning_receipt"]
-        .as_str()
-        .unwrap()
-        .to_owned();
     assert!(
-        receipt.contains("# Note 6"),
+        evidence(&store).await.contains("# Note 6"),
         "the validated plan keeps its observations"
     );
 }

@@ -28,10 +28,32 @@ pub async fn evidence(State(state): State<AppState>, Path(id): Path<String>) -> 
                     .any(|a| a["assignment_id"] == p["assignment_id"])
             })
             .collect();
-        Ok(json!({"goal":goal,"assignments":assignments,"publications":publications}))
+        let history = state.store.lock().await.activity_history(&id)?;
+        Ok(json!({"goal":goal,"history":history,"assignments":assignments,"publications":publications}))
     }
     .await;
     api_answer(result)
+}
+
+/// Add each goal's progress history (`Store::activity_history`) to view rows as
+/// `activity_history`. Bounded receipts no longer carry it; readers take it from here.
+pub(crate) fn attach_history(store: &Store, goals: &mut Value) -> Result<()> {
+    for goal in goals.as_array_mut().into_iter().flatten() {
+        if !goal["activity_history"].is_object() {
+            goal["activity_history"] = store.activity_history(field(goal, "goal_id"))?;
+        }
+    }
+    Ok(())
+}
+
+/// A goal's activity history: attached by the store, or carried by a receipt recorded
+/// before progress was bounded.
+fn history<'a>(goal: &'a Value, receipt: &'a Value) -> &'a Value {
+    if goal["activity_history"].is_object() {
+        &goal["activity_history"]
+    } else {
+        receipt
+    }
 }
 fn short(value: &str, limit: usize) -> String {
     let mut text: String = value.chars().take(limit).collect();
@@ -264,7 +286,7 @@ pub(crate) fn operations(view: &Value) -> Result<String> {
             short(field(goal, "planning_worktree_path"), 180),
             escape(field(goal, "goal_id"))
         )?;
-        if let Some(events) = receipt["activity"].as_array() {
+        if let Some(events) = history(goal, &receipt)["activity"].as_array() {
             for item in events.iter().rev().take(20) {
                 timeline.push((
                     field(item, "at").to_owned(),
@@ -274,7 +296,7 @@ pub(crate) fn operations(view: &Value) -> Result<String> {
             }
         }
         // Each assignment keeps its own latest event; one worker cannot replace another.
-        if let Some(fleet) = receipt["fleet"].as_object() {
+        if let Some(fleet) = history(goal, &receipt)["fleet"].as_object() {
             for (id, activity) in fleet {
                 if state != "Running"
                     || activity["goal_revision"] != goal["revision"]

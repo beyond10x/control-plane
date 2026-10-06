@@ -89,12 +89,19 @@ impl Supervisor {
                 rows(&self.store, "AssignmentList").await?,
             );
             let rejected_goal = goal.clone();
+            let acceptance = self
+                .store
+                .lock()
+                .await
+                .activity_history(text(&goal, "goal_id")?)?["acceptance"]
+                .clone();
             let rejected_repositories = repositories.clone();
             let rejected_assignments = assignments.clone();
             let runner = self.runner();
             if tokio::task::spawn_blocking(move || {
                 crate::fleet::acceptance_is_unchanged(
                     &rejected_goal,
+                    &acceptance,
                     &rejected_repositories,
                     &rejected_assignments,
                     &runner,
