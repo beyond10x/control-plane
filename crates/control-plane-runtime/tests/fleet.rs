@@ -1380,7 +1380,7 @@ async fn admission_refusals_reach_the_model() {
 async fn execution_refusals_reach_the_model() {
     let turns = vec![
         (
-            json!({"action":"run","program":"rg","args":["a","huge.txt"]}),
+            json!({"action":"run","program":"git","args":["show","HEAD:huge.txt"]}),
             Some("command_output_too_large"),
         ),
         (
