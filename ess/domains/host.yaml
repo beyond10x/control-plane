@@ -256,6 +256,7 @@ entities:
       - Reviewing
       - ReadyToMerge
       - Merging
+      - Blocked
       to: Blocked
     - name: cancel
       from:

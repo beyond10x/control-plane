@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
-// contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
+// model digest 81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf
+// contract digest 003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -229,6 +229,7 @@ where
         let _ = &held;
         let held_state = held.state;
         let moved = match held.refine() {
+            crate::host::AnyAssignment::Blocked(instance) => crate::host::AnyAssignment::Blocked(instance.block()),
             crate::host::AnyAssignment::Implementing(instance) => crate::host::AnyAssignment::Blocked(instance.block()),
             crate::host::AnyAssignment::Merging(instance) => crate::host::AnyAssignment::Blocked(instance.block()),
             crate::host::AnyAssignment::Queued(instance) => crate::host::AnyAssignment::Blocked(instance.block()),

@@ -1689,6 +1689,242 @@ async fn target_moved_past_uncertain_head_closes_intent() {
     );
 }
 
+/// The number of host decisions the store has committed: every record, progress or command.
+async fn committed(store: &SharedStore) -> u64 {
+    *store.lock().await.subscribe().borrow()
+}
+
+/// The assignment's newest recorded activity (`Store::activity_history`).
+async fn newest_activity(store: &SharedStore, assignment: &Value) -> Value {
+    history(store).await["fleet"][assignment["assignment_id"].as_str().unwrap()].clone()
+}
+
+/// An assignment blocked by an unresolved publication stays Blocked when its intent closes as not
+/// published; here the target moved past the head observed when the outcome became uncertain.
+/// Its reason then names the close, not the unresolved outcome first recorded, and ten ticks over
+/// the paused goal record nothing. Resumed, the assignment cannot be attempted again, because its
+/// attempt started on the old base: every tick refuses it and blocks it with that cause, so the
+/// reason is replaced once more and then, over ten ticks that each block it with the unchanged
+/// cause, never again.
+#[tokio::test]
+async fn closed_publication_replaces_the_blocked_reason() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let blocked = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert!(
+        blocked["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication outcome unresolved")),
+        "{blocked}"
+    );
+    let operator = |command: &'static str| {
+        let (store, goal) = (fixture.store.clone(), fixture.goal.clone());
+        async move {
+            store
+                .lock()
+                .await
+                .execute(command, json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap()
+        }
+    };
+    operator("PauseGoal").await;
+    let since =
+        newest_activity(&fixture.store, &blocked).await["detail"]["uncertain_since"].clone();
+    assert!(
+        since.is_i64(),
+        "the unresolved blocker records its start: {since}"
+    );
+    let base = rows(&fixture.store, "PublicationIntentList").await[0]["expected_base"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let repo = fixture.root.join("repos/repo0");
+    let moved = cmd(
+        &repo,
+        "git",
+        &[
+            "commit-tree",
+            &format!("{base}^{{tree}}"),
+            "-p",
+            &base,
+            "-m",
+            "an unrelated change",
+        ],
+        &[],
+    )
+    .trim()
+    .to_owned();
+    cmd(
+        &repo,
+        "git",
+        &["push", "origin", &format!("{moved}:refs/heads/main")],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    let intent = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    assert_eq!(intent["state"], "NotPublished", "{intent}");
+    let closed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(closed["state"], "Blocked", "{closed}");
+    assert!(
+        closed["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("closed as not published")),
+        "after the intent closed as not published ({}), the assignment's reason still reads {}",
+        intent["reason"],
+        closed["reason"]
+    );
+    assert_eq!(closed["reason"], intent["reason"], "{closed} {intent}");
+    // The close is blocked before the intent closes, and its blocker carries the intent and the
+    // start of its uncertainty, so a process stopped between the two closes it on the next
+    // observation instead of waiting a new grace period.
+    let blocker = newest_activity(&fixture.store, &closed).await;
+    assert_eq!(
+        (
+            &blocker["action"],
+            &blocker["detail"]["reason"],
+            &blocker["detail"]["publication_id"],
+            &blocker["detail"]["uncertain_since"]
+        ),
+        (
+            &json!("blocked"),
+            &intent["reason"],
+            &intent["publication_id"],
+            &since
+        ),
+        "{blocker}"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &closed["reason"]),
+        "{now}"
+    );
+    assert_eq!(
+        committed(&fixture.store).await - before,
+        0,
+        "ten fleet ticks over the paused goal's closed publication committed decisions"
+    );
+
+    // Resumed: the fleet attempts the assignment, refuses the attempt (the target moved since it
+    // started) and blocks it with that cause, which replaces the close as its reason.
+    operator("StartGoal").await;
+    let refused = |report: &control_plane_runtime::TickReport| {
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains(&moved) && reason.contains("since this attempt started"))
+    };
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(refused(&report), "{report:?}");
+    let resumed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (resumed["state"].as_str(), &resumed["attempt"]),
+        (Some("Blocked"), &closed["attempt"]),
+        "{resumed}"
+    );
+    assert!(
+        resumed["reason"].as_str().is_some_and(
+            |reason| reason.contains(&moved) && reason.contains("since this attempt started")
+        ),
+        "{resumed}"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        // Each tick blocks the assignment again with the unchanged cause.
+        let report = supervisor.fleet_tick().await.unwrap();
+        assert!(refused(&report), "{report:?}");
+    }
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &resumed["reason"]),
+        "{now}"
+    );
+    assert_eq!(
+        committed(&fixture.store).await - before,
+        0,
+        "ten fleet ticks that each blocked the assignment with an unchanged cause committed \
+         decisions"
+    );
+}
+
+/// A Blocked assignment whose cause holds, tick after tick, keeps the reason that names it. The
+/// cause here is an unreachable remote whose diagnostics change on every observation (curl reports
+/// how long its attempt took): the failure's class identifies the cause, not the output, so
+/// although every observation words the reason differently, none replaces it or records anything.
+#[tokio::test]
+async fn unchanged_blocked_reason_is_not_replaced() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let failing = fixture.root.join("unreachable-upload-pack");
+    std::fs::write(
+        &failing,
+        "#!/bin/sh\necho \"fatal: unable to access 'https://git.example.invalid/repo0.git/': Failed \
+         to connect to git.example.invalid port 443 after $(date +%N) ms: Could not connect to \
+         server\" >&2\nexit 128\n",
+    )
+    .unwrap();
+    cmd(
+        &fixture.root,
+        "chmod",
+        &["755", failing.to_str().unwrap()],
+        &[],
+    );
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "config",
+            "remote.origin.uploadpack",
+            failing.to_str().unwrap(),
+        ],
+        &[],
+    );
+    // The first failed observation is a new cause: the assignment's reason names it.
+    supervisor.fleet_tick().await.unwrap();
+    let blocked = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let cause = newest_activity(&fixture.store, &blocked).await;
+    assert_eq!(blocked["state"], "Blocked", "{blocked}");
+    assert!(
+        cause["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication observation unavailable")),
+        "{cause}"
+    );
+    assert_eq!(
+        blocked["reason"], cause["detail"]["reason"],
+        "the Blocked assignment's reason does not name the cause recorded for it"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let after = committed(&fixture.store).await;
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        rows(&fixture.store, "PublicationIntentList").await[0]["state"],
+        "Uncertain"
+    );
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &blocked["reason"]),
+        "an unchanged cause replaced the Blocked assignment's reason"
+    );
+    assert_eq!(
+        after - before,
+        0,
+        "ten fleet ticks over an unchanged cause committed {} decisions; reason now {}",
+        after - before,
+        now["reason"]
+    );
+}
+
 /// An assignment holds its repository from its claim until it is merged or cancelled, so a
 /// queued assignment on the same repository waits. It records why, once: the assignment that
 /// holds the repository. Here the first workspace's assignment holds it with an unresolved

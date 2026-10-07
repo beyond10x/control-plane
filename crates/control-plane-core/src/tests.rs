@@ -1463,6 +1463,76 @@ async fn blocked_repair_reacquires_worker_capacity() {
     assert!(result.unwrap_err().to_string().contains("worker limit"));
 }
 
+/// BlockAssignment on a Blocked assignment replaces its reason and leaves it Blocked; the reason
+/// survives a restart. Only the Supervisor may send it, and a merged or cancelled assignment still
+/// refuses it.
+#[tokio::test]
+async fn blocked_reason_is_replaced_by_the_supervisor_only() {
+    let temp = adversary_scratch();
+    let path = temp.path().join("repo");
+    repository(&path);
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:blocked").await;
+    claim(&mut store, &id).await.unwrap();
+    let block = |reason: &str| json!({"assignment_id":id,"reason":reason});
+    let row = |store: &Store| {
+        store.query("AssignmentList").unwrap()[0]
+            .as_object()
+            .unwrap()
+            .clone()
+    };
+    let outcome = store
+        .execute("BlockAssignment", block("first cause"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "applied", "{outcome}");
+
+    let refused = store
+        .execute("BlockAssignment", block("operator cause"), Actor::Operator)
+        .await
+        .unwrap_err();
+    assert!(refused.to_string().contains("actor"), "{refused}");
+    assert_eq!(row(&store)["reason"], "first cause");
+
+    let outcome = store
+        .execute("BlockAssignment", block("second cause"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "applied", "{outcome}");
+    let replaced = row(&store);
+    assert_eq!(
+        (&replaced["state"], &replaced["reason"]),
+        (&json!("Blocked"), &json!("second cause")),
+        "{replaced:?}"
+    );
+
+    drop(store);
+    let mut store = Store::open(&database).await.unwrap();
+    assert_eq!(row(&store), replaced, "the replaced reason after a restart");
+    store
+        .execute(
+            "CancelAssignment",
+            json!({"assignment_id":id}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let outcome = store
+        .execute("BlockAssignment", block("too late"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "wrong-state", "{outcome}");
+    assert_eq!(row(&store)["reason"], "second cause");
+}
+
 #[tokio::test]
 async fn multiple_workspaces_keep_directory_membership_isolated() {
     let temp = scratch();

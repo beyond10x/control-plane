@@ -247,7 +247,14 @@ impl Host {
     }
     /// Record the blocker `detail` and block the assignment unless it already rests. A blocker
     /// unchanged since the assignment's newest record, on an assignment that already rests,
-    /// records nothing: the fleet meets an unresolved publication on every tick.
+    /// records nothing: the fleet meets an unresolved publication on every tick. A changed
+    /// blocker of a Blocked assignment blocks it again with the new reason (`block` takes a
+    /// Blocked assignment too), unless that reason is already its own, so the reason names the
+    /// cause that holds now. A merged or cancelled assignment keeps its reason.
+    ///
+    /// The assignment is blocked before the blocker is recorded. The record is what marks a cause
+    /// as seen, so a process that stops between the two commits leaves the cause unrecorded and
+    /// the next block of it records it, rather than a recorded cause whose reason never landed.
     fn block_with(&self, id: &Value, detail: Value) -> Result<()> {
         let row = self.row("AssignmentList", "assignment_id", id)?;
         let rests = matches!(
@@ -258,14 +265,14 @@ impl Host {
             return Ok(());
         }
         let reason = detail["reason"].clone();
-        self.progress(&row, "blocked", "host", detail)?;
-        if !rests {
+        let replaced = row["state"] == "Blocked" && row["reason"] != reason;
+        if !rests || replaced {
             self.execute(
                 "BlockAssignment",
                 json!({"assignment_id":id,"reason":reason}),
             )?;
         }
-        Ok(())
+        self.progress(&row, "blocked", "host", detail)
     }
     /// Record `detail` under `action` as the assignment's newest activity unless it already is:
     /// the fleet meets a waiting assignment on every tick.
@@ -2280,11 +2287,21 @@ fn reconcile_publications(host: &Host) -> Result<()> {
                             ),
                         }
                     );
+                    // Blocked first: a closed intent is never observed again, so a process that
+                    // stopped after the close would leave the assignment's reason unresolved. The
+                    // blocker carries the intent's uncertainty like every blocker of the intent,
+                    // so after a stop before the close the next observation finds the same start
+                    // and closes it.
+                    host.block_publication(
+                        id,
+                        publication,
+                        json!({"reason":reason}),
+                        uncertain.as_ref(),
+                    )?;
                     host.execute(
                         "ClosePublication",
                         json!({"publication_id":publication,"reason":reason}),
                     )?;
-                    host.block(id, &reason)?;
                 }
             }
             Ok(Observation::Missing { head }) if intent["state"] == "Prepared" => {
@@ -3236,10 +3253,16 @@ mod blocker_tests {
         *host.store.blocking_lock().subscribe().borrow()
     }
 
-    /// A blocker the store records bounded, because it is long, is still recognised as the
-    /// assignment's last one: repeating it appends nothing, and a different one appends again.
-    #[test]
-    fn long_unchanged_blocker_appends_once() {
+    /// A store holding one queued assignment of a running goal, and the fleet host over it.
+    /// Fields drop in order: the host and its store before the runtime and the directory.
+    struct Blocking {
+        host: Host,
+        assignment: Value,
+        _runtime: tokio::runtime::Runtime,
+        _temp: tempfile::TempDir,
+    }
+
+    fn blocking() -> Blocking {
         let temp = tempfile::tempdir().unwrap();
         let repo = temp.path().join("repo");
         std::fs::create_dir(&repo).unwrap();
@@ -3290,32 +3313,107 @@ mod blocker_tests {
             },
             deadline: None,
         };
+        Blocking {
+            host,
+            assignment,
+            _runtime: runtime,
+            _temp: temp,
+        }
+    }
+
+    /// A blocker the store records bounded, because it is long, is still recognised as the
+    /// assignment's last one: repeating it appends nothing, and a different one appends again.
+    #[test]
+    fn long_unchanged_blocker_appends_once() {
+        let blocking = blocking();
+        let (host, assignment) = (&blocking.host, &blocking.assignment);
         let long = format!(
             "Publication observation unavailable: {}",
             "fatal: could not read from remote repository. ".repeat(40)
         );
-        let start = committed(&host);
-        host.block(&assignment, &long).unwrap();
+        let start = committed(host);
+        host.block(assignment, &long).unwrap();
         assert_eq!(
-            committed(&host) - start,
+            committed(host) - start,
             2,
             "the first block records progress and blocks the assignment"
         );
-        let blocked = committed(&host);
+        let blocked = committed(host);
         for _ in 0..3 {
-            host.block(&assignment, &long).unwrap();
+            host.block(assignment, &long).unwrap();
         }
         assert_eq!(
-            committed(&host) - blocked,
+            committed(host) - blocked,
             0,
             "an unchanged blocker was recorded again"
         );
-        host.block(&assignment, &format!("{long}, and again"))
+        let changed = format!("{long}, and again");
+        host.block(assignment, &changed).unwrap();
+        assert_eq!(
+            committed(host) - blocked,
+            2,
+            "a changed blocker records progress once and replaces the Blocked assignment's \
+             reason once"
+        );
+        let row = host
+            .row("AssignmentList", "assignment_id", assignment)
             .unwrap();
         assert_eq!(
-            committed(&host) - blocked,
-            1,
-            "a changed blocker records progress once"
+            (&row["state"], &row["reason"]),
+            (&json!("Blocked"), &json!(changed)),
+            "{row}"
         );
+        let replaced = committed(host);
+        for _ in 0..3 {
+            host.block(assignment, &changed).unwrap();
+        }
+        assert_eq!(
+            committed(host) - replaced,
+            0,
+            "an unchanged blocker was recorded again after its reason was replaced"
+        );
+    }
+
+    /// The fleet commits a Blocked assignment's new reason before the blocker that records its
+    /// cause, so a process that stops between the two leaves the reason in place and the blocker
+    /// unrecorded. The next block of that cause records it once and does not send the reason the
+    /// assignment already holds; after that, the cause is unchanged and records nothing.
+    #[test]
+    fn replaced_reason_without_its_blocker_is_recorded_once() {
+        let blocking = blocking();
+        let (host, assignment) = (&blocking.host, &blocking.assignment);
+        host.block(assignment, "first cause").unwrap();
+        // The replacement committed; the process stopped before recording its blocker.
+        host.execute(
+            "BlockAssignment",
+            json!({"assignment_id":assignment,"reason":"second cause"}),
+        )
+        .unwrap();
+        let stopped = committed(host);
+        host.block(assignment, "second cause").unwrap();
+        assert_eq!(
+            committed(host) - stopped,
+            1,
+            "a cause whose reason the assignment already holds is recorded once and not sent again"
+        );
+        let row = host
+            .row("AssignmentList", "assignment_id", assignment)
+            .unwrap();
+        assert_eq!(
+            (&row["state"], &row["reason"]),
+            (&json!("Blocked"), &json!("second cause")),
+            "{row}"
+        );
+        let last = host.last_activity(&row).unwrap();
+        assert_eq!(
+            (&last["action"], &last["detail"]["reason"]),
+            (&json!("blocked"), &json!("second cause")),
+            "{last}"
+        );
+        let recorded = committed(host);
+        for _ in 0..3 {
+            host.block(assignment, "second cause").unwrap();
+        }
+        assert_eq!(committed(host) - recorded, 0);
     }
 }
