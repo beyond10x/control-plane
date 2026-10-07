@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:blocked-reason-update
 kind: story
-status: draft
+status: active
 title: A Blocked assignment's reason is replaced when its cause changes
 relations:
 - decomposes: epic:unattended-operation
@@ -20,7 +20,10 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 2
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 3}
+- {from: "proposed", to: "active", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 4}
 ---
 ## Outcome
 

@@ -2,13 +2,12 @@
 format: aep.planning-md/3
 id: story:acceptance-edit-ordering
 kind: story
-status: draft
+status: active
 title: A goal edit and its acceptance are ordered, and both orders are shown
 relations:
 - decomposes: epic:unattended-operation
 - serves: vision:autonomous-engineering
 - depends_on: story:goal-acceptance-authority
-- depends_on: story:spec-owned-admission
 scope:
 - confidence: inferred
   path: crates/control-plane-core/src/guards.rs
@@ -20,7 +19,10 @@ scope:
   path: crates/control-plane-runtime/tests/fleet.rs
 - confidence: inferred
   path: ess/domains/host.yaml
-revision: 2
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 4}
+- {from: "proposed", to: "active", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 5}
 ---
 ## Outcome
 
@@ -38,7 +40,7 @@ The order between an operator's goal edit and the goal's acceptance is stated as
 - `satisfy_after_edit_names_the_old_revision_and_is_refused`: after UpdateGoal moves a goal to revision 2, SatisfyGoal with a receipt for revision 1 is refused and the goal stays Running at revision 2.
 - `edit_after_satisfy_is_refused_and_says_why`: after SatisfyGoal applies, UpdateGoal is refused with the satisfied outcome, the goal keeps its satisfaction receipt for the checked revision, and the refusal reaches the operator's command result.
 - `goal_edit_during_acceptance_is_not_satisfied` reaches the window between the fleet's post-review check and SatisfyGoal by a seam that does not depend on thread scheduling, and asserts the outcome of each ordering instead of assuming one.
-- The precondition "SatisfyGoal's receipt names the goal's current revision" is declared in ess/domains/host.yaml where the specification can express it (with story:spec-owned-admission), and `ess specify validate --path ess --strict-requires` passes; if it cannot be expressed, the story records that as a decision before any code change.
+- The precondition "SatisfyGoal's receipt names the goal's current revision" is declared in ess/domains/host.yaml where the specification can express it, and `ess specify validate --path ess --strict-requires` passes; if it cannot be expressed, the story records that as a decision before any code change.
 
 ## Scope
 
