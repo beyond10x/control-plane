@@ -9,6 +9,7 @@ relations:
 - serves: vision:autonomous-engineering
 - informed_by: decision-blocker:satisfy-goal-precondition-in-ess
 - depends_on: story:acceptance-edit-ordering
+- depends_on: story:ess-055-upgrade
 scope:
 - confidence: inferred
   path: crates/control-plane-core/src/guards.rs
