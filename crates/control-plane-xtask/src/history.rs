@@ -557,6 +557,74 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?;
     }
 
+    // Published, but the target never received the candidate: closed as not published, then
+    // cancelled, which releases the repository.
+    let fourth = identity(
+        &run.expect(
+            "QueueAssignment",
+            queue(&alpha, "story:fourth"),
+            Supervisor,
+            "created",
+        )
+        .await?,
+        "assignment_id",
+    )?;
+    for (command, body) in [
+        (
+            "ClaimAssignment",
+            json!({"worktree_id": "tree-fourth", "implementor_run": "implementor-fourth",
+                "base_revision": "base-fourth"}),
+        ),
+        (
+            "ReviewAssignment",
+            json!({"candidate": "candidate-fourth", "test_revision": "candidate-fourth"}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"reviewer_run": "reviewer-fourth", "review_revision": "candidate-fourth"}),
+        ),
+    ] {
+        run.expect(command, with(&fourth, body), Supervisor, "applied")
+            .await?;
+    }
+    let unreceived = identity(
+        &run.expect(
+            "PreparePublication",
+            json!({"assignment_id": fourth, "candidate": "candidate-fourth", "target": "main",
+                "expected_base": "base-fourth"}),
+            Supervisor,
+            "created",
+        )
+        .await?,
+        "publication_id",
+    )?;
+    for (command, body) in [
+        ("MergeAssignment", json!({"assignment_id": fourth})),
+        (
+            "MarkPublicationUncertain",
+            json!({"publication_id": unreceived}),
+        ),
+        (
+            "BlockAssignment",
+            json!({"assignment_id": fourth, "reason": "publisher returned without an observed merge"}),
+        ),
+    ] {
+        run.expect(command, body, Supervisor, "applied").await?;
+    }
+    let close = json!({"publication_id": unreceived,
+        "reason": "The publisher exited and main does not contain candidate-fourth; closed as not published"});
+    for outcome in ["applied", "wrong-state"] {
+        run.expect("ClosePublication", close.clone(), Supervisor, outcome)
+            .await?;
+    }
+    run.expect(
+        "CancelAssignment",
+        json!({"assignment_id": fourth}),
+        Supervisor,
+        "applied",
+    )
+    .await?;
+
     let third = identity(
         &run.expect(
             "QueueAssignment",
@@ -790,6 +858,11 @@ async fn unknown_instances(run: &mut Script<'_>) -> Result<()> {
         (
             "ConfirmPublication",
             json!({"publication_id": unknown, "receipt": "unknown"}),
+            Supervisor,
+        ),
+        (
+            "ClosePublication",
+            json!({"publication_id": unknown, "reason": "unknown"}),
             Supervisor,
         ),
     ];

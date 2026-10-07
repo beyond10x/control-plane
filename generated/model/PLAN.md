@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-  contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+  model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+  contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-128 capabilities: **128 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+131 capabilities: **131 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -39,6 +39,8 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | command behaviour | `controlplane.host.CancelGoal` |
 | command contract | `controlplane.host.ClaimAssignment` |
 | command behaviour | `controlplane.host.ClaimAssignment` |
+| command contract | `controlplane.host.ClosePublication` |
+| command behaviour | `controlplane.host.ClosePublication` |
 | command contract | `controlplane.host.CompleteAssignment` |
 | command behaviour | `controlplane.host.CompleteAssignment` |
 | command contract | `controlplane.host.ConfigureRepository` |
@@ -91,6 +93,7 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.CancelAssignmentApplied` |
 | event type | `controlplane.host.CancelGoalApplied` |
 | event type | `controlplane.host.ClaimAssignmentApplied` |
+| event type | `controlplane.host.ClosePublicationApplied` |
 | event type | `controlplane.host.CompleteAssignmentApplied` |
 | event type | `controlplane.host.ConfigureRepositoryApplied` |
 | event type | `controlplane.host.ConfirmPublicationApplied` |

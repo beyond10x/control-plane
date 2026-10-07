@@ -1,7 +1,8 @@
 //! Trusted fleet effects; model proposals never construct validation or publication receipts.
 use crate::{
     AgentModel, ModelRequest, RuntimeConfig, SharedStore, TickReport, engine,
-    process::ProcessRunner, refusal::InputRefusal,
+    process::{ProcessExit, ProcessRunner},
+    refusal::InputRefusal,
 };
 use anyhow::{Context, Result, bail, ensure};
 use control_plane_core::Actor;
@@ -31,6 +32,13 @@ use tokio_util::sync::CancellationToken;
 /// in the decision's body and again in its outcome, which together stay within 16 KiB;
 /// later progress leaves it to the goal's journal.
 const ACCEPTANCE_REASON_BYTES: usize = 5 * 1024;
+
+/// What the fleet records once the repair of an interrupted or blocked attempt has applied.
+const RECOVER: &str = "Recover interrupted implementation with fresh tests and independent review";
+
+/// The blocker member that names a failure's stable class ([`failure`]). A blocker that has one
+/// is compared by it ([`same_activity`]), not by its reason, which carries the process output.
+const FAILURE: &str = "failure";
 
 #[derive(Clone)]
 struct Host {
@@ -216,20 +224,194 @@ impl Host {
         }
         Ok(current_assignment)
     }
+    /// Record `error` as the assignment's blocker and block it unless it already rests.
     fn block(&self, id: &Value, error: &str) -> Result<()> {
+        self.block_with(id, json!({"reason":error}))
+    }
+    /// Record the blocker `detail` ([`blocker`]) of an assignment whose publication
+    /// `publication` still holds it. `uncertain` says when that intent became Uncertain; each
+    /// later blocker of the intent carries it on, so the record survives them and a restart.
+    fn block_publication(
+        &self,
+        id: &Value,
+        publication: &Value,
+        mut detail: Value,
+        uncertain: Option<&Uncertainty>,
+    ) -> Result<()> {
+        detail["publication_id"] = publication.clone();
+        if let Some(uncertain) = uncertain {
+            detail["uncertain_head"] = json!(uncertain.head);
+            detail["uncertain_since"] = json!(uncertain.since);
+        }
+        self.block_with(id, detail)
+    }
+    /// Record the blocker `detail` and block the assignment unless it already rests. A blocker
+    /// unchanged since the assignment's newest record, on an assignment that already rests,
+    /// records nothing: the fleet meets an unresolved publication on every tick.
+    fn block_with(&self, id: &Value, detail: Value) -> Result<()> {
         let row = self.row("AssignmentList", "assignment_id", id)?;
-        self.progress(&row, "blocked", "host", json!({"reason":error}))?;
-        if !matches!(
+        let rests = matches!(
             row["state"].as_str(),
             Some("Blocked" | "Merged" | "Cancelled")
-        ) {
+        );
+        if rests && same_activity(&self.last_activity(&row)?, "blocked", &detail) {
+            return Ok(());
+        }
+        let reason = detail["reason"].clone();
+        self.progress(&row, "blocked", "host", detail)?;
+        if !rests {
             self.execute(
                 "BlockAssignment",
-                json!({"assignment_id":id,"reason":error}),
+                json!({"assignment_id":id,"reason":reason}),
             )?;
         }
         Ok(())
     }
+    /// Record `detail` under `action` as the assignment's newest activity unless it already is:
+    /// the fleet meets a waiting assignment on every tick.
+    fn note(&self, assignment: &Value, action: &str, detail: Value) -> Result<()> {
+        if !same_activity(&self.last_activity(assignment)?, action, &detail) {
+            self.progress(assignment, action, "host", detail)?;
+        }
+        Ok(())
+    }
+    /// Whether the store refuses every later step of `assignment` because its repository was
+    /// reconfigured since its attempt was admitted: the store's own comparison
+    /// (`Store::assignment_configuration_changed`).
+    fn configuration_changed(&self, assignment: &Value) -> Result<bool> {
+        let id = text(assignment, "assignment_id")?;
+        Ok(self
+            .handle
+            .block_on(async { self.store.lock().await.assignment_configuration_changed(id) }))
+    }
+    /// The assignment's newest recorded activity, or null.
+    fn last_activity(&self, assignment: &Value) -> Result<Value> {
+        let (goal, id) = (
+            text(assignment, "goal_id")?,
+            text(assignment, "assignment_id")?,
+        );
+        let history = self
+            .handle
+            .block_on(async { self.store.lock().await.activity_history(goal) })?;
+        Ok(history["fleet"][id].clone())
+    }
+    /// When the publication `intent` of `assignment` became Uncertain, as the assignment's
+    /// newest blocker records it. While a publication holds an assignment, only the fleet's
+    /// publication path records the assignment's activity, so that blocker is the intent's own.
+    fn uncertainty(&self, assignment: &Value, intent: &Value) -> Result<Option<Uncertainty>> {
+        let last = self.last_activity(assignment)?;
+        let detail = &last["detail"];
+        if last["action"] != "blocked" || detail["publication_id"] != intent["publication_id"] {
+            return Ok(None);
+        }
+        Ok(detail["uncertain_since"].as_i64().map(|since| Uncertainty {
+            head: detail["uncertain_head"].as_str().map(str::to_owned),
+            since,
+        }))
+    }
+}
+
+/// A blocker's detail: its `reason` and, when a process failed, the failure's stable class.
+fn blocker(reason: &str, error: &anyhow::Error) -> Value {
+    let mut detail = json!({"reason":reason});
+    if let Some(class) = failure(error) {
+        detail[FAILURE] = json!(class);
+    }
+    detail
+}
+
+/// The stable class of a failure in which a process exited unsuccessfully: its program,
+/// arguments and exit status. The output is left out, because the same failure can print
+/// different output on every run (a connect error reports how long it took).
+fn failure(error: &anyhow::Error) -> Option<String> {
+    let exit = error.downcast_ref::<ProcessExit>()?;
+    Some(match exit.code {
+        Some(code) => format!("{} {:?} exited with status {code}", exit.program, exit.args),
+        None => format!("{} {:?} was ended by a signal", exit.program, exit.args),
+    })
+}
+
+/// Whether the newest activity `last` is `detail` recorded under `action`. The store keeps a
+/// large detail bounded: each text member cut to its first bytes, and the size of the detail it
+/// was given. A detail that names its failure's class ([`FAILURE`]) is compared by every member
+/// but its reason, which carries the failing process's output; a member the store had to cut
+/// compares unequal, so such a blocker is recorded again rather than taken for an older one.
+/// Any other detail is compared whole.
+fn same_activity(last: &Value, action: &str, detail: &Value) -> bool {
+    fn identity(detail: &Value) -> Option<BTreeMap<&str, &Value>> {
+        detail.as_object().map(|members| {
+            members
+                .iter()
+                .map(|(key, value)| (key.as_str(), value))
+                .filter(|(key, _)| !matches!(*key, "reason" | "_bounded"))
+                .collect()
+        })
+    }
+    let recorded = &last["detail"];
+    if detail.get(FAILURE).is_some() {
+        return last["action"] == action && identity(recorded) == identity(detail);
+    }
+    last["action"] == action
+        && match recorded["_bounded"]["bytes"].as_u64() {
+            None => recorded == detail,
+            Some(bytes) => {
+                bytes == detail.to_string().len() as u64
+                    && detail.as_object().is_some_and(|members| {
+                        members
+                            .iter()
+                            .all(|(key, sent)| match (sent, &recorded[key]) {
+                                (Value::String(sent), Value::String(kept)) => {
+                                    sent.starts_with(kept.as_str())
+                                }
+                                (sent, kept) => sent == kept,
+                            })
+                    })
+            }
+        }
+}
+
+/// When a publication intent became Uncertain: the target head observed then (none when that
+/// observation failed) and the time, in Unix seconds. The intent's blockers record it.
+#[derive(Debug, Clone)]
+struct Uncertainty {
+    head: Option<String>,
+    since: i64,
+}
+impl Uncertainty {
+    fn now(head: Option<String>) -> Self {
+        Self {
+            head,
+            since: time::OffsetDateTime::now_utc().unix_timestamp(),
+        }
+    }
+}
+
+/// An attempt whose publication it left Uncertain. The fleet records the blocker with the
+/// intent's [`Uncertainty`], where its grace period starts.
+#[derive(Debug)]
+struct Unresolved {
+    publication: Value,
+    uncertain: Uncertainty,
+}
+impl std::fmt::Display for Unresolved {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Publication outcome unresolved")
+    }
+}
+impl std::error::Error for Unresolved {}
+
+/// Whether a publication intent still holds its assignment and repository: every intent but one
+/// closed as not published. An open intent waits for its outcome to be observed, and a
+/// confirmed one for its assignment to be reconciled.
+fn holds(intent: &Value) -> bool {
+    intent["state"] != "NotPublished"
+}
+
+/// Whether `assignment` has a publication intent that still holds it.
+fn held(publications: &[Value], assignment: &Value) -> bool {
+    publications
+        .iter()
+        .any(|p| p["assignment_id"] == assignment["assignment_id"] && holds(p))
 }
 /// A goal acceptance stop that latches (`failed`): a verdict on the goal (the goal reviewer
 /// rejected it, a check ran and failed, a target moved) or a goal review turn that ran and
@@ -292,6 +474,8 @@ pub(crate) async fn record_progress(
     text(assignment, "assignment_id")?;
     let status = if action == "blocked" {
         "failed"
+    } else if action == "waiting" {
+        "waiting"
     } else if action.ends_with(".completed") {
         "completed"
     } else {
@@ -425,6 +609,7 @@ pub async fn run(
         })
         .await??;
     let mut chosen = Vec::new();
+    let mut waiting = Vec::new();
     let mut common = BTreeSet::new();
     let mut workers = BTreeMap::<String, usize>::new();
     // Recover in-flight work first. A queued alias cannot steal its common-directory slot.
@@ -463,29 +648,59 @@ pub async fn run(
         {
             continue;
         }
-        if common.contains(text(repo, "common_dir")?) {
+        // Publication reconciliation, not another attempt, resolves a held publication.
+        if held(&publications, &assignment) {
             continue;
         }
-        // A blocked publication still owns its repository until its outcome is observed.
-        if assignments.iter().any(|other| {
+        // The store's rule (`active` in control-plane-core `guards.rs`): an assignment holds its
+        // repository from its claim until it is merged or cancelled, Blocked included, so
+        // another assignment on that repository waits without an attempt the store would refuse,
+        // and records which assignment it waits for. Only a queued one can meet this rule.
+        if let Some(holder) = assignments.iter().find(|other| {
             other["assignment_id"] != assignment["assignment_id"]
-                && (matches!(
+                && matches!(
                     other["state"].as_str(),
-                    Some("Implementing" | "Reviewing" | "ReadyToMerge" | "Merging")
-                ) || (other["state"] != "Merged"
-                    && publications
-                        .iter()
-                        .any(|p| p["assignment_id"] == other["assignment_id"])))
+                    Some("Implementing" | "Reviewing" | "ReadyToMerge" | "Merging" | "Blocked")
+                )
                 && repositories.iter().any(|r| {
                     r["repository_id"] == other["repository_id"]
                         && r["common_dir"] == repo["common_dir"]
                 })
         }) {
+            if assignment["state"] == "Queued" {
+                waiting.push((assignment.clone(), holder.clone(), repo.clone()));
+            }
+            continue;
+        }
+        // An assignment chosen this tick holds the repository from now on; one queued behind it
+        // finds it active on the next tick.
+        if common.contains(text(repo, "common_dir")?) {
             continue;
         }
         common.insert(text(repo, "common_dir")?.to_owned());
         *count += 1;
         chosen.push((assignment, goal.clone(), repo.clone()));
+    }
+    if !waiting.is_empty() {
+        let recorder = host.clone();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            for (assignment, holder, repo) in &waiting {
+                let reason = format!(
+                    "Waiting for repository {}: assignment {} ({}) holds it until that \
+                     assignment is merged or cancelled",
+                    text(repo, "name")?,
+                    text(holder, "assignment_id")?,
+                    text(holder, "story_id")?
+                );
+                recorder.note(
+                    assignment,
+                    "waiting",
+                    json!({"reason":reason,"holder":holder["assignment_id"]}),
+                )?;
+            }
+            Ok(())
+        })
+        .await??;
     }
     let mut tasks: tokio::task::JoinSet<Result<Option<String>>> = tokio::task::JoinSet::new();
     for (assignment, goal, repo) in chosen {
@@ -496,7 +711,19 @@ pub async fn run(
                 Ok(()) => Ok(None),
                 Err(error) => {
                     let reason = format!("{error:#}");
-                    worker.block(&assignment["assignment_id"], &reason)?;
+                    let id = &assignment["assignment_id"];
+                    // A failure before the repair (an unreachable target) repeats on every tick
+                    // with output that may differ; its class identifies it.
+                    let detail = blocker(&reason, &error);
+                    match error.downcast_ref::<Unresolved>() {
+                        Some(unresolved) => worker.block_publication(
+                            id,
+                            &unresolved.publication,
+                            detail,
+                            Some(&unresolved.uncertain),
+                        )?,
+                        None => worker.block_with(id, detail)?,
+                    }
                     Ok(Some(reason))
                 }
             }
@@ -523,9 +750,7 @@ fn retire_stale(host: &Host) -> Result<()> {
         if matches!(
             a["state"].as_str(),
             Some("Merged" | "Cancelled" | "Merging")
-        ) || publications
-            .iter()
-            .any(|p| p["assignment_id"] == a["assignment_id"])
+        ) || held(&publications, &a)
         {
             continue;
         }
@@ -777,11 +1002,7 @@ fn fetch(host: &Host, path: &Path, target: &str) -> Result<String> {
     Ok(head)
 }
 fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<()> {
-    if host
-        .rows("PublicationIntentList")?
-        .iter()
-        .any(|p| p["assignment_id"] == initial["assignment_id"])
-    {
+    if held(&host.rows("PublicationIntentList")?, initial) {
         bail!("publication intent exists; waiting for exact remote reconciliation");
     }
     let mut worker = host.clone();
@@ -795,30 +1016,53 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
     );
     let _deadline = AttemptDeadline::start(worker.runner.cancel.clone(), budget);
     let host = &worker;
-    host.guard(initial, goal, repo, false)?;
+    let current = host.guard(initial, goal, repo, false)?;
+    let resumed = initial["state"] != "Queued";
+    // The store refuses every later step of an attempt admitted under another repository
+    // configuration, so the assignment is blocked, once, instead of attempted on every tick.
+    ensure!(
+        !(resumed && host.configuration_changed(initial)?),
+        "Repository configuration changed since this attempt was admitted; cancel or re-plan it"
+    );
     let primary = Path::new(text(repo, "path")?);
     let target = text(repo, "base_branch")?;
     let base = fetch(host, primary, target)?;
     let run = format!("implementor-{}", uuid::Uuid::new_v4());
-    let tree_id = if initial["state"] == "Queued" {
-        format!("cp-impl-{}", uuid::Uuid::new_v4())
-    } else {
+    let tree_id = if resumed {
         text(initial, "worktree_id")?.into()
-    };
-    if initial["state"] == "Queued" {
-        host.execute("ClaimAssignment",json!({"assignment_id":initial["assignment_id"],"worktree_id":tree_id,"implementor_run":run,"base_revision":base}))?;
     } else {
-        host.block(
-            &initial["assignment_id"],
-            "Recover interrupted implementation with fresh tests and independent review",
-        )?;
-        host.execute("RepairAssignment",json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run}))?;
+        format!("cp-impl-{}", uuid::Uuid::new_v4())
+    };
+    if resumed {
+        // A repair spends an attempt, and the attempt implements on the assignment's own base.
+        // Once the target is no longer at that base, no attempt can publish and no command gives
+        // the assignment another base, so it is blocked here, before the repair.
+        let started = text(initial, "base_revision")?;
         ensure!(
-            initial["base_revision"] == base,
-            "target base changed; queued plan must be reconciled before another attempt"
+            started == base,
+            "The target {target} moved from {started} to {base} since this attempt started; \
+             cancel or re-plan the assignment"
         );
+        if current["state"] != "Blocked" {
+            // Repair takes a blocked assignment; an interrupted one is blocked first.
+            host.execute(
+                "BlockAssignment",
+                json!({"assignment_id":initial["assignment_id"],"reason":RECOVER}),
+            )?;
+        }
+        host.execute("RepairAssignment",json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run}))?;
+    } else {
+        host.execute("ClaimAssignment",json!({"assignment_id":initial["assignment_id"],"worktree_id":tree_id,"implementor_run":run,"base_revision":base}))?;
     }
     let assignment = host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
+    if resumed {
+        host.progress(
+            &assignment,
+            "attempt.repair",
+            "host",
+            json!({"reason":RECOVER}),
+        )?;
+    }
     host.progress(
         &assignment,
         "worktree.prepare",
@@ -1860,7 +2104,7 @@ fn publish(
     let outcome = admitted_publication(execution, &governor, &case_id, &bindings);
     let intent = host.row("PublicationIntentList", "publication_id", &publication_id)?;
     match observe_merge(host, repo, &intent) {
-        Ok(Some(receipt)) => {
+        Ok(Observation::Merged(receipt)) => {
             let observed = attestation(
                 "merge_observation",
                 "merged",
@@ -1902,21 +2146,38 @@ fn publish(
                 "MarkPublicationUncertain",
                 json!({"publication_id":publication_id}),
             )?;
-            match outcome {
-                Err(error) => Err(error
-                    .context("publication failed; exact intent requires remote reconciliation")),
-                Ok(_) => bail!(
+            // The intent became Uncertain now, with the target at the head just observed.
+            let uncertain = Uncertainty::now(match &observation {
+                Ok(Observation::Missing { head }) => Some(head.clone()),
+                _ => None,
+            });
+            let error = match outcome {
+                Err(error) => {
+                    error.context("publication failed; exact intent requires remote reconciliation")
+                }
+                Ok(_) => anyhow::anyhow!(
                     "publisher returned without an observed merge: {}",
                     match observation {
                         Err(error) => error.to_string(),
                         _ => "candidate not on target".into(),
                     }
                 ),
-            }
+            };
+            Err(error.context(Unresolved {
+                publication: publication_id,
+                uncertain,
+            }))
         }
     }
 }
-fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Option<String>> {
+/// What a fetched publication target showed.
+enum Observation {
+    /// It contains the candidate: the merge receipt.
+    Merged(String),
+    /// It does not contain the candidate: the head it was observed at.
+    Missing { head: String },
+}
+fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Observation> {
     let path = Path::new(text(repo, "path")?);
     let head = fetch(host, path, text(intent, "target")?)?;
     let candidate = text(intent, "candidate")?;
@@ -1926,23 +2187,42 @@ fn observe_merge(host: &Host, repo: &Value, intent: &Value) -> Result<Option<Str
         "candidate is not based on expected publication base"
     );
     if git(host, path, &["merge-base", candidate, &head])? != candidate {
-        return Ok(None);
+        return Ok(Observation::Missing { head });
     }
-    Ok(Some(json!({"kind":"git_merge_observation","operation_id":intent["publication_id"],"candidate":candidate,"expected_base":base,"target":intent["target"],"observed_head":head,"origin":git(host,path,&["remote","get-url","origin"])?,"observed_at":now()}).to_string()))
+    Ok(Observation::Merged(json!({"kind":"git_merge_observation","operation_id":intent["publication_id"],"candidate":candidate,"expected_base":base,"target":intent["target"],"observed_head":head,"origin":git(host,path,&["remote","get-url","origin"])?,"observed_at":now()}).to_string()))
 }
+/// Observe every publication that still holds its assignment. A target that contains the
+/// candidate confirms the intent and reconciles the assignment. Uncertain means the publisher
+/// has exited: `publish` marks an intent Uncertain once its publisher returned, and this
+/// function marks a Prepared one, left by an attempt that stopped before then. Each tick runs
+/// this under the fleet lock, before any attempt of this service starts a publisher.
+///
+/// A merge can become visible after its publisher exited (a merge queue, an auto-merge, a fetch
+/// URL behind the push URL). So an Uncertain intent whose target lacks the candidate is closed
+/// as not published, which frees the assignment for repair or cancellation, only once the
+/// target has moved past the head observed when it became Uncertain, or once the configured
+/// grace period since then has passed ([`Settled`]). An observation that fails closes nothing;
+/// the intent stays as it is and the assignment Blocked.
 fn reconcile_publications(host: &Host) -> Result<()> {
     let repositories = host.rows("RepositoryRegistrationList")?;
     for intent in host.rows("PublicationIntentList")? {
         let assignment = host.row("AssignmentList", "assignment_id", &intent["assignment_id"])?;
-        if assignment["state"] == "Merged" {
+        if assignment["state"] == "Merged" || !holds(&intent) {
             continue;
         }
         let repo = repositories
             .iter()
             .find(|r| r["repository_id"] == assignment["repository_id"])
             .context("publication repository missing")?;
+        let (id, publication) = (&assignment["assignment_id"], &intent["publication_id"]);
+        // An Uncertain intent whose newest blocker records no start (it was marked before the
+        // fleet recorded one) starts its grace period at this observation.
+        let uncertain = (intent["state"] == "Uncertain")
+            .then(|| host.uncertainty(&assignment, &intent))
+            .transpose()?
+            .flatten();
         match observe_merge(host, repo, &intent) {
-            Ok(Some(receipt)) => {
+            Ok(Observation::Merged(receipt)) => {
                 let receipt = if intent["state"] == "Confirmed" {
                     text(&intent, "receipt")?.to_owned()
                 } else {
@@ -1963,25 +2243,137 @@ fn reconcile_publications(host: &Host) -> Result<()> {
                     json!({"assignment_id":assignment["assignment_id"],"merge_receipt":receipt}),
                 )?;
             }
-            Ok(None) => {
-                if intent["state"] == "Prepared" {
-                    host.execute(
-                        "MarkPublicationUncertain",
-                        json!({"publication_id":intent["publication_id"]}),
+            Ok(Observation::Missing { head }) if intent["state"] == "Uncertain" => {
+                let path = Path::new(text(repo, "path")?);
+                let settled = uncertain
+                    .as_ref()
+                    .map_or(Settled::Waiting, |u| settlement(host, path, u, &head));
+                if settled == Settled::Waiting {
+                    let uncertain = match uncertain {
+                        Some(Uncertainty { head: None, since }) => Uncertainty {
+                            head: Some(head),
+                            since,
+                        },
+                        Some(recorded) => recorded,
+                        None => Uncertainty::now(Some(head)),
+                    };
+                    let reason = waiting(&intent, &uncertain, host.config.publication_grace)?;
+                    host.block_publication(
+                        id,
+                        publication,
+                        json!({"reason":reason}),
+                        Some(&uncertain),
                     )?;
+                } else {
+                    let reason = format!(
+                        "The publisher exited and {} at {head} does not contain candidate {}; \
+                         closed as not published: {}",
+                        text(&intent, "target")?,
+                        text(&intent, "candidate")?,
+                        match settled {
+                            Settled::Moved => "the target moved past the head observed when the \
+                                               outcome became uncertain"
+                                .to_owned(),
+                            _ => format!(
+                                "{} s passed since the outcome became uncertain",
+                                host.config.publication_grace.as_secs()
+                            ),
+                        }
+                    );
+                    host.execute(
+                        "ClosePublication",
+                        json!({"publication_id":publication,"reason":reason}),
+                    )?;
+                    host.block(id, &reason)?;
                 }
-                host.block(
-                    &assignment["assignment_id"],
-                    "Publication outcome remains unresolved; no duplicate effect will be invoked",
+            }
+            Ok(Observation::Missing { head }) if intent["state"] == "Prepared" => {
+                host.execute(
+                    "MarkPublicationUncertain",
+                    json!({"publication_id":publication}),
+                )?;
+                let uncertain = Uncertainty::now(Some(head));
+                let reason = waiting(&intent, &uncertain, host.config.publication_grace)?;
+                host.block_publication(
+                    id,
+                    publication,
+                    json!({"reason":reason}),
+                    Some(&uncertain),
                 )?;
             }
-            Err(error) => host.block(
-                &assignment["assignment_id"],
-                &format!("Publication observation unavailable: {error:#}"),
+            Ok(Observation::Missing { .. }) => host.block_publication(
+                id,
+                publication,
+                json!({"reason":format!(
+                    "Confirmed publication, but {} does not show candidate {} now; the \
+                     assignment stays blocked until it does",
+                    text(&intent, "target")?,
+                    text(&intent, "candidate")?
+                )}),
+                None,
             )?,
+            Err(error) => {
+                let uncertain = (intent["state"] == "Uncertain")
+                    .then(|| uncertain.unwrap_or_else(|| Uncertainty::now(None)));
+                // The reason keeps the failing process's output; the blocker is identified by
+                // the failure's class, so output that differs between ticks records nothing new.
+                host.block_publication(
+                    id,
+                    publication,
+                    blocker(
+                        &format!("Publication observation unavailable: {error:#}"),
+                        &error,
+                    ),
+                    uncertain.as_ref(),
+                )?
+            }
         }
     }
     Ok(())
+}
+
+/// Whether an Uncertain intent whose target shows `head` without the candidate may close.
+#[derive(PartialEq)]
+enum Settled {
+    /// Neither condition holds yet.
+    Waiting,
+    /// The target moved past the head observed when the intent became Uncertain.
+    Moved,
+    /// The grace period since the intent became Uncertain has passed.
+    Waited,
+}
+fn settlement(host: &Host, path: &Path, uncertain: &Uncertainty, head: &str) -> Settled {
+    // A head that descends from the recorded one moved past it; a rewritten target, or one Git
+    // cannot compare, waits for the grace period instead.
+    let moved = uncertain.head.as_deref().is_some_and(|before| {
+        before != head
+            && git(host, path, &["merge-base", before, head]).is_ok_and(|base| base == before)
+    });
+    let waited = time::OffsetDateTime::now_utc().unix_timestamp() - uncertain.since
+        >= i64::try_from(host.config.publication_grace.as_secs()).unwrap_or(i64::MAX);
+    if moved {
+        Settled::Moved
+    } else if waited {
+        Settled::Waited
+    } else {
+        Settled::Waiting
+    }
+}
+
+/// The blocker of an Uncertain intent whose target does not show its candidate yet: what the
+/// fleet does next.
+fn waiting(intent: &Value, uncertain: &Uncertainty, grace: Duration) -> Result<String> {
+    let target = text(intent, "target")?;
+    Ok(format!(
+        "Publication outcome unresolved: {target} does not show candidate {} yet. The publisher is \
+         not run again for this intent. Once {target} moves past {} without it, or {} s after the \
+         outcome became uncertain, the intent is closed as not published. The assignment is then \
+         attempted again if {target} is still at the base its attempt started from, and \
+         otherwise blocked until it is cancelled or re-planned",
+        text(intent, "candidate")?,
+        uncertain.head.as_deref().unwrap_or("its observed head"),
+        grace.as_secs()
+    ))
 }
 
 fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
@@ -2824,5 +3216,106 @@ mod progress_tests {
         let activity = history["activity"].as_array().unwrap();
         assert_eq!(activity.len(), 64);
         assert_eq!(activity.last(), Some(&receipt["last_activity"]));
+    }
+}
+
+#[cfg(test)]
+mod blocker_tests {
+    use super::*;
+    use control_plane_core::Store;
+
+    struct NoModel;
+    impl AgentModel for NoModel {
+        fn respond(&self, _: &ModelRequest) -> Result<Value> {
+            bail!("blocking calls no model")
+        }
+    }
+
+    /// Decisions the store has committed so far.
+    fn committed(host: &Host) -> u64 {
+        *host.store.blocking_lock().subscribe().borrow()
+    }
+
+    /// A blocker the store records bounded, because it is long, is still recognised as the
+    /// assignment's last one: repeating it appends nothing, and a different one appends again.
+    #[test]
+    fn long_unchanged_blocker_appends_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--quiet", "--initial-branch=main"])
+                .arg(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (store, assignment) = runtime.block_on(async {
+            let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+            let id = |outcome: Value, field: &str| outcome["published"][0]["payload"][field].clone();
+            let ws = id(
+                store
+                    .execute(
+                        "RegisterWorkspace",
+                        json!({"path":temp.path(),"name":"blockers"}),
+                        Actor::Operator,
+                    )
+                    .await
+                    .unwrap(),
+                "workspace_id",
+            );
+            let repository = id(store.execute("RegisterRepository",json!({"workspace_id":ws,"path":repo,"name":"repo","common_dir":"","base_branch":"main","test_command":"cargo test","publish_command":"publish-helper"}),Actor::Operator).await.unwrap(),"repository_id");
+            let goal = id(store.execute("CreateGoal",json!({"workspace_id":ws,"objective":"Report blockers","acceptance":"Blockers stay bounded","max_workers":1,"max_attempts":1,"max_minutes":60,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await.unwrap(),"goal_id");
+            store
+                .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap();
+            let assignment = id(store.execute("QueueAssignment",json!({"goal_id":goal,"repository_id":repository,"story_id":"story:blocked","case_id":"case","worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1}),Actor::Supervisor).await.unwrap(),"assignment_id");
+            (Arc::new(tokio::sync::Mutex::new(store)), assignment)
+        });
+        let host = Host {
+            store,
+            handle: runtime.handle().clone(),
+            config: RuntimeConfig::default(),
+            model: Arc::new(NoModel),
+            runner: ProcessRunner {
+                environment: vec![],
+                timeout: Duration::from_secs(60),
+                cancel: CancellationToken::new(),
+            },
+            deadline: None,
+        };
+        let long = format!(
+            "Publication observation unavailable: {}",
+            "fatal: could not read from remote repository. ".repeat(40)
+        );
+        let start = committed(&host);
+        host.block(&assignment, &long).unwrap();
+        assert_eq!(
+            committed(&host) - start,
+            2,
+            "the first block records progress and blocks the assignment"
+        );
+        let blocked = committed(&host);
+        for _ in 0..3 {
+            host.block(&assignment, &long).unwrap();
+        }
+        assert_eq!(
+            committed(&host) - blocked,
+            0,
+            "an unchanged blocker was recorded again"
+        );
+        host.block(&assignment, &format!("{long}, and again"))
+            .unwrap();
+        assert_eq!(
+            committed(&host) - blocked,
+            1,
+            "a changed blocker records progress once"
+        );
     }
 }

@@ -3,7 +3,7 @@ use crate::{Store, discovery};
 use anyhow::{Context, Result, ensure};
 use controlplane_model::host::{
     AssignmentSnapshot, AssignmentState as A, GoalState as G, PublicationIntentState as P,
-    RepositoryRegistrationState as R, WorkspaceState as W,
+    RepositoryRegistrationData, RepositoryRegistrationState as R, WorkspaceState as W,
 };
 use serde_json::{Value, json};
 use std::path::Path;
@@ -34,6 +34,13 @@ fn active(state: A) -> bool {
     )
 }
 
+/// Whether a publication intent still holds its assignment: every intent but one closed as not
+/// published. An open intent waits for its outcome to be observed, and a confirmed one for its
+/// assignment to be reconciled.
+fn holds(state: P) -> bool {
+    state != P::NotPublished
+}
+
 fn occupies_worker(state: A) -> bool {
     matches!(
         state,
@@ -41,7 +48,36 @@ fn occupies_worker(state: A) -> bool {
     )
 }
 
+/// Whether the repository configuration `admitted` with an assignment's claim or repair is still
+/// the repository's `current` one: the same base branch, test command and publication command.
+fn same_configuration(
+    admitted: &RepositoryRegistrationData,
+    current: &RepositoryRegistrationData,
+) -> bool {
+    admitted.base_branch == current.base_branch
+        && admitted.test_command == current.test_command
+        && admitted.publish_command == current.publish_command
+}
+
 impl Store {
+    /// Whether the repository configuration admitted with the assignment's newest claim or repair
+    /// is no longer its repository's. The store then refuses the assignment's repair, review,
+    /// readiness, merge and publication, so only cancelling or re-planning it ends it. False for
+    /// an unknown assignment and for one never claimed.
+    pub fn assignment_configuration_changed(&self, assignment_id: &str) -> bool {
+        let Some(assignment) = self.memory.assignments.get(assignment_id) else {
+            return false;
+        };
+        let admitted = self.memory.assignment_configs.get(assignment_id);
+        let repo = self
+            .memory
+            .repositories
+            .get(&assignment.data.repository_id.0);
+        admitted
+            .zip(repo)
+            .is_some_and(|(admitted, repo)| !same_configuration(admitted, &repo.data))
+    }
+
     pub(crate) fn prepare(&self, command: &str, body: &mut Value) -> Result<Option<Value>> {
         match command {
             "RegisterWorkspace" => {
@@ -178,10 +214,22 @@ impl Store {
                 anyhow::bail!("assignment not found");
             }
         }
-        if command == "ConfirmPublication" {
+        // A receipt or reason is checked only for an open intent: an unknown or settled one keeps
+        // its declared `not-found` or `wrong-state` answer.
+        let open = body["publication_id"]
+            .as_str()
+            .and_then(|id| self.memory.publications.get(id))
+            .is_some_and(|p| matches!(p.state, P::Prepared | P::Uncertain));
+        if command == "ConfirmPublication" && open {
             ensure!(
                 !text(body, "receipt")?.is_empty(),
                 "publication receipt is empty"
+            );
+        }
+        if command == "ClosePublication" && open {
+            ensure!(
+                !text(body, "reason")?.trim().is_empty(),
+                "publication close reason is empty"
             );
         }
         if command == "SatisfyGoal" {
@@ -281,9 +329,7 @@ impl Store {
                     .get(&data.assignment_id.0)
                     .context("assignment has no admitted repository configuration")?;
                 ensure!(
-                    admitted.base_branch == repo.data.base_branch
-                        && admitted.test_command == repo.data.test_command
-                        && admitted.publish_command == repo.data.publish_command,
+                    same_configuration(admitted, &repo.data),
                     "repository configuration changed; assignment evidence is stale"
                 );
             }
@@ -337,8 +383,8 @@ impl Store {
                     .memory
                     .publications
                     .values()
-                    .any(|p| p.data.assignment_id == data.assignment_id),
-                "publication must be reconciled before repair or cancellation"
+                    .any(|p| p.data.assignment_id == data.assignment_id && holds(p.state)),
+                "publication must be reconciled or closed before repair or cancellation"
             );
         }
         if command == "ReviewAssignment" {
@@ -388,7 +434,7 @@ impl Store {
                     .memory
                     .publications
                     .values()
-                    .any(|p| p.data.assignment_id == data.assignment_id),
+                    .any(|p| p.data.assignment_id == data.assignment_id && holds(p.state)),
                 "publication already exists; reconcile it"
             );
         }

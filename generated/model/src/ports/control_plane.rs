@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+// model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+// contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! control-plane — the `control-plane` component of `controlplane` v1.
@@ -30,6 +30,8 @@ pub enum PublishedEvent {
     CancelGoalApplied(crate::host::CancelGoalApplied),
     /// `controlplane.host.ClaimAssignmentApplied`.
     ClaimAssignmentApplied(crate::host::ClaimAssignmentApplied),
+    /// `controlplane.host.ClosePublicationApplied`.
+    ClosePublicationApplied(crate::host::ClosePublicationApplied),
     /// `controlplane.host.CompleteAssignmentApplied`.
     CompleteAssignmentApplied(crate::host::CompleteAssignmentApplied),
     /// `controlplane.host.ConfigureRepositoryApplied`.
@@ -108,7 +110,7 @@ impl<B> ControlPlane<B> {
 
 impl<B> ControlPlane<B>
 where
-    B: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DeleteGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
+    B: crate::host::obligations::AddWorkspaceDirectoryBehavior + crate::host::obligations::ArchiveWorkspaceBehavior + crate::host::obligations::BlockAssignmentBehavior + crate::host::obligations::CancelAssignmentBehavior + crate::host::obligations::CancelGoalBehavior + crate::host::obligations::ClaimAssignmentBehavior + crate::host::obligations::ClosePublicationBehavior + crate::host::obligations::CompleteAssignmentBehavior + crate::host::obligations::ConfigureRepositoryBehavior + crate::host::obligations::ConfirmPublicationBehavior + crate::host::obligations::CreateGoalBehavior + crate::host::obligations::DeleteGoalBehavior + crate::host::obligations::DisableRepositoryRegistrationBehavior + crate::host::obligations::EnableRepositoryRegistrationBehavior + crate::host::obligations::MarkPublicationUncertainBehavior + crate::host::obligations::MergeAssignmentBehavior + crate::host::obligations::PauseGoalBehavior + crate::host::obligations::PreparePublicationBehavior + crate::host::obligations::QueueAssignmentBehavior + crate::host::obligations::ReadyAssignmentBehavior + crate::host::obligations::ReconcileAssignmentBehavior + crate::host::obligations::RecordPlanningProgressBehavior + crate::host::obligations::RegisterRepositoryBehavior + crate::host::obligations::RegisterWorkspaceBehavior + crate::host::obligations::RemoveWorkspaceDirectoryBehavior + crate::host::obligations::RepairAssignmentBehavior + crate::host::obligations::ReviewAssignmentBehavior + crate::host::obligations::SatisfyGoalBehavior + crate::host::obligations::StartGoalBehavior + crate::host::obligations::UpdateGoalBehavior + crate::host::obligations::AssignmentListQuery + crate::host::obligations::GoalListQuery + crate::host::obligations::PublicationIntentListQuery + crate::host::obligations::RepositoryRegistrationListQuery + crate::host::obligations::WorkspaceDirectoryListQuery + crate::host::obligations::WorkspaceListQuery,
 {
     /// Accepts `controlplane.host.AddWorkspaceDirectory`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
@@ -206,6 +208,23 @@ where
             }
             crate::host::ClaimAssignmentOutcome::WrongState { .. } => {}
             crate::host::ClaimAssignmentOutcome::NotFound { .. } => {}
+        }
+        Ok(outcome)
+    }
+
+    /// Accepts `controlplane.host.ClosePublication`: runs the behaviour obligation, then publishes the declared events
+    /// the outcome carries.
+    ///
+    /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
+    /// arrives as a variant of the outcome type, refusals included.
+    pub fn close_publication(&mut self, input: crate::host::ClosePublication) -> Result<crate::host::ClosePublicationOutcome, crate::obligation::UnmetObligation> {
+        let outcome = self.behaviors.close_publication(input)?;
+        match &outcome {
+            crate::host::ClosePublicationOutcome::Applied { close_publication_applied, .. } => {
+                self.outbox.push(PublishedEvent::ClosePublicationApplied(close_publication_applied.clone()));
+            }
+            crate::host::ClosePublicationOutcome::NotFound { .. } => {}
+            crate::host::ClosePublicationOutcome::WrongState { .. } => {}
         }
         Ok(outcome)
     }

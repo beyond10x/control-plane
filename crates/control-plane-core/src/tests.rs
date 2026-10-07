@@ -392,6 +392,358 @@ async fn review_and_publication_require_current_independent_evidence() {
     assert_eq!(store.query("AssignmentList").unwrap()[0]["state"], "Merged");
 }
 
+/// Claim, review, ready and publish `assignment`, then record the publication as the fleet does
+/// when the publisher returned without an observed merge: intent Uncertain, assignment Blocked.
+async fn unresolved_publication(store: &mut Store, assignment: &str) -> String {
+    claim(store, assignment).await.unwrap();
+    let candidate = format!("candidate-{assignment}");
+    for (command, body) in [
+        (
+            "ReviewAssignment",
+            json!({"assignment_id":assignment,"candidate":candidate,"test_revision":candidate}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":assignment,"reviewer_run":"reviewer","review_revision":candidate}),
+        ),
+    ] {
+        store
+            .execute(command, body, Actor::Supervisor)
+            .await
+            .unwrap();
+    }
+    let publication = identity(
+        &store
+            .execute(
+                "PreparePublication",
+                json!({"assignment_id":assignment,"candidate":candidate,"target":"main","expected_base":"base"}),
+                Actor::Supervisor,
+            )
+            .await
+            .unwrap(),
+        "publication_id",
+    );
+    for (command, body) in [
+        ("MergeAssignment", json!({"assignment_id":assignment})),
+        (
+            "MarkPublicationUncertain",
+            json!({"publication_id":publication}),
+        ),
+        (
+            "BlockAssignment",
+            json!({"assignment_id":assignment,"reason":"publisher returned without an observed merge"}),
+        ),
+    ] {
+        assert_eq!(
+            store
+                .execute(command, body, Actor::Supervisor)
+                .await
+                .unwrap()["outcome"],
+            "applied"
+        );
+    }
+    publication
+}
+
+const NOT_PUBLISHED: &str =
+    "The publisher exited and target main does not contain the candidate; closed as not published";
+
+/// story:publication-exit, the review's probe sequence: an uncertain publication refuses repair,
+/// cancellation and reconciliation, and after its goal is cancelled it still holds the repository
+/// in every workspace. Closing it as not published releases the assignment and the repository.
+#[tokio::test]
+async fn unpublished_intent_closes_and_frees_repository() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let mut goals = Vec::new();
+    let mut assignments = Vec::new();
+    for name in ["one", "two"] {
+        let path = temp.path().join(name);
+        std::fs::create_dir_all(&path).unwrap();
+        let ws = workspace(&mut store, &path).await;
+        let repo = register_repository(&mut store, &ws, &repo_path).await;
+        let goal = goal(&mut store, &ws).await;
+        store
+            .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+            .await
+            .unwrap();
+        assignments.push(assignment(&mut store, &goal, &repo, "story:change").await);
+        goals.push(goal);
+    }
+    let (first, second) = (&assignments[0], &assignments[1]);
+    let publication = unresolved_publication(&mut store, first).await;
+    for (command, body) in [
+        (
+            "RepairAssignment",
+            json!({"assignment_id":first,"reason":"retry","implementor_run":"new"}),
+        ),
+        ("CancelAssignment", json!({"assignment_id":first})),
+        (
+            "ReconcileAssignment",
+            json!({"assignment_id":first,"merge_receipt":"unobserved"}),
+        ),
+    ] {
+        assert!(
+            store
+                .execute(command, body, Actor::Supervisor)
+                .await
+                .is_err(),
+            "{command} admitted while the publication is unresolved"
+        );
+    }
+    store
+        .execute("CancelGoal", json!({"goal_id":goals[0]}), Actor::Operator)
+        .await
+        .unwrap();
+    let held = claim(&mut store, second).await.unwrap_err().to_string();
+    assert!(
+        held.contains("repository already has an active change"),
+        "{held}"
+    );
+
+    let operator = store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":publication,"reason":NOT_PUBLISHED}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(operator.contains("actor"), "{operator}");
+    let closed = store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":publication,"reason":NOT_PUBLISHED}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(closed["outcome"], "applied", "{closed}");
+    let intent = store.query("PublicationIntentList").unwrap()[0].clone();
+    assert_eq!(intent["state"], "NotPublished", "{intent}");
+    assert_eq!(intent["reason"], NOT_PUBLISHED, "{intent}");
+
+    let cancelled = store
+        .execute(
+            "CancelAssignment",
+            json!({"assignment_id":first}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancelled["outcome"], "applied", "{cancelled}");
+    let claimed = claim(&mut store, second).await.unwrap();
+    assert_eq!(claimed["outcome"], "applied", "{claimed}");
+}
+
+/// A publication closed as not published can be retried: the assignment is repaired and a new
+/// intent for it is admitted, while the closed one stays closed and keeps its reason.
+#[tokio::test]
+async fn closed_publication_admits_repair_and_a_new_intent() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo, "story:retry").await;
+    let first = unresolved_publication(&mut store, &assignment).await;
+    let empty = store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":first,"reason":" "}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(empty.is_err(), "closed without a reason: {empty:?}");
+    store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":first,"reason":NOT_PUBLISHED}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let again = store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":first,"reason":"closed twice"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(again["outcome"], "wrong-state", "{again}");
+    let confirmed = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":first,"receipt":"late receipt"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(confirmed["outcome"], "wrong-state", "{confirmed}");
+
+    let candidate = "candidate-retry";
+    for (command, body) in [
+        (
+            "RepairAssignment",
+            json!({"assignment_id":assignment,"reason":"publication closed as not published","implementor_run":"implementor-retry"}),
+        ),
+        (
+            "ReviewAssignment",
+            json!({"assignment_id":assignment,"candidate":candidate,"test_revision":candidate}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":assignment,"reviewer_run":"reviewer-retry","review_revision":candidate}),
+        ),
+        (
+            "PreparePublication",
+            json!({"assignment_id":assignment,"candidate":candidate,"target":"main","expected_base":"base"}),
+        ),
+        ("MergeAssignment", json!({"assignment_id":assignment})),
+    ] {
+        let answer = store.execute(command, body, Actor::Supervisor).await;
+        assert!(
+            answer.as_ref().is_ok_and(|answer| matches!(
+                answer["outcome"].as_str(),
+                Some("applied" | "created")
+            )),
+            "{command} after the close: {answer:?}"
+        );
+    }
+    let intents = store.query("PublicationIntentList").unwrap();
+    let state = |id: &str| {
+        intents
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["publication_id"] == id)
+            .unwrap()["state"]
+            .clone()
+    };
+    assert_eq!(intents.as_array().unwrap().len(), 2, "{intents}");
+    assert_eq!(state(&first), "NotPublished");
+    assert_eq!(
+        store.query("AssignmentList").unwrap()[0]["state"],
+        "Merging"
+    );
+}
+
+/// ConfirmPublication's receipt check, like ClosePublication's reason check, guards only an open
+/// intent: an unknown or settled one answers its declared `not-found` or `wrong-state`.
+#[tokio::test]
+async fn confirm_receipt_check_leaves_declared_refusals_first() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let unknown = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":"00000000-0000-4000-8000-000000000000","receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        unknown
+            .as_ref()
+            .is_ok_and(|answer| answer["outcome"] == "not-found"),
+        "{unknown:?}"
+    );
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo, "story:receipt").await;
+    let publication = unresolved_publication(&mut store, &assignment).await;
+    let empty = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        empty.is_err(),
+        "an open intent confirmed without a receipt: {empty:?}"
+    );
+    store
+        .execute(
+            "ClosePublication",
+            json!({"publication_id":publication,"reason":NOT_PUBLISHED}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let settled = store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":""}),
+            Actor::Supervisor,
+        )
+        .await;
+    assert!(
+        settled
+            .as_ref()
+            .is_ok_and(|answer| answer["outcome"] == "wrong-state"),
+        "{settled:?}"
+    );
+}
+
+/// Only a publication closed as not published releases its assignment: one the remote confirmed
+/// still refuses repair and cancellation until the assignment is reconciled.
+#[tokio::test]
+async fn confirmed_publication_still_holds_repair_and_cancellation() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let assignment = assignment(&mut store, &goal, &repo, "story:confirmed").await;
+    let publication = unresolved_publication(&mut store, &assignment).await;
+    store
+        .execute(
+            "ConfirmPublication",
+            json!({"publication_id":publication,"receipt":"observed-target"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    for (command, body) in [
+        (
+            "RepairAssignment",
+            json!({"assignment_id":assignment,"reason":"retry","implementor_run":"new"}),
+        ),
+        ("CancelAssignment", json!({"assignment_id":assignment})),
+    ] {
+        assert!(
+            store
+                .execute(command, body, Actor::Supervisor)
+                .await
+                .is_err(),
+            "{command} admitted after the publication was confirmed"
+        );
+    }
+}
+
 #[tokio::test]
 async fn changed_goal_revokes_existing_assignments() {
     let temp = scratch();

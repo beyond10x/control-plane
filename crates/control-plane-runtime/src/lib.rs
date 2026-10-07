@@ -62,7 +62,13 @@ pub struct RuntimeConfig {
     pub max_steps: usize,
     pub process_timeout: std::time::Duration,
     pub poll_interval: std::time::Duration,
+    /// How long a publication whose publisher exited without its merge on the target waits for
+    /// the candidate while the target does not move, before it is closed as not published.
+    pub publication_grace: std::time::Duration,
 }
+
+/// The default [`RuntimeConfig::publication_grace`]: ten minutes.
+pub const PUBLICATION_GRACE: std::time::Duration = std::time::Duration::from_secs(600);
 
 impl Default for RuntimeConfig {
     fn default() -> Self {
@@ -80,6 +86,7 @@ impl Default for RuntimeConfig {
             max_steps: 64,
             process_timeout: std::time::Duration::from_secs(120),
             poll_interval: std::time::Duration::from_secs(15),
+            publication_grace: PUBLICATION_GRACE,
         }
     }
 }
