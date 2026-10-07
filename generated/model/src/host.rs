@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf
-// contract digest 003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a
+// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
+// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -283,7 +283,7 @@ impl Assignment<assignment_state::Queued> {
 }
 
 impl Assignment<assignment_state::Blocked> {
-    /// `repair` — `Blocked` → `Implementing`. Taken by the `applied` outcome of `controlplane.host.RepairAssignment`.
+    /// `repair` — `Blocked` → `Implementing`. Taken by the `rebased` outcome of `controlplane.host.RepairAssignment`, the `applied` outcome of `controlplane.host.RepairAssignment`.
     pub fn repair(self) -> Assignment<assignment_state::Implementing> {
         Assignment {
             data: self.data,
@@ -421,7 +421,7 @@ impl Assignment<assignment_state::ReadyToMerge> {
 }
 
 impl Assignment<assignment_state::Reviewing> {
-    /// `repair` — `Reviewing` → `Implementing`. Taken by the `applied` outcome of `controlplane.host.RepairAssignment`.
+    /// `repair` — `Reviewing` → `Implementing`. Taken by the `rebased` outcome of `controlplane.host.RepairAssignment`, the `applied` outcome of `controlplane.host.RepairAssignment`.
     pub fn repair(self) -> Assignment<assignment_state::Implementing> {
         Assignment {
             data: self.data,
@@ -2480,6 +2480,8 @@ pub struct RepairAssignment {
     pub reason: String,
     /// `implementor_run` — `String`.
     pub implementor_run: String,
+    /// `base_revision` — `Optional<String>`.
+    pub base_revision: Option<String>,
 }
 
 /// Everything `controlplane.host.RepairAssignment` can result in — one variant per declared outcome.
@@ -2489,6 +2491,11 @@ pub struct RepairAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepairAssignmentOutcome {
+    /// `rebased` — when `defined(base_revision)`.
+    Rebased {
+        /// The `controlplane.host.RepairAssignmentApplied` this outcome publishes.
+        repair_assignment_applied: RepairAssignmentApplied,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.RepairAssignmentApplied` this outcome publishes.

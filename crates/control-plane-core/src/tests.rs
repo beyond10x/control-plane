@@ -1533,6 +1533,123 @@ async fn blocked_reason_is_replaced_by_the_supervisor_only() {
     assert_eq!(row(&store)["reason"], "second cause");
 }
 
+/// story:repair-on-moved-target. A repair that names a base revision records it as the
+/// assignment's base (`rebased`); one that names none keeps the base it has (`applied`), as every
+/// repair recorded before the input existed did. A publication must then expect the new base. An
+/// empty base is refused, the Operator cannot repair, and the base survives a restart.
+#[tokio::test]
+async fn repair_takes_a_new_base_only_when_it_names_one() {
+    let temp = adversary_scratch();
+    let path = temp.path().join("repo");
+    repository(&path);
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:moved").await;
+    claim(&mut store, &id).await.unwrap();
+    let row = |store: &Store| store.query("AssignmentList").unwrap()[0].clone();
+    let block = json!({"assignment_id":id,"reason":"publication closed as not published"});
+    let repair = |base: Option<&str>| {
+        let mut body =
+            json!({"assignment_id":id,"reason":"retry","implementor_run":"implementor-retry"});
+        if let Some(base) = base {
+            body["base_revision"] = json!(base);
+        }
+        body
+    };
+    store
+        .execute("BlockAssignment", block.clone(), Actor::Supervisor)
+        .await
+        .unwrap();
+
+    let operator = store
+        .execute("RepairAssignment", repair(Some("moved")), Actor::Operator)
+        .await
+        .unwrap_err();
+    assert!(operator.to_string().contains("actor"), "{operator}");
+    let empty = store
+        .execute("RepairAssignment", repair(Some("")), Actor::Supervisor)
+        .await;
+    assert!(
+        empty
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("base revision is empty")),
+        "a repair with an empty base: {empty:?}"
+    );
+    let held = row(&store);
+    assert_eq!(
+        (&held["state"], &held["base_revision"], &held["attempt"]),
+        (&json!("Blocked"), &json!("base"), &json!(1)),
+        "{held}"
+    );
+
+    let rebased = store
+        .execute("RepairAssignment", repair(Some("moved")), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(rebased["outcome"], "rebased", "{rebased}");
+    let moved = row(&store);
+    assert_eq!(
+        (&moved["state"], &moved["base_revision"], &moved["attempt"]),
+        (&json!("Implementing"), &json!("moved"), &json!(2)),
+        "{moved}"
+    );
+
+    store
+        .execute("BlockAssignment", block, Actor::Supervisor)
+        .await
+        .unwrap();
+    let kept = store
+        .execute("RepairAssignment", repair(None), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(kept["outcome"], "applied", "{kept}");
+    let repaired = row(&store);
+    assert_eq!(
+        (&repaired["base_revision"], &repaired["attempt"]),
+        (&json!("moved"), &json!(3)),
+        "{repaired}"
+    );
+
+    let candidate = "candidate-moved";
+    for (command, body) in [
+        (
+            "ReviewAssignment",
+            json!({"assignment_id":id,"candidate":candidate,"test_revision":candidate}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":id,"reviewer_run":"reviewer","review_revision":candidate}),
+        ),
+    ] {
+        store
+            .execute(command, body, Actor::Supervisor)
+            .await
+            .unwrap();
+    }
+    let prepare = |base: &str| json!({"assignment_id":id,"candidate":candidate,"target":"main","expected_base":base});
+    let stale = store
+        .execute("PreparePublication", prepare("base"), Actor::Supervisor)
+        .await;
+    assert!(stale.is_err(), "a publication on the old base: {stale:?}");
+    let prepared = store
+        .execute("PreparePublication", prepare("moved"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(prepared["outcome"], "created", "{prepared}");
+
+    let reviewed = row(&store);
+    drop(store);
+    let store = Store::open(&database).await.unwrap();
+    assert_eq!(row(&store), reviewed, "the assignment after a restart");
+}
+
 #[tokio::test]
 async fn multiple_workspaces_keep_directory_membership_isolated() {
     let temp = scratch();

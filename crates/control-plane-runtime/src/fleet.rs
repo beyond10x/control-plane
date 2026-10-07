@@ -164,8 +164,12 @@ impl Host {
                 .await
                 .execute(command, body, Actor::Supervisor)
                 .await?;
+            // `rebased` is RepairAssignment applied with a new base revision.
             ensure!(
-                matches!(result["outcome"].as_str(), Some("applied" | "created")),
+                matches!(
+                    result["outcome"].as_str(),
+                    Some("applied" | "created" | "rebased")
+                ),
                 "{command} refused: {result}"
             );
             Ok(result)
@@ -547,18 +551,131 @@ fn command(
 fn commit(host: &Host, path: &Path, message: &str) -> Result<String> {
     if !git(host, path, &["status", "--porcelain"])?.is_empty() {
         git(host, path, &["add", "--all"])?;
-        let command = host.config.commit_for(path, &host.runner)?;
-        let (program, prefix) = command.split_first().context("commit command empty")?;
-        let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
-        host.config
-            .credentialed(&host.runner)
-            .run(path, program, &args, None)?;
+        record_commit(host, path, message)?;
     }
     ensure!(
         git(host, path, &["status", "--porcelain"])?.is_empty(),
         "candidate worktree remains dirty after commit"
     );
     git(host, path, &["rev-parse", "HEAD"])
+}
+/// Commit what is staged at `path` through the configured commit command.
+fn record_commit(host: &Host, path: &Path, message: &str) -> Result<()> {
+    let command = host.config.commit_for(path, &host.runner)?;
+    let (program, prefix) = command.split_first().context("commit command empty")?;
+    let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
+    host.config
+        .credentialed(&host.runner)
+        .run(path, program, &args, None)?;
+    Ok(())
+}
+/// The answer of a Git command that answers by its exit status (`merge-base --is-ancestor`,
+/// `rev-parse --verify --quiet`): `true` when it exits 0, `false` when it exits 1. Any other
+/// failure is an error.
+fn git_answers(host: &Host, path: &Path, args: &[&str]) -> Result<bool> {
+    match git(host, path, args) {
+        Ok(_) => Ok(true),
+        Err(error)
+            if error
+                .downcast_ref::<ProcessExit>()
+                .is_some_and(|exit| exit.code == Some(1)) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+/// Merge `revision` into the clean worktree at `path` and commit the merge, and nothing else,
+/// through the configured commit command. A merge that changes no file is committed too: the
+/// merge commit is what makes the worktree descend from `revision`. When the merge or its commit
+/// fails, a merge still in progress (`MERGE_HEAD`) is aborted, which leaves the worktree as it was
+/// before the merge; a merge Git refused to start left it so already.
+fn integrate(host: &Host, path: &Path, revision: &str, message: &str) -> Result<()> {
+    ensure!(
+        git(host, path, &["status", "--porcelain"])?.is_empty(),
+        "the candidate worktree has uncommitted changes before merging {revision}"
+    );
+    let merged = (|| -> Result<()> {
+        git(host, path, &["merge", "--no-commit", "--no-ff", revision])
+            .with_context(|| format!("{revision} does not merge into the candidate worktree"))?;
+        record_commit(host, path, message)?;
+        ensure!(
+            git(host, path, &["merge-base", "HEAD", revision])? == revision
+                && git(host, path, &["status", "--porcelain"])?.is_empty(),
+            "the candidate worktree does not descend from {revision} after merging it"
+        );
+        Ok(())
+    })();
+    let Err(error) = merged else {
+        return Ok(());
+    };
+    Err(match abort_merge(host, path) {
+        Ok(()) => error,
+        Err(abort) => error.context(format!("aborting the merge failed too: {abort:#}")),
+    })
+}
+/// Abort the merge in progress in the worktree at `path`, if there is one (`MERGE_HEAD`).
+fn abort_merge(host: &Host, path: &Path) -> Result<()> {
+    if git_answers(
+        host,
+        path,
+        &["rev-parse", "--verify", "--quiet", "MERGE_HEAD"],
+    )? {
+        git(host, path, &["merge", "--abort"])?;
+    }
+    Ok(())
+}
+/// Whether the work in the worktree at `path`, built on `started`, can be carried onto `base`,
+/// the head the target moved to since: an error naming why not, which blocks the assignment
+/// before its repair, so that no attempt is spent on a cause that holds until the target or the
+/// assignment changes. The target must still contain `started`, and the work must merge with
+/// `base` and change something on it. A worktree with no commit of its own beyond `base` carries
+/// nothing, and its attempt implements on `base`.
+fn carried_onto(host: &Host, path: &Path, target: &str, started: &str, base: &str) -> Result<()> {
+    ensure!(
+        git_answers(host, path, &["merge-base", "--is-ancestor", started, base])?,
+        "The target {target} no longer contains {started}, the base this assignment's work was \
+         built on: it is now at {base}, which does not descend from it; cancel or re-plan the \
+         assignment"
+    );
+    if git_answers(host, path, &["merge-base", "--is-ancestor", "HEAD", base])? {
+        return Ok(());
+    }
+    let merge = [
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "--no-messages",
+        "HEAD",
+        base,
+    ];
+    let merged = match git(host, path, &merge) {
+        Ok(merged) => merged,
+        Err(error) => match error.downcast_ref::<ProcessExit>() {
+            // Exit 1 is a conflicted merge: the tree, then one conflicted path per line.
+            Some(exit) if exit.code == Some(1) => bail!(
+                "The work of this assignment conflicts with the target {target} at {base} in {}; \
+                 cancel or re-plan the assignment",
+                exit.stdout
+                    .lines()
+                    .skip(1)
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            _ => return Err(error),
+        },
+    };
+    let tree = merged
+        .lines()
+        .next()
+        .context("git merge-tree printed no tree")?;
+    ensure!(
+        tree != git(host, path, &["rev-parse", &format!("{base}^{{tree}}")])?,
+        "The candidate's changes are already on the target {target} at {base}: merged onto it, \
+         this assignment's work changes nothing; cancel the assignment"
+    );
+    Ok(())
 }
 
 pub async fn run(
@@ -1040,42 +1157,22 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
     } else {
         format!("cp-impl-{}", uuid::Uuid::new_v4())
     };
-    if resumed {
-        // A repair spends an attempt, and the attempt implements on the assignment's own base.
-        // Once the target is no longer at that base, no attempt can publish and no command gives
-        // the assignment another base, so it is blocked here, before the repair.
-        let started = text(initial, "base_revision")?;
-        ensure!(
-            started == base,
-            "The target {target} moved from {started} to {base} since this attempt started; \
-             cancel or re-plan the assignment"
-        );
-        if current["state"] != "Blocked" {
-            // Repair takes a blocked assignment; an interrupted one is blocked first.
-            host.execute(
-                "BlockAssignment",
-                json!({"assignment_id":initial["assignment_id"],"reason":RECOVER}),
-            )?;
-        }
-        host.execute("RepairAssignment",json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run}))?;
+    // A new assignment is claimed before its worktree is created. A resumed one reuses the
+    // worktree of the attempt before it, which is leased before the repair: what decides the
+    // repair is read there.
+    let claimed = if resumed {
+        None
     } else {
         host.execute("ClaimAssignment",json!({"assignment_id":initial["assignment_id"],"worktree_id":tree_id,"implementor_run":run,"base_revision":base}))?;
-    }
-    let assignment = host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
-    if resumed {
+        let assignment = host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
         host.progress(
             &assignment,
-            "attempt.repair",
+            "worktree.prepare",
             "host",
-            json!({"reason":RECOVER}),
+            json!({"base":base,"tree_id":tree_id}),
         )?;
-    }
-    host.progress(
-        &assignment,
-        "worktree.prepare",
-        "host",
-        json!({"base":base,"tree_id":tree_id}),
-    )?;
+        Some(assignment)
+    };
     let path = tree(host, repo, &tree_id, &base)?;
     let lease = Lease::acquire(host, &path, &run)?;
     let result = (|| -> Result<()> {
@@ -1086,13 +1183,74 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
                 &["switch", "-c", &format!("control-plane/{run}")],
             )?;
         }
+        let assignment = match claimed {
+            Some(assignment) => assignment,
+            None => {
+                // The writes a failed attempt left uncommitted are its work: they are committed
+                // first, on their own, so that the decision below sees them and an integration
+                // merge carries nothing but the merge. Every merge starts on a clean worktree
+                // (`integrate`), so a merge an interrupted attempt left in progress is aborted
+                // first, back to where it started, rather than committed as such work.
+                host.guard(initial, goal, repo, false)?;
+                abort_merge(host, &path)?;
+                commit(
+                    host,
+                    &path,
+                    "Keep the work an earlier attempt left uncommitted",
+                )?;
+                // A repair spends an attempt, and the attempt implements on the target's current
+                // head. When the target moved since the assignment's base and the earlier work can
+                // be carried onto that head, the repair records it as the new base (the `rebased`
+                // outcome) and the work is merged onto it below; when it cannot, the assignment
+                // is blocked here, before the repair, and every tick while the cause holds blocks
+                // it again with the same reason, spending nothing. On an unchanged target the
+                // repair names no base and keeps its own.
+                let started = text(&current, "base_revision")?;
+                if started != base {
+                    carried_onto(host, &path, target, started, &base)?;
+                }
+                if current["state"] != "Blocked" {
+                    // Repair takes a blocked assignment; an interrupted one is blocked first.
+                    host.execute(
+                        "BlockAssignment",
+                        json!({"assignment_id":initial["assignment_id"],"reason":RECOVER}),
+                    )?;
+                }
+                let mut repair = json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run});
+                if started != base {
+                    repair["base_revision"] = json!(base);
+                }
+                host.execute("RepairAssignment", repair)?;
+                let assignment =
+                    host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
+                host.progress(
+                    &assignment,
+                    "attempt.repair",
+                    "host",
+                    json!({"reason":RECOVER}),
+                )?;
+                host.progress(
+                    &assignment,
+                    "worktree.prepare",
+                    "host",
+                    json!({"base":base,"tree_id":tree_id}),
+                )?;
+                assignment
+            }
+        };
         let planned = text(initial, "candidate")?;
         if initial["state"] == "Queued"
             && git(host, &path, &["merge-base", planned, &base])? != planned
         {
             host.guard(&assignment, goal, repo, false)?;
-            git(host, &path, &["merge", "--no-commit", "--no-ff", planned])?;
-            commit(host, &path, "Integrate validated engineering plan")?;
+            integrate(host, &path, planned, "Integrate validated engineering plan")?;
+        }
+        // A resumed attempt reuses the worktree of the attempt before it. When its repair took the
+        // target's current head as the base, that work is merged onto the head, so the candidate
+        // descends from the base its publication names.
+        if git(host, &path, &["merge-base", "HEAD", &base])? != base {
+            host.guard(&assignment, goal, repo, false)?;
+            integrate(host, &path, &base, "Integrate the target's current head")?;
         }
         let story_id = text(&assignment, "story_id")?
             .split_once("::")
@@ -2385,8 +2543,10 @@ fn waiting(intent: &Value, uncertain: &Uncertainty, grace: Duration) -> Result<S
         "Publication outcome unresolved: {target} does not show candidate {} yet. The publisher is \
          not run again for this intent. Once {target} moves past {} without it, or {} s after the \
          outcome became uncertain, the intent is closed as not published. The assignment is then \
-         attempted again if {target} is still at the base its attempt started from, and \
-         otherwise blocked until it is cancelled or re-planned",
+         attempted again on the current head of {target}, unless {target} was rewound and no \
+         longer contains the base its work was built on, that work conflicts with the head, or \
+         its changes are already on {target}: then it is blocked instead, without spending an \
+         attempt",
         text(intent, "candidate")?,
         uncertain.head.as_deref().unwrap_or("its observed head"),
         grace.as_secs()

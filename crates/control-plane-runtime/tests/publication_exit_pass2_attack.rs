@@ -309,14 +309,12 @@ fn land_unrelated_change(fixture: &Fixture, base: &str) -> String {
 /// `closed_publication_is_retried_with_a_new_intent` shows the retry for a close on an unmoved
 /// target. `target_moved_past_uncertain_head_closes_intent` pauses the goal before its close, so
 /// nothing shows what follows the other close rule. Here the goal keeps running: the target
-/// moves past the head observed at Uncertain and the intent closes. The assignment's attempt
-/// started on the old base, and no command gives it a new one, so a retry could never publish.
-/// The coordinator chose option (a) of the pass-2 finding: the assignment is blocked once, with
-/// a reason that says the target moved since its attempt started and that it must be cancelled
-/// or re-planned, spends no attempt and opens no new intent. A retry on a fresh base is a later
-/// story.
+/// moves past the head observed at Uncertain and the intent closes. Wave 4 blocked the assignment
+/// there, because its attempt had started on the old base; story:repair-on-moved-target retries
+/// it instead. The repair records the target's current head as the assignment's base, and the
+/// attempt publishes through a second intent that expects that head.
 #[tokio::test]
-async fn publication_closed_after_its_target_moved_blocks_once_without_spending_an_attempt() {
+async fn publication_closed_after_its_target_moved_is_retried_on_the_current_head() {
     let fixture = fixture().await;
     let supervisor = supervisor(&fixture, PUBLICATION_GRACE);
     let first = unresolved(&fixture, &supervisor).await;
@@ -325,7 +323,9 @@ async fn publication_closed_after_its_target_moved_blocks_once_without_spending_
         rows(&fixture.store, "PublicationIntentList").await[0]["state"],
         "Uncertain"
     );
-    let attempt = rows(&fixture.store, "AssignmentList").await[0]["attempt"].clone();
+    let attempt = rows(&fixture.store, "AssignmentList").await[0]["attempt"]
+        .as_i64()
+        .unwrap();
     let moved = land_unrelated_change(&fixture, first["expected_base"].as_str().unwrap());
     supervisor.fleet_tick().await.unwrap();
     let intents = rows(&fixture.store, "PublicationIntentList").await;
@@ -341,35 +341,49 @@ async fn publication_closed_after_its_target_moved_blocks_once_without_spending_
             .is_some_and(|reason| reason.contains(&moved)),
         "{intents:?}"
     );
-    let newest = |store: &Store| {
-        let goal = store.query("GoalList").unwrap()[0]["goal_id"].clone();
-        store.activity_history(goal.as_str().unwrap()).unwrap()["fleet"]
-            [assignment["assignment_id"].as_str().unwrap()]
-        .clone()
-    };
-    let blocker = newest(&*fixture.store.lock().await);
-    let explained = |blocker: &Value| {
-        blocker["action"] == "blocked"
-            && blocker["detail"]["reason"].as_str().is_some_and(|reason| {
-                reason.contains(&moved)
-                    && reason.contains("since this attempt started")
-                    && reason.contains("cancel or re-plan")
-            })
-    };
-    assert_eq!(
-        (
+    // The intents, the assignment's state, attempt and base, and the new intent's state and base.
+    let retried = |assignment: &Value, intents: &[Value]| {
+        let second = intents
+            .iter()
+            .find(|i| i["publication_id"] != first["publication_id"])
+            .cloned()
+            .unwrap_or(Value::Null);
+        json!([
             intents.len(),
-            assignment["state"].as_str(),
-            &assignment["attempt"]
-        ),
-        (1, Some("Blocked"), &attempt),
-        "the intent closed because main moved to {moved}; the assignment must be blocked at \
-         attempt {attempt} with no second intent: it is {} at attempt {} ({}), intents {intents:?}",
+            assignment["state"],
+            assignment["attempt"],
+            assignment["base_revision"],
+            second["state"],
+            second["expected_base"]
+        ])
+    };
+    let expected = json!([2, "Blocked", attempt + 1, moved, "Uncertain", moved]);
+    assert_eq!(
+        retried(&assignment, &intents),
+        expected,
+        "the intent closed because main moved to {moved}; the retry must take that head as its \
+         base and publish a second intent: the assignment is {} at attempt {} on {} ({}), \
+         intents {intents:?}",
         assignment["state"],
         assignment["attempt"],
-        blocker["detail"]["reason"]
+        assignment["base_revision"],
+        assignment["reason"]
     );
-    assert!(explained(&blocker), "{blocker}");
+    let second = intents
+        .iter()
+        .find(|i| i["publication_id"] != first["publication_id"])
+        .unwrap();
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "merge-base",
+            "--is-ancestor",
+            &moved,
+            second["candidate"].as_str().unwrap(),
+        ],
+        &[],
+    );
 
     // Ten more ticks over the unchanged assignment append at most one progress decision.
     let database = fixture.root.join("host.sqlite3");
@@ -385,34 +399,16 @@ async fn publication_closed_after_its_target_moved_blocks_once_without_spending_
     }
     let intents = rows(&store, "PublicationIntentList").await;
     let now = rows(&store, "AssignmentList").await[0].clone();
-    let blocker = newest(&*store.lock().await);
-    assert_eq!(
-        (intents.len(), now["state"].as_str(), &now["attempt"]),
-        (1, Some("Blocked"), &attempt),
-        "{now} {intents:?}"
-    );
-    assert!(explained(&blocker), "{blocker}");
+    assert_eq!(retried(&now, &intents), expected, "{now} {intents:?}");
     drop(supervisor);
     drop(store);
-    let mut reopened = Store::open(&database).await.unwrap();
-    let after = reopened.replayed_progress();
+    let after = Store::open(&database).await.unwrap().replayed_progress();
     assert!(
         after - before <= 1,
-        "ten fleet ticks over the blocked assignment appended {} progress decisions; newest: {}",
+        "ten fleet ticks over the blocked assignment appended {} progress decisions; reason: {}",
         after - before,
-        blocker["detail"]["reason"]
+        now["reason"]
     );
-
-    // The closed intent no longer holds the assignment, so it can be cancelled.
-    let cancelled = reopened
-        .execute(
-            "CancelAssignment",
-            json!({"assignment_id":assignment["assignment_id"]}),
-            Actor::Supervisor,
-        )
-        .await
-        .unwrap();
-    assert_eq!(cancelled["outcome"], "applied", "{cancelled}");
 }
 
 /// The grace period starts when the intent became Uncertain, and the commit says that start is

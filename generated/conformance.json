@@ -4,7 +4,7 @@
     "authored_sources": {},
     "counts": {
       "authored": 0,
-      "generated": 178,
+      "generated": 180,
       "outside": 0,
       "refused": 0
     },
@@ -73,6 +73,7 @@
       "controlplane.host.Assignment/transition/ready/by/controlplane.host.ReadyAssignment/applied",
       "controlplane.host.Assignment/transition/reconcile/by/controlplane.host.ReconcileAssignment/applied",
       "controlplane.host.Assignment/transition/repair/by/controlplane.host.RepairAssignment/applied",
+      "controlplane.host.Assignment/transition/repair/by/controlplane.host.RepairAssignment/rebased",
       "controlplane.host.Assignment/transition/review/by/controlplane.host.ReviewAssignment/applied",
       "controlplane.host.BlockAssignment/grant/denied",
       "controlplane.host.BlockAssignment/outcome/applied",
@@ -166,6 +167,7 @@
       "controlplane.host.RepairAssignment/grant/denied",
       "controlplane.host.RepairAssignment/outcome/applied",
       "controlplane.host.RepairAssignment/outcome/not-found",
+      "controlplane.host.RepairAssignment/outcome/rebased",
       "controlplane.host.RepositoryRegistration/state/Disabled/refuses/controlplane.host.DisableRepositoryRegistration",
       "controlplane.host.RepositoryRegistration/state/Registered/refuses/controlplane.host.EnableRepositoryRegistration",
       "controlplane.host.RepositoryRegistration/transition/disable/by/controlplane.host.DisableRepositoryRegistration/applied",
@@ -202,9 +204,9 @@
     }
   },
   "provenance": {
-    "contract_digest": "003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a",
+    "contract_digest": "b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7",
     "scenario_initial_state": "empty",
-    "spec_digest": "81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf",
+    "spec_digest": "897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7",
     "specification_version": "v1",
     "suite_version": "ess-conformance/35",
     "system": "controlplane"
@@ -9531,6 +9533,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -9954,6 +9963,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -14071,6 +14084,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -14502,6 +14522,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -19451,6 +19475,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -19896,6 +19927,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -23813,6 +23848,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -24321,6 +24363,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -27721,6 +27767,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -28122,6 +28175,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -31865,6 +31922,13 @@
           "kind": "outcome",
           "name": {
             "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
             "outcome": "wrong-state"
           }
         },
@@ -32355,6 +32419,10 @@
             "assignment_id": {
               "instance": "assignment",
               "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
             },
             "implementor_run": {
               "kind": "literal",
@@ -45554,6 +45622,1012 @@
         }
       ]
     },
+    "controlplane.host.Assignment/transition/repair/by/controlplane.host.RepairAssignment/rebased": {
+      "purpose": "`controlplane.host.RepairAssignment` on `rebased` moves a `controlplane.host.Assignment` to `Implementing` along `repair`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Assignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.BlockAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.ClaimAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.QueueAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RepairAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.ReviewAssignment"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.BlockAssignment",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.ClaimAssignment",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.QueueAssignment",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.ReviewAssignment",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClosePublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalDeleted"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryRemoved"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.AssignmentList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.QueueAssignment",
+          "input": {
+            "attempt": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "candidate": {
+              "kind": "literal",
+              "value": "candidate"
+            },
+            "case_id": {
+              "kind": "literal",
+              "value": "case_id"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "goal_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            },
+            "repository_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-fcfc1a0c26c3"
+            },
+            "reviewer_run": {
+              "kind": "literal",
+              "value": "reviewer_run"
+            },
+            "story_id": {
+              "kind": "literal",
+              "value": "story_id"
+            },
+            "worktree_id": {
+              "kind": "literal",
+              "value": "worktree_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.QueueAssignment",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Assignment",
+          "event": "controlplane.host.AssignmentCreated",
+          "field": "assignment_id",
+          "instance": "assignment",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.BlockAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.BlockAssignment",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RepairAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "payload": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason-1"
+            }
+          },
+          "shape": {
+            "assignment_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "implementor_run": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "reason": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClosePublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.AssignmentList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "assignment_id": {
+                "instance": "assignment",
+                "kind": "instance"
+              },
+              "attempt": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "base_revision": {
+                "kind": "literal",
+                "value": "base_revision"
+              },
+              "candidate": {
+                "kind": "literal",
+                "value": "candidate"
+              },
+              "case_id": {
+                "kind": "literal",
+                "value": "case_id"
+              },
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "goal_revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "implementor_run": {
+                "kind": "literal",
+                "value": "implementor_run-1"
+              },
+              "merge_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reason": {
+                "kind": "literal",
+                "value": "reason-1"
+              },
+              "repository_id": {
+                "kind": "literal",
+                "value": "00000000-0000-4000-8000-fcfc1a0c26c3"
+              },
+              "review_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reviewer_run": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Implementing"
+              },
+              "story_id": {
+                "kind": "literal",
+                "value": "story_id"
+              },
+              "test_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "worktree_id": {
+                "kind": "literal",
+                "value": "worktree_id"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.AssignmentList"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name-1"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace-2",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Operator",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance-1"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model-1"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": false
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective-1"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model-1"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model-1"
+            },
+            "workspace_id": {
+              "instance": "workspace-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal-2",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.QueueAssignment",
+          "input": {
+            "attempt": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "candidate": {
+              "kind": "literal",
+              "value": "candidate-1"
+            },
+            "case_id": {
+              "kind": "literal",
+              "value": "case_id-1"
+            },
+            "goal_id": {
+              "instance": "goal-2",
+              "kind": "instance"
+            },
+            "goal_revision": {
+              "kind": "literal",
+              "value": 2.0
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason-1"
+            },
+            "repository_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-7491402ac063"
+            },
+            "reviewer_run": {
+              "kind": "literal",
+              "value": "reviewer_run-1"
+            },
+            "story_id": {
+              "kind": "literal",
+              "value": "story_id-1"
+            },
+            "worktree_id": {
+              "kind": "literal",
+              "value": "worktree_id-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.QueueAssignment",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Assignment",
+          "event": "controlplane.host.AssignmentCreated",
+          "field": "assignment_id",
+          "instance": "assignment-2",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.ClaimAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment-2",
+              "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision-1"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "worktree_id": {
+              "kind": "literal",
+              "value": "worktree_id-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.ClaimAssignment",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.ReviewAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment-2",
+              "kind": "instance"
+            },
+            "candidate": {
+              "kind": "literal",
+              "value": "candidate-1"
+            },
+            "test_revision": {
+              "kind": "literal",
+              "value": "test_revision-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.ReviewAssignment",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RepairAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment-2",
+              "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "payload": {
+            "assignment_id": {
+              "instance": "assignment-2",
+              "kind": "instance"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            }
+          },
+          "shape": {
+            "assignment_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "implementor_run": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "reason": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.AssignmentList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "assignment_id": {
+                "instance": "assignment-2",
+                "kind": "instance"
+              },
+              "base_revision": {
+                "kind": "literal",
+                "value": "base_revision"
+              },
+              "candidate": {
+                "kind": "literal",
+                "value": "candidate-1"
+              },
+              "case_id": {
+                "kind": "literal",
+                "value": "case_id-1"
+              },
+              "goal_id": {
+                "instance": "goal-2",
+                "kind": "instance"
+              },
+              "goal_revision": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "implementor_run": {
+                "kind": "literal",
+                "value": "implementor_run"
+              },
+              "merge_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reason": {
+                "kind": "literal",
+                "value": "reason"
+              },
+              "repository_id": {
+                "kind": "literal",
+                "value": "00000000-0000-4000-8000-7491402ac063"
+              },
+              "review_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reviewer_run": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Implementing"
+              },
+              "story_id": {
+                "kind": "literal",
+                "value": "story_id-1"
+              },
+              "test_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "worktree_id": {
+                "kind": "literal",
+                "value": "worktree_id-1"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.AssignmentList"
+        }
+      ]
+    },
     "controlplane.host.Assignment/transition/review/by/controlplane.host.ReviewAssignment/applied": {
       "purpose": "`controlplane.host.ReviewAssignment` on `applied` moves a `controlplane.host.Assignment` to `Reviewing` along `review`",
       "source": [
@@ -45742,16 +46816,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Operator"
-        },
-        {
-          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -45780,7 +46850,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -46374,7 +47444,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -46403,7 +47473,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -46758,12 +47828,16 @@
         },
         {
           "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -46792,7 +47866,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -47644,7 +48718,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -47673,7 +48747,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -48024,16 +49098,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Operator"
-        },
-        {
-          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -48062,7 +49132,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -50440,16 +51510,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Operator"
-        },
-        {
-          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -50478,7 +51544,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -51373,7 +52439,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -51402,7 +52468,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -51805,12 +52871,16 @@
         },
         {
           "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -51839,7 +52909,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -53264,16 +54334,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Operator"
-        },
-        {
-          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -53302,7 +54368,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -54239,7 +55305,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -55367,7 +56433,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -55396,7 +56462,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -55808,7 +56874,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -55837,7 +56903,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -76526,7 +77592,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -76555,7 +77621,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -76963,7 +78029,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -76992,7 +78058,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -78362,7 +79428,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -78391,7 +79457,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -80502,7 +81568,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -80531,7 +81597,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -80903,7 +81969,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -80932,7 +81998,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -81510,7 +82576,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -81539,7 +82605,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -82152,7 +83218,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -82181,7 +83247,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -82805,7 +83871,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -82834,7 +83900,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -83443,7 +84509,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -83472,7 +84538,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -84096,7 +85162,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -84125,7 +85191,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -84749,7 +85815,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -84778,7 +85844,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -85387,7 +86453,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -85416,7 +86482,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -86021,7 +87087,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -86050,7 +87116,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -86420,7 +87486,7 @@
           "view": "controlplane.host.PublicationIntentList"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -86449,7 +87515,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -86930,7 +87996,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -86959,7 +88025,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -87325,7 +88391,7 @@
           "view": "controlplane.host.PublicationIntentList"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -87354,7 +88420,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -87820,7 +88886,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -87849,7 +88915,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -88379,7 +89445,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -88408,7 +89474,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -89862,7 +90928,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -89891,7 +90957,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -90822,7 +91888,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -90851,7 +91917,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -91248,7 +92314,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -91277,7 +92343,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -92144,7 +93210,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -92173,7 +93239,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -94187,12 +95253,12 @@
         },
         {
           "kind": "actor",
-          "name": "controlplane.host.Supervisor"
+          "name": "controlplane.host.Operator"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -94558,7 +95624,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -94843,11 +95909,15 @@
         {
           "kind": "actor",
           "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -95598,7 +96668,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -95627,7 +96697,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -96019,12 +97089,16 @@
         },
         {
           "kind": "actor",
+          "name": "controlplane.host.Operator"
+        },
+        {
+          "kind": "actor",
           "name": "controlplane.host.Supervisor"
         }
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -96053,7 +97127,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -96613,6 +97687,10 @@
               "kind": "literal",
               "value": "00000000-0000-4000-8000-f03bb0ed0426"
             },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
+            },
             "implementor_run": {
               "kind": "literal",
               "value": "implementor_run"
@@ -96754,6 +97832,636 @@
         {
           "event": "controlplane.host.WorkspaceDirectoryRemoved",
           "step": "expect_no_event"
+        }
+      ]
+    },
+    "controlplane.host.RepairAssignment/outcome/rebased": {
+      "purpose": "`controlplane.host.RepairAssignment` answers `rebased` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "controlplane.host.Assignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.BlockAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.CreateGoal"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.QueueAssignment"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RegisterWorkspace"
+        },
+        {
+          "kind": "command",
+          "name": "controlplane.host.RepairAssignment"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.BlockAssignment",
+            "outcome": "applied"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.QueueAssignment",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ArchiveWorkspaceApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.AssignmentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.BlockAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CancelGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClaimAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ClosePublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.CompleteAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfigureRepositoryApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ConfirmPublicationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.DisableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.EnableRepositoryRegistrationApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.GoalDeleted"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MarkPublicationUncertainApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.MergeAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PauseGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PlanningProgressRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.PublicationIntentCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReadyAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReconcileAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepairAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.RepositoryRegistrationCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.ReviewAssignmentApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.SatisfyGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.StartGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.UpdateGoalApplied"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryCreated"
+        },
+        {
+          "kind": "event",
+          "name": "controlplane.host.WorkspaceDirectoryRemoved"
+        },
+        {
+          "kind": "view",
+          "name": "controlplane.host.AssignmentList"
+        },
+        {
+          "kind": "actor",
+          "name": "controlplane.host.Supervisor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RegisterWorkspace",
+          "input": {
+            "name": {
+              "kind": "literal",
+              "value": "name"
+            },
+            "path": {
+              "kind": "literal",
+              "value": "path"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RegisterWorkspace",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Workspace",
+          "event": "controlplane.host.WorkspaceCreated",
+          "field": "workspace_id",
+          "instance": "workspace",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.CreateGoal",
+          "input": {
+            "acceptance": {
+              "kind": "literal",
+              "value": "acceptance"
+            },
+            "implementor_model": {
+              "kind": "literal",
+              "value": "implementor_model"
+            },
+            "max_attempts": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_minutes": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "max_workers": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "merge_authority": {
+              "kind": "literal",
+              "value": true
+            },
+            "objective": {
+              "kind": "literal",
+              "value": "objective"
+            },
+            "planner_model": {
+              "kind": "literal",
+              "value": "planner_model"
+            },
+            "reviewer_model": {
+              "kind": "literal",
+              "value": "reviewer_model"
+            },
+            "workspace_id": {
+              "instance": "workspace",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.CreateGoal",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Goal",
+          "event": "controlplane.host.GoalCreated",
+          "field": "goal_id",
+          "instance": "goal",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.QueueAssignment",
+          "input": {
+            "attempt": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "candidate": {
+              "kind": "literal",
+              "value": "candidate"
+            },
+            "case_id": {
+              "kind": "literal",
+              "value": "case_id"
+            },
+            "goal_id": {
+              "instance": "goal",
+              "kind": "instance"
+            },
+            "goal_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            },
+            "repository_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-fcfc1a0c26c3"
+            },
+            "reviewer_run": {
+              "kind": "literal",
+              "value": "reviewer_run"
+            },
+            "story_id": {
+              "kind": "literal",
+              "value": "story_id"
+            },
+            "worktree_id": {
+              "kind": "literal",
+              "value": "worktree_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.QueueAssignment",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "controlplane.host.Assignment",
+          "event": "controlplane.host.AssignmentCreated",
+          "field": "assignment_id",
+          "instance": "assignment",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.BlockAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.BlockAssignment",
+            "outcome": "applied"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "actor": "controlplane.host.Supervisor",
+          "command": "controlplane.host.RepairAssignment",
+          "input": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "base_revision": {
+              "kind": "literal",
+              "value": "base_revision"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason-1"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "controlplane.host.RepairAssignment",
+            "outcome": "rebased"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "controlplane.host.RepairAssignmentApplied",
+          "payload": {
+            "assignment_id": {
+              "instance": "assignment",
+              "kind": "instance"
+            },
+            "implementor_run": {
+              "kind": "literal",
+              "value": "implementor_run-1"
+            },
+            "reason": {
+              "kind": "literal",
+              "value": "reason-1"
+            }
+          },
+          "shape": {
+            "assignment_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            },
+            "implementor_run": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "reason": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "controlplane.host.ArchiveWorkspaceApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.AssignmentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.BlockAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CancelGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClaimAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ClosePublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.CompleteAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfigureRepositoryApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ConfirmPublicationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.DisableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.EnableRepositoryRegistrationApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.GoalDeleted",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MarkPublicationUncertainApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.MergeAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PauseGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PlanningProgressRecorded",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.PublicationIntentCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReadyAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReconcileAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.RepositoryRegistrationCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.ReviewAssignmentApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.SatisfyGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.StartGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.UpdateGoalApplied",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryCreated",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "controlplane.host.WorkspaceDirectoryRemoved",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "controlplane.host.AssignmentList"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "assignment_id": {
+                "instance": "assignment",
+                "kind": "instance"
+              },
+              "attempt": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "base_revision": {
+                "kind": "literal",
+                "value": "base_revision"
+              },
+              "candidate": {
+                "kind": "literal",
+                "value": "candidate"
+              },
+              "case_id": {
+                "kind": "literal",
+                "value": "case_id"
+              },
+              "goal_id": {
+                "instance": "goal",
+                "kind": "instance"
+              },
+              "goal_revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "implementor_run": {
+                "kind": "literal",
+                "value": "implementor_run-1"
+              },
+              "merge_receipt": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reason": {
+                "kind": "literal",
+                "value": "reason-1"
+              },
+              "repository_id": {
+                "kind": "literal",
+                "value": "00000000-0000-4000-8000-fcfc1a0c26c3"
+              },
+              "review_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "reviewer_run": {
+                "kind": "literal",
+                "value": ""
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Implementing"
+              },
+              "story_id": {
+                "kind": "literal",
+                "value": "story_id"
+              },
+              "test_revision": {
+                "kind": "literal",
+                "value": ""
+              },
+              "worktree_id": {
+                "kind": "literal",
+                "value": "worktree_id"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "controlplane.host.AssignmentList"
         }
       ]
     },
@@ -100051,7 +101759,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -100080,7 +101788,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {
@@ -101412,7 +103120,7 @@
       ],
       "steps": [
         {
-          "actor": "controlplane.host.Operator",
+          "actor": "controlplane.host.Supervisor",
           "command": "controlplane.host.RegisterWorkspace",
           "input": {
             "name": {
@@ -101441,7 +103149,7 @@
           "step": "capture_instance"
         },
         {
-          "actor": "controlplane.host.Supervisor",
+          "actor": "controlplane.host.Operator",
           "command": "controlplane.host.CreateGoal",
           "input": {
             "acceptance": {

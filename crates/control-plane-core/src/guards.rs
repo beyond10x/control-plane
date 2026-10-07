@@ -362,6 +362,18 @@ impl Store {
                     "claim requires worktree and base revision"
                 );
             }
+            // A repair that names a base (the declared `rebased` outcome) names a revision, as a
+            // claim does; one that names none keeps the assignment's base.
+            if command == "RepairAssignment"
+                && body
+                    .get("base_revision")
+                    .is_some_and(|base| !base.is_null())
+            {
+                ensure!(
+                    !text(body, "base_revision")?.is_empty(),
+                    "repair base revision is empty"
+                );
+            }
             if command == "ClaimAssignment"
                 || (command == "RepairAssignment" && assignment.state == A::Blocked)
             {

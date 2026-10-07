@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf
-// contract digest 003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a
+// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
+// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -2934,6 +2934,10 @@ pub fn encode_command_controlplane_host_repair_assignment(value: &crate::host::R
     json::push_text(out, &value.reason);
     json::member(out, "implementor_run");
     json::push_text(out, &value.implementor_run);
+    if let Some(held0) = &value.base_revision {
+        json::member(out, "base_revision");
+        json::push_text(out, &*held0);
+    }
     out.push('}');
 }
 
@@ -2959,6 +2963,13 @@ pub fn decode_command_controlplane_host_repair_assignment(value: &json::Value, a
             let member2 = json::member_at(value, at, "implementor_run")?;
             json::text_at(member2, &at2, "a string")?.to_owned()
         },
+        base_revision: match value.member("base_revision") {
+            None | Some(json::Value::Null) => None,
+            Some(member3) => {
+                let at3 = json::nested(at, "base_revision");
+                Some(json::text_at(member3, &at3, "a string")?.to_owned())
+            }
+        },
     })
 }
 
@@ -2967,6 +2978,19 @@ pub fn decode_command_controlplane_host_repair_assignment(value: &json::Value, a
 pub fn encode_outcome_controlplane_host_repair_assignment(value: &crate::host::RepairAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::RepairAssignmentOutcome::Rebased { repair_assignment_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "rebased");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.RepairAssignmentApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_repair_assignment_applied(repair_assignment_applied, out);
+            out.push('}');
+            out.push(']');
+        }
         crate::host::RepairAssignmentOutcome::Applied { repair_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");

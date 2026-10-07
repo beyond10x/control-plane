@@ -16,6 +16,206 @@
       },
       "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
       "reason": "The block route gains Blocked as a source, so BlockAssignment on a Blocked assignment now applies and replaces its reason where it answered wrong-state; every other answer of BlockAssignment is unchanged (applied from Queued, Implementing, Reviewing, ReadyToMerge and Merging, wrong-state from Merged and Cancelled, not-found). Replay re-answers each recorded call, so only a recorded BlockAssignment answered wrong-state on a Blocked assignment could now differ, and no stored history holds one: in every commit each sender reads the assignment first and sends BlockAssignment only to one that is not Blocked (the fleet's block helper and its repair path in control-plane-runtime fleet.rs), the supervisor's retirement of a superseded queue blocks only Queued assignments and cancels them under the same store lock, and the Operator is not granted the command, so its call is refused before anything is appended. The committed recorded history, whose BlockAssignment refusal is on a Merged assignment, replays to its committed views with this change."
+    },
+    {
+      "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "rebased"
+        },
+        "subject": "controlplane.host.RepairAssignment"
+      },
+      "command_outcomes": [
+        "rebased",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.RepairAssignment/outcome-added/rebased",
+      "outcome": {
+        "condition": {
+          "kind": "when",
+          "predicate": "defined(base_revision)"
+        },
+        "emits": [
+          "controlplane.host.RepairAssignmentApplied"
+        ],
+        "name": "rebased",
+        "payload": [
+          {
+            "event": "controlplane.host.RepairAssignmentApplied",
+            "fields": [
+              {
+                "target": "assignment_id",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "uuid"
+                },
+                "value": {
+                  "field": "assignment_id",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "uuid"
+                  }
+                }
+              },
+              {
+                "target": "reason",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "value": {
+                  "field": "reason",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              },
+              {
+                "target": "implementor_run",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "value": {
+                  "field": "implementor_run",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "sets": [
+          {
+            "target": "attempt",
+            "target_type": {
+              "kind": "primitive",
+              "name": "integer"
+            },
+            "value": {
+              "by": "1",
+              "kind": "increment"
+            }
+          },
+          {
+            "target": "reason",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "reason",
+              "kind": "input_field",
+              "type_ref": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          },
+          {
+            "target": "implementor_run",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "implementor_run",
+              "kind": "input_field",
+              "type_ref": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          },
+          {
+            "target": "reviewer_run",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          },
+          {
+            "target": "base_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "base_revision",
+              "kind": "input_or_generated",
+              "otherwise": "",
+              "type_ref": {
+                "kind": "optional",
+                "of": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            }
+          },
+          {
+            "target": "test_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          },
+          {
+            "target": "review_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        ],
+        "subject": {
+          "effect": "moves",
+          "entity": "controlplane.host.Assignment",
+          "instance": {
+            "field": {
+              "name": "assignment_id",
+              "naming": {},
+              "type_ref": {
+                "kind": "primitive",
+                "name": "uuid"
+              }
+            },
+            "from": "supplied"
+          },
+          "transition": {
+            "from": [
+              "Blocked",
+              "Reviewing"
+            ],
+            "name": "repair",
+            "to": "Implementing"
+          }
+        },
+        "test_strategy": "construct_input"
+      },
+      "reason": "The added outcome answers only a RepairAssignment whose input names base_revision, an Optional input added by the same change. No stored decision carries it: before this change every sender (the fleet's repair in control-plane-runtime fleet.rs and the record-history script) sent assignment_id, reason and implementor_run only, and the Operator is not granted the command, so its call is refused before anything is appended. The generated decoder reads an absent base_revision as none, so `defined(base_revision)` holds for no recorded call and each one is still answered by `applied`, whose condition, field updates and payload are unchanged; RepairAssignment's wrong-state and not-found answers are unchanged too. The committed recorded history replays to its committed views with this change."
     }
   ]
 }

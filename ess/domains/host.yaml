@@ -890,7 +890,31 @@ commands:
     type: String
   - name: implementor_run
     type: String
+  - name: base_revision
+    type: Optional<String>
   outcomes:
+  - name: rebased
+    when: defined(base_revision)
+    moves: controlplane.host.Assignment.repair
+    instance: assignment_id
+    emits:
+    - controlplane.host.RepairAssignmentApplied
+    payload:
+      controlplane.host.RepairAssignmentApplied:
+        assignment_id: input.assignment_id
+        implementor_run: input.implementor_run
+        reason: input.reason
+    sets:
+      reason: input.reason
+      implementor_run: input.implementor_run
+      base_revision:
+        input: base_revision
+        else: ''
+      attempt:
+        increment: 1
+      test_revision: ''
+      review_revision: ''
+      reviewer_run: ''
   - name: applied
     moves: controlplane.host.Assignment.repair
     instance: assignment_id
