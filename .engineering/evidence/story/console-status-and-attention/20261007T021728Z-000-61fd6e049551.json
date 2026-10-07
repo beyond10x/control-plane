@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T02:17:28Z",
+  "actor": "human:timo",
+  "artifact": "story:console-status-and-attention",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave-4 integration gate, task check 12 steps each exit 0 (control-plane/wave-4)",
+    "reference": "commit 4fbf76f: 359 Rust tests in 39 result lines passed, 0 failed (cargo test -- --list: 359); spec-history-check passed (4 acknowledged against 72d4ed7); acceptance-check 98 names in 24 stories resolve; frontend-check 27 component tests passed; 179/179 conformance; generated and foundation checks passed; ESS 0.53.0 as CI pins it"
+  }
+}

@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+// model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+// contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -74,6 +74,8 @@ pub enum PlanningPhase {
 pub enum PublicationIntentState {
     /// `Confirmed`.
     Confirmed,
+    /// `NotPublished`.
+    NotPublished,
     /// `Prepared`.
     Prepared,
     /// `Uncertain`.
@@ -862,6 +864,8 @@ pub struct PublicationIntentData {
     pub expected_base: String,
     /// `receipt` — `String`.
     pub receipt: String,
+    /// `reason` — `Optional<String>`.
+    pub reason: Option<String>,
 }
 
 /// The states of `controlplane.host.PublicationIntent`, at the type level.
@@ -874,6 +878,7 @@ pub mod publication_intent_state {
         /// Implemented only by the marker types beside this module.
         pub trait Sealed {}
         impl Sealed for super::Confirmed {}
+        impl Sealed for super::NotPublished {}
         impl Sealed for super::Prepared {}
         impl Sealed for super::Uncertain {}
     }
@@ -889,6 +894,13 @@ pub mod publication_intent_state {
 
     impl Marker for Confirmed {
         const STATE: super::PublicationIntentState = super::PublicationIntentState::Confirmed;
+    }
+
+    /// `NotPublished`. Terminal: an instance may rest here forever.
+    pub struct NotPublished;
+
+    impl Marker for NotPublished {
+        const STATE: super::PublicationIntentState = super::PublicationIntentState::NotPublished;
     }
 
     /// `Prepared`. Where a new instance starts.
@@ -960,11 +972,27 @@ impl PublicationIntent<publication_intent_state::Prepared> {
             state: core::marker::PhantomData,
         }
     }
+
+    /// `close` — `Prepared` → `NotPublished`. Taken by the `applied` outcome of `controlplane.host.ClosePublication`.
+    pub fn close(self) -> PublicationIntent<publication_intent_state::NotPublished> {
+        PublicationIntent {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
 }
 
 impl PublicationIntent<publication_intent_state::Uncertain> {
     /// `confirm` — `Uncertain` → `Confirmed`. Taken by the `applied` outcome of `controlplane.host.ConfirmPublication`.
     pub fn confirm(self) -> PublicationIntent<publication_intent_state::Confirmed> {
+        PublicationIntent {
+            data: self.data,
+            state: core::marker::PhantomData,
+        }
+    }
+
+    /// `close` — `Uncertain` → `NotPublished`. Taken by the `applied` outcome of `controlplane.host.ClosePublication`.
+    pub fn close(self) -> PublicationIntent<publication_intent_state::NotPublished> {
         PublicationIntent {
             data: self.data,
             state: core::marker::PhantomData,
@@ -988,6 +1016,8 @@ pub struct PublicationIntentSnapshot {
 pub enum AnyPublicationIntent {
     /// Resting in `Confirmed`.
     Confirmed(PublicationIntent<publication_intent_state::Confirmed>),
+    /// Resting in `NotPublished`.
+    NotPublished(PublicationIntent<publication_intent_state::NotPublished>),
     /// Resting in `Prepared`.
     Prepared(PublicationIntent<publication_intent_state::Prepared>),
     /// Resting in `Uncertain`.
@@ -1002,6 +1032,10 @@ impl PublicationIntentSnapshot {
     pub fn refine(self) -> AnyPublicationIntent {
         match self.state {
             PublicationIntentState::Confirmed => AnyPublicationIntent::Confirmed(PublicationIntent {
+                data: self.data,
+                state: core::marker::PhantomData,
+            }),
+            PublicationIntentState::NotPublished => AnyPublicationIntent::NotPublished(PublicationIntent {
                 data: self.data,
                 state: core::marker::PhantomData,
             }),
@@ -1022,6 +1056,7 @@ impl AnyPublicationIntent {
     pub fn state(&self) -> PublicationIntentState {
         match self {
             Self::Confirmed(_) => PublicationIntentState::Confirmed,
+            Self::NotPublished(_) => PublicationIntentState::NotPublished,
             Self::Prepared(_) => PublicationIntentState::Prepared,
             Self::Uncertain(_) => PublicationIntentState::Uncertain,
         }
@@ -1032,6 +1067,10 @@ impl AnyPublicationIntent {
         match self {
             Self::Confirmed(instance) => PublicationIntentSnapshot {
                 state: PublicationIntentState::Confirmed,
+                data: instance.into_data(),
+            },
+            Self::NotPublished(instance) => PublicationIntentSnapshot {
+                state: PublicationIntentState::NotPublished,
                 data: instance.into_data(),
             },
             Self::Prepared(instance) => PublicationIntentSnapshot {
@@ -1750,6 +1789,41 @@ pub enum ClaimAssignmentOutcome {
     NotFound {
         /// Why it was refused: `controlplane.host.AssignmentNotFound`.
         error: AssignmentNotFound,
+    },
+}
+
+/// ClosePublication — the input of `controlplane.host.ClosePublication`.
+///
+/// Everything it can result in is [`ClosePublicationOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosePublication {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
+}
+
+/// Everything `controlplane.host.ClosePublication` can result in — one variant per declared outcome.
+///
+/// An infrastructure failure is deliberately not in here: a refusal is a fact about the domain,
+/// a transport fault is a fact about the run, and conflating the two is what the declared
+/// outcomes exist to prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClosePublicationOutcome {
+    /// `applied` — otherwise.
+    Applied {
+        /// The `controlplane.host.ClosePublicationApplied` this outcome publishes.
+        close_publication_applied: ClosePublicationApplied,
+    },
+    /// `not-found` — for an identity no record carries.
+    NotFound {
+        /// Why it was refused: `controlplane.host.PublicationIntentNotFound`.
+        error: PublicationIntentNotFound,
+    },
+    /// `wrong-state` — from a state no declared move starts in.
+    WrongState {
+        /// Why it was refused: `controlplane.host.PublicationIntentStateConflict`.
+        error: PublicationIntentStateConflict,
     },
 }
 
@@ -2657,6 +2731,15 @@ pub struct ClaimAssignmentApplied {
     pub base_revision: String,
 }
 
+/// ClosePublicationApplied — the event `controlplane.host.ClosePublicationApplied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosePublicationApplied {
+    /// `publication_id` — `Uuid`.
+    pub publication_id: crate::primitives::Uuid,
+    /// `reason` — `String`.
+    pub reason: String,
+}
+
 /// CompleteAssignmentApplied — the event `controlplane.host.CompleteAssignmentApplied`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompleteAssignmentApplied {
@@ -3145,6 +3228,8 @@ pub struct PublicationIntentList {
     pub expected_base: String,
     /// `receipt` — `String`.
     pub receipt: String,
+    /// `reason` — `Optional<String>`.
+    pub reason: Option<String>,
     /// `state` — `controlplane.host.PublicationIntent.State`.
     pub state: PublicationIntentState,
 }
@@ -3283,6 +3368,17 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
         fn claim_assignment(&mut self, input: super::ClaimAssignment) -> Result<super::ClaimAssignmentOutcome, crate::obligation::UnmetObligation>;
+    }
+
+    /// The behaviour `controlplane.host.ClosePublication` — generated.
+    ///
+    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
+    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    pub trait ClosePublicationBehavior {
+        /// Decides and enacts exactly one declared outcome of `controlplane.host.ClosePublication`.
+        ///
+        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        fn close_publication(&mut self, input: super::ClosePublication) -> Result<super::ClosePublicationOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `controlplane.host.CompleteAssignment` — generated.

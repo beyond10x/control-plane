@@ -296,14 +296,18 @@ entities:
     type: String
   - name: receipt
     type: String
+  - name: reason
+    type: Optional<String>
   lifecycle:
     initial: Prepared
     states:
     - Prepared
     - Uncertain
     - Confirmed
+    - NotPublished
     terminal:
     - Confirmed
+    - NotPublished
     transitions:
     - name: uncertain
       from:
@@ -314,6 +318,11 @@ entities:
       - Prepared
       - Uncertain
       to: Confirmed
+    - name: close
+      from:
+      - Prepared
+      - Uncertain
+      to: NotPublished
 actors:
 - name: controlplane.host.Operator
   may:
@@ -356,6 +365,7 @@ actors:
   - controlplane.host.PreparePublication
   - controlplane.host.MarkPublicationUncertain
   - controlplane.host.ConfirmPublication
+  - controlplane.host.ClosePublication
   - controlplane.host.RecordPlanningProgress
 errors:
 - name: controlplane.host.WorkspaceDirectoryStateConflict
@@ -1211,6 +1221,30 @@ commands:
   - name: wrong-state
     wrong_state: true
     error: controlplane.host.PublicationIntentStateConflict
+- name: controlplane.host.ClosePublication
+  input:
+  - name: publication_id
+    type: Uuid
+  - name: reason
+    type: String
+  outcomes:
+  - name: applied
+    moves: controlplane.host.PublicationIntent.close
+    instance: publication_id
+    sets:
+      reason: input.reason
+    emits:
+    - controlplane.host.ClosePublicationApplied
+    payload:
+      controlplane.host.ClosePublicationApplied:
+        publication_id: input.publication_id
+        reason: input.reason
+  - name: not-found
+    unknown_instance: true
+    error: controlplane.host.PublicationIntentNotFound
+  - name: wrong-state
+    wrong_state: true
+    error: controlplane.host.PublicationIntentStateConflict
 - name: controlplane.host.RecordPlanningProgress
   input:
   - name: goal_id
@@ -1517,6 +1551,12 @@ events:
     type: Uuid
   - name: receipt
     type: String
+- name: controlplane.host.ClosePublicationApplied
+  fields:
+  - name: publication_id
+    type: Uuid
+  - name: reason
+    type: String
 - name: controlplane.host.PlanningProgressRecorded
   fields:
   - name: goal_id
@@ -1690,6 +1730,8 @@ views:
     type: String
   - name: receipt
     type: String
+  - name: reason
+    type: Optional<String>
   - name: state
     type: controlplane.host.PublicationIntent.State
 types:

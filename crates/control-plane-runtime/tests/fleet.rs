@@ -1,6 +1,8 @@
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -26,6 +28,14 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).unwrap()
+}
+/// A new workspace directory that holds no repository. Fixtures live under the source
+/// checkout's `.scratch`, so discovering a plain directory there would resolve to that checkout
+/// (detached in pull-request CI, where it has no `origin/HEAD`); a bare repository in the
+/// directory stops Git's discovery at it.
+fn context_directory(path: &Path) {
+    std::fs::create_dir(path).unwrap();
+    cmd(path, "git", &["init", "--bare", "--quiet"], &[]);
 }
 /// The goal's progress history (`Store::activity_history`), including its newest acceptance
 /// record, which bounded receipts record once per review.
@@ -1298,6 +1308,329 @@ async fn restart_reconciles_effects() {
     let assignment = reopened.lock().await.query("AssignmentList").unwrap()[0].clone();
     assert_eq!(assignment["state"], "Merged");
     assert!(!assignment["merge_receipt"].as_str().unwrap().is_empty());
+}
+
+async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
+    store
+        .lock()
+        .await
+        .query(view)
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+/// One delivery whose publisher exits without pushing (`git --version`): after the fleet tick
+/// its intent is Uncertain and its assignment Blocked, with the goal still running. The
+/// supervisor waits `grace` for an unmoved target before it closes the intent.
+async fn unresolved_publication(grace: std::time::Duration) -> (Fixture, Supervisor) {
+    let fixture = fixture(1).await;
+    fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
+    let supervisor = Supervisor::new(
+        fixture.store.clone(),
+        Arc::new(Notify::new()),
+        RuntimeConfig {
+            publication_grace: grace,
+            ..fixture.config.clone()
+        },
+        Arc::new(Scripted::new()),
+    );
+    supervisor.tick().await.unwrap();
+    let report = supervisor.fleet_tick().await.unwrap();
+    assert!(!report.blockers.is_empty(), "{report:?}");
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+    (fixture, supervisor)
+}
+
+/// The fixture's remote moved away, so observing the target fails as for an unreachable remote.
+fn unreachable(fixture: &Fixture) -> impl FnOnce() + use<> {
+    let remote = fixture.root.join("remotes/repo0.git");
+    let moved = fixture.root.join("remotes/repo0-unreachable.git");
+    std::fs::rename(&remote, &moved).unwrap();
+    move || std::fs::rename(&moved, &remote).unwrap()
+}
+
+/// With no grace, every observation of the unmoved target may close the intent: only the
+/// failed observations keep it open.
+#[tokio::test]
+async fn failed_observation_keeps_intent_open() {
+    let (fixture, supervisor) = unresolved_publication(std::time::Duration::ZERO).await;
+    let restore = unreachable(&fixture);
+    for _ in 0..3 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+    let blocker = history(&fixture.store).await["fleet"]
+        [assignment["assignment_id"].as_str().unwrap()]
+    .clone();
+    assert!(
+        blocker["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication observation unavailable")),
+        "{blocker}"
+    );
+
+    // The failed observation kept the intent open, not a missing exit: observed again without
+    // its candidate, the same intent closes. The paused goal keeps the freed assignment idle.
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    restore();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "NotPublished", "{intents:?}");
+    assert!(
+        intents[0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("does not contain")),
+        "{intents:?}"
+    );
+    assert_eq!(
+        rows(&fixture.store, "AssignmentList").await[0]["state"],
+        "Blocked"
+    );
+}
+
+#[tokio::test]
+async fn published_candidate_still_reconciles() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let intent = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/main", intent["candidate"].as_str().unwrap()),
+        ],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Confirmed", "{intents:?}");
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["state"], "Merged", "{assignment}");
+    assert_eq!(assignment["merge_receipt"], intents[0]["receipt"]);
+    assert!(!assignment["merge_receipt"].as_str().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn unchanged_unresolved_publication_appends_once() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let _restore = unreachable(&fixture);
+    let database = fixture.root.join("host.sqlite3");
+    drop(supervisor);
+    let Fixture { store, config, .. } = fixture;
+    drop(store);
+    // `replayed_progress` counts the progress decisions a store holds when it opens.
+    let reopened = Store::open(&database).await.unwrap();
+    let before = reopened.replayed_progress();
+    let store = Arc::new(tokio::sync::Mutex::new(reopened));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(Scripted::new()),
+    );
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    assert_eq!(
+        rows(&store, "PublicationIntentList").await[0]["state"],
+        "Uncertain"
+    );
+    assert_eq!(rows(&store, "AssignmentList").await[0]["state"], "Blocked");
+    drop(supervisor);
+    drop(store);
+    let after = Store::open(&database).await.unwrap().replayed_progress();
+    assert!(
+        after - before <= 1,
+        "ten fleet ticks over one unresolved publication appended {} progress decisions",
+        after - before
+    );
+}
+
+/// A closed publication frees its assignment for another attempt, which publishes through a
+/// new intent; the closed one stays closed. No grace: the next observation closes.
+#[tokio::test]
+async fn closed_publication_is_retried_with_a_new_intent() {
+    let (fixture, supervisor) = unresolved_publication(std::time::Duration::ZERO).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0]["publication_id"].clone();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 2, "{intents:?}");
+    for intent in &intents {
+        let expected = if intent["publication_id"] == first {
+            "NotPublished"
+        } else {
+            "Uncertain"
+        };
+        assert_eq!(intent["state"], expected, "{intents:?}");
+    }
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(assignment["attempt"], 2, "{assignment}");
+    assert_eq!(assignment["state"], "Blocked", "{assignment}");
+}
+
+/// Within the grace period an unmoved target keeps the intent Uncertain. Once the target moves
+/// past the head observed when the intent became Uncertain and still lacks the candidate, the
+/// intent closes without waiting for the grace period.
+#[tokio::test]
+async fn target_moved_past_uncertain_head_closes_intent() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "Uncertain", "{intents:?}");
+
+    // Another change lands on main; the candidate is not part of it.
+    let repo = fixture.root.join("repos/repo0");
+    let base = intents[0]["expected_base"].as_str().unwrap();
+    let other = cmd(
+        &repo,
+        "git",
+        &[
+            "commit-tree",
+            &format!("{base}^{{tree}}"),
+            "-p",
+            base,
+            "-m",
+            "an unrelated change",
+        ],
+        &[],
+    );
+    cmd(
+        &repo,
+        "git",
+        &[
+            "push",
+            "origin",
+            &format!("{}:refs/heads/main", other.trim()),
+        ],
+        &[],
+    );
+    fixture
+        .store
+        .lock()
+        .await
+        .execute(
+            "PauseGoal",
+            json!({"goal_id":fixture.goal}),
+            Actor::Operator,
+        )
+        .await
+        .unwrap();
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0]["state"], "NotPublished", "{intents:?}");
+    assert!(
+        intents[0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(other.trim())),
+        "the reason names the head the target moved to: {intents:?}"
+    );
+    assert_eq!(
+        rows(&fixture.store, "AssignmentList").await[0]["state"],
+        "Blocked"
+    );
+}
+
+/// An assignment holds its repository from its claim until it is merged or cancelled, so a
+/// queued assignment on the same repository waits. It records why, once: the assignment that
+/// holds the repository. Here the first workspace's assignment holds it with an unresolved
+/// publication while a second workspace queues work on the same repository.
+#[tokio::test]
+async fn queued_assignment_records_once_which_assignment_holds_its_repository() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let holder = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let other = fixture.root.join("second");
+    context_directory(&other);
+    let second_goal = {
+        let mut store = fixture.store.lock().await;
+        let workspace = store
+            .execute(
+                "RegisterWorkspace",
+                json!({"path":other,"name":"second workspace"}),
+                Actor::Operator,
+            )
+            .await
+            .unwrap()["published"][0]["payload"]["workspace_id"]
+            .clone();
+        store.execute("RegisterRepository",json!({"workspace_id":workspace,"path":fixture.root.join("repos/repo0"),"name":"repo0","common_dir":"","base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
+        let goal=store.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Return 42 in the shared repository","acceptance":"requested_answer passes on the reviewed merged target","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+        store
+            .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+            .await
+            .unwrap();
+        goal
+    };
+    supervisor.tick().await.unwrap();
+    let queued = rows(&fixture.store, "AssignmentList")
+        .await
+        .into_iter()
+        .find(|a| a["goal_id"] == second_goal)
+        .expect("the second workspace's goal queued an assignment");
+    assert_eq!(queued["state"], "Queued", "{queued}");
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let waiting = rows(&fixture.store, "AssignmentList")
+        .await
+        .into_iter()
+        .find(|a| a["assignment_id"] == queued["assignment_id"])
+        .unwrap();
+    assert_eq!(
+        (waiting["state"].as_str(), &waiting["attempt"]),
+        (Some("Queued"), &queued["attempt"]),
+        "{waiting}"
+    );
+    let history = fixture
+        .store
+        .lock()
+        .await
+        .activity_history(second_goal.as_str().unwrap())
+        .unwrap();
+    let recorded = history["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["assignment_id"] == queued["assignment_id"])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        recorded.len(),
+        1,
+        "ten fleet ticks over the waiting assignment recorded {} activities: {recorded:?}",
+        recorded.len()
+    );
+    let newest = &history["fleet"][queued["assignment_id"].as_str().unwrap()];
+    let holder_id = holder["assignment_id"].as_str().unwrap();
+    assert!(
+        newest["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(holder_id)),
+        "the waiting assignment's newest activity does not name {holder_id}, which holds the \
+         repository: {newest}"
+    );
 }
 
 #[tokio::test]

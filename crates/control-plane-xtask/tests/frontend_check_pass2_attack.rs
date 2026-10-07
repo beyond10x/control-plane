@@ -55,6 +55,23 @@ fn frontend_copy(prefix: &str) -> Result<(tempfile::TempDir, PathBuf)> {
     Ok((temporary, root))
 }
 
+/// Remove every file Vitest's default include would collect (`*.test.*` and `*.spec.*`) under
+/// `dir`, so the case holds however many suites the console has; returns how many were removed.
+fn remove_component_tests(dir: &Path) -> Result<usize> {
+    let mut removed = 0;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.file_type()?.is_dir() {
+            removed += remove_component_tests(&entry.path())?;
+        } else if name.contains(".test.") || name.contains(".spec.") {
+            fs::remove_file(entry.path())?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 fn rewrite(root: &Path, file: &str, from: &str, to: &str) -> Result<()> {
     let path = root.join("frontend").join(file);
     let text = fs::read_to_string(&path)?;
@@ -113,7 +130,10 @@ fn inverted_acceptance_test_fails_the_gate() -> Result<()> {
 #[test]
 fn passing_with_no_tests_fails_the_gate() -> Result<()> {
     let (_temporary, root) = frontend_copy("frontend-check-pass2-")?;
-    fs::remove_file(root.join("frontend/src/App.test.js"))?;
+    ensure!(
+        remove_component_tests(&root.join("frontend/src"))? > 0,
+        "the copy held no component test file to remove"
+    );
     rewrite(
         &root,
         "vitest.config.js",

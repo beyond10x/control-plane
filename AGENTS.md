@@ -5,6 +5,7 @@ Standalone Rust product: local autonomous planner, implementation fleet and web 
 ## Serves
 
 - O1 — governed reach: check declared authority before effectful work.
+- O2 — decisions as data, with evidence: the domain is ESS, the plan is AEP, and a merge counts only with its verified receipt.
 - O5 — the generic agent platform: configure autonomous work and inspect its record.
 
 ## Working rules

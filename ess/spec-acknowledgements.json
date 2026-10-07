@@ -1,81 +1,58 @@
 {
   "format": "control-plane-spec-acknowledgements/2",
-  "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+  "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
   "acknowledged": [
     {
-      "id": "command/controlplane.host.UpdateGoal/outcome-condition-changed/applied",
+      "id": "entity/controlplane.host.PublicationIntent/terminal-added/NotPublished",
       "change": {
-        "category": "command",
-        "subject": "controlplane.host.UpdateGoal",
+        "category": "entity",
+        "subject": "controlplane.host.PublicationIntent",
         "changed": {
-          "kind": "outcome-condition-changed",
-          "outcome": "applied",
-          "before": "otherwise",
-          "after": "when subject state is Paused or Running"
+          "kind": "terminal-added",
+          "state": "NotPublished"
         }
       },
-      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
-      "reason": "Replay answers differently only for a recorded UpdateGoal that was applied to a Satisfied or Cancelled goal; it now answers satisfied or cancelled. Stored history holds none: the operator's store (3602 decisions, 8 UpdateGoal, none on a finished goal) opened with this change on 2026-10-06, and the committed recorded history replayed to its committed views before it was re-recorded."
+      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
+      "reason": "Only ClosePublication, a new command, moves an intent into NotPublished, so no stored decision does: stored history cannot hold a call of a command that did not exist. Every recorded intent replays to the Prepared, Uncertain or Confirmed state it reached, and PreparePublication, MarkPublicationUncertain and ConfirmPublication answer from those states as before. The committed recorded history replayed to its committed views with this change before it was re-recorded."
     },
     {
-      "id": "command/controlplane.host.UpdateGoal/outcome-added/satisfied",
+      "id": "entity/controlplane.host.PublicationIntent/transition-added/close",
       "change": {
-        "category": "command",
-        "subject": "controlplane.host.UpdateGoal",
+        "category": "entity",
+        "subject": "controlplane.host.PublicationIntent",
         "changed": {
-          "kind": "outcome-added",
-          "outcome": "satisfied"
+          "kind": "transition-added",
+          "transition": "close"
         }
       },
-      "outcome": {
-        "name": "satisfied",
-        "condition": {
-          "kind": "subject_state",
-          "state": "Satisfied",
-          "predicate": null
-        },
-        "test_strategy": "construct_input_in_state",
-        "emits": [],
-        "error": "controlplane.host.GoalStateConflict"
-      },
-      "command_outcomes": [
-        "applied",
-        "satisfied",
-        "cancelled",
-        "not-found"
-      ],
-      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
-      "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Satisfied goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
+      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
+      "reason": "The close transition is taken only by the applied outcome of ClosePublication, a new command; no stored decision calls it. The transitions of the recorded publication commands are unchanged, so each recorded outcome replays as recorded (see the NotPublished entry)."
     },
     {
-      "id": "command/controlplane.host.UpdateGoal/outcome-added/cancelled",
+      "id": "component/control-plane/accepts-added/controlplane.host.ClosePublication",
       "change": {
-        "category": "command",
-        "subject": "controlplane.host.UpdateGoal",
+        "category": "component",
+        "subject": "control-plane",
         "changed": {
-          "kind": "outcome-added",
-          "outcome": "cancelled"
+          "command": "controlplane.host.ClosePublication",
+          "kind": "accepts-added"
         }
       },
-      "outcome": {
-        "name": "cancelled",
-        "condition": {
-          "kind": "subject_state",
-          "state": "Cancelled",
-          "predicate": null
-        },
-        "test_strategy": "construct_input_in_state",
-        "emits": [],
-        "error": "controlplane.host.GoalStateConflict"
+      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
+      "reason": "The component gains a route for a new command. Replay routes only recorded commands, and no stored decision names ClosePublication, so no recorded call reaches the new route; ESS rates the change compatible for history."
+    },
+    {
+      "id": "component/control-plane/publishes-added/controlplane.host.ClosePublicationApplied",
+      "change": {
+        "category": "component",
+        "subject": "control-plane",
+        "changed": {
+          "event": "controlplane.host.ClosePublicationApplied",
+          "kind": "publishes-added"
+        }
       },
-      "command_outcomes": [
-        "applied",
-        "satisfied",
-        "cancelled",
-        "not-found"
-      ],
-      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
-      "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Cancelled goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
+      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
+      "reason": "Only the applied outcome of ClosePublication, a new command, publishes this event, so no stored outcome carries it and no recorded outcome changes; ESS rates the change compatible for history."
     }
   ]
 }

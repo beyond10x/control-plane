@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 5ee011354cbdde7e1cd5aaec6e606c149d9e94ef7ac62c9bf1fc21621ff9b8ba
-// contract digest c0aa7ecbbdf9304cda7cddf46352bf7a404ef748f1fd5a39222ff2628fadf6ca
+// model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
+// contract digest 1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -101,6 +101,7 @@ pub fn decode_controlplane_host_planning_phase(value: &json::Value, at: &str) ->
 pub fn encode_controlplane_host_publication_intent_state(value: &crate::host::PublicationIntentState, out: &mut String) {
     match value {
         crate::host::PublicationIntentState::Confirmed => json::push_text(out, "Confirmed"),
+        crate::host::PublicationIntentState::NotPublished => json::push_text(out, "NotPublished"),
         crate::host::PublicationIntentState::Prepared => json::push_text(out, "Prepared"),
         crate::host::PublicationIntentState::Uncertain => json::push_text(out, "Uncertain"),
     }
@@ -112,11 +113,12 @@ pub fn encode_controlplane_host_publication_intent_state(value: &crate::host::Pu
 ///
 /// [`json::DecodeError`] naming the path and what the declaration says belongs there.
 pub fn decode_controlplane_host_publication_intent_state(value: &json::Value, at: &str) -> Result<crate::host::PublicationIntentState, json::DecodeError> {
-    Ok(match json::text_at(value, at, "one of `Confirmed`, `Prepared`, `Uncertain`")? {
+    Ok(match json::text_at(value, at, "one of `Confirmed`, `NotPublished`, `Prepared`, `Uncertain`")? {
         "Confirmed" => crate::host::PublicationIntentState::Confirmed,
+        "NotPublished" => crate::host::PublicationIntentState::NotPublished,
         "Prepared" => crate::host::PublicationIntentState::Prepared,
         "Uncertain" => crate::host::PublicationIntentState::Uncertain,
-        other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Confirmed`, `Prepared`, `Uncertain`".to_owned(), found: format!("`{other}`") }),
+        other => return Err(json::DecodeError { at: at.to_owned(), expected: "one of `Confirmed`, `NotPublished`, `Prepared`, `Uncertain`".to_owned(), found: format!("`{other}`") }),
     })
 }
 
@@ -258,6 +260,16 @@ pub fn encode_event_controlplane_host_claim_assignment_applied(value: &crate::ho
     json::push_text(out, &value.implementor_run);
     json::member(out, "base_revision");
     json::push_text(out, &value.base_revision);
+    out.push('}');
+}
+
+/// Writes the event `controlplane.host.ClosePublicationApplied` as JSON.
+pub fn encode_event_controlplane_host_close_publication_applied(value: &crate::host::ClosePublicationApplied, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
     out.push('}');
 }
 
@@ -778,6 +790,10 @@ pub fn encode_view_controlplane_host_publication_intent_list(value: &crate::host
     json::push_text(out, &value.expected_base);
     json::member(out, "receipt");
     json::push_text(out, &value.receipt);
+    if let Some(held0) = &value.reason {
+        json::member(out, "reason");
+        json::push_text(out, &*held0);
+    }
     json::member(out, "state");
     encode_controlplane_host_publication_intent_state(&value.state, out);
     out.push('}');
@@ -1334,6 +1350,86 @@ pub fn encode_outcome_controlplane_host_claim_assignment(value: &crate::host::Cl
             json::push_text(out, "controlplane.host.AssignmentNotFound");
             json::member(out, "payload");
             encode_error_controlplane_host_assignment_not_found(error, out);
+            out.push('}');
+        }
+    }
+    out.push('}');
+}
+
+/// Writes the input of `controlplane.host.ClosePublication` as JSON.
+pub fn encode_command_controlplane_host_close_publication(value: &crate::host::ClosePublication, out: &mut String) {
+    out.push('{');
+    json::member(out, "publication_id");
+    json::push_text(out, &value.publication_id.0);
+    json::member(out, "reason");
+    json::push_text(out, &value.reason);
+    out.push('}');
+}
+
+/// Reads the input of `controlplane.host.ClosePublication` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_command_controlplane_host_close_publication(value: &json::Value, at: &str) -> Result<crate::host::ClosePublication, json::DecodeError> {
+    Ok(crate::host::ClosePublication {
+        publication_id: {
+            let at0 = json::nested(at, "publication_id");
+            let member0 = json::member_at(value, at, "publication_id")?;
+            crate::primitives::Uuid(json::uuid_at(member0, &at0, "a UUID")?.to_owned())
+        },
+        reason: {
+            let at1 = json::nested(at, "reason");
+            let member1 = json::member_at(value, at, "reason")?;
+            json::text_at(member1, &at1, "a string")?.to_owned()
+        },
+    })
+}
+
+/// Writes the outcome of `controlplane.host.ClosePublication` as JSON: the branch taken, what it published, and the declared
+/// refusal it carries where it carries one.
+pub fn encode_outcome_controlplane_host_close_publication(value: &crate::host::ClosePublicationOutcome, out: &mut String) {
+    out.push('{');
+    match value {
+        crate::host::ClosePublicationOutcome::Applied { close_publication_applied } => {
+            json::member(out, "outcome");
+            json::push_text(out, "applied");
+            json::member(out, "published");
+            out.push('[');
+            out.push('{');
+            json::member(out, "event");
+            json::push_text(out, "controlplane.host.ClosePublicationApplied");
+            json::member(out, "payload");
+            encode_event_controlplane_host_close_publication_applied(close_publication_applied, out);
+            out.push('}');
+            out.push(']');
+        }
+        crate::host::ClosePublicationOutcome::NotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_not_found(error, out);
+            out.push('}');
+        }
+        crate::host::ClosePublicationOutcome::WrongState { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "wrong-state");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.PublicationIntentStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_publication_intent_state_conflict(error, out);
             out.push('}');
         }
     }
@@ -3320,6 +3416,7 @@ pub fn encode_system_event(value: &crate::system::SystemEvent) -> String {
         crate::system::SystemEvent::CancelAssignmentApplied(event) => encode_event_controlplane_host_cancel_assignment_applied(event, &mut out),
         crate::system::SystemEvent::CancelGoalApplied(event) => encode_event_controlplane_host_cancel_goal_applied(event, &mut out),
         crate::system::SystemEvent::ClaimAssignmentApplied(event) => encode_event_controlplane_host_claim_assignment_applied(event, &mut out),
+        crate::system::SystemEvent::ClosePublicationApplied(event) => encode_event_controlplane_host_close_publication_applied(event, &mut out),
         crate::system::SystemEvent::CompleteAssignmentApplied(event) => encode_event_controlplane_host_complete_assignment_applied(event, &mut out),
         crate::system::SystemEvent::ConfigureRepositoryApplied(event) => encode_event_controlplane_host_configure_repository_applied(event, &mut out),
         crate::system::SystemEvent::ConfirmPublicationApplied(event) => encode_event_controlplane_host_confirm_publication_applied(event, &mut out),

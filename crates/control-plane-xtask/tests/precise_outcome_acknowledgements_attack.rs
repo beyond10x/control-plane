@@ -355,7 +355,9 @@ fn the_same_swap_of_two_declared_outcomes_is_refused() -> Result<()> {
 
 /// The unit's own document: the three entries it migrated into `ess/spec-acknowledgements.json`,
 /// rebased onto a baseline without story:terminal-goal-edits' `UpdateGoal` change, admit that
-/// change as this tree declares it and refuse the refusals swapped under the same names.
+/// change as this tree declares it and refuse the refusals swapped under the same names. The
+/// entries are kept as a fixture: the live file moved on once main held that change and now
+/// acknowledges later changes only.
 #[test]
 fn migrated_acknowledgements_admit_only_the_reviewed_refusals() -> Result<()> {
     let (dir, baseline) = repository(
@@ -369,11 +371,12 @@ fn migrated_acknowledgements_admit_only_the_reviewed_refusals() -> Result<()> {
         str::to_owned,
     )?;
     let root = dir.path();
-    let live: Value = serde_json::from_slice(&fs::read(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ess/spec-acknowledgements.json"),
+    let migrated: Value = serde_json::from_slice(&fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/terminal-goal-edits-acknowledgements.json"),
     )?)?;
-    let mut acknowledged = live["acknowledged"].as_array().unwrap().clone();
-    assert_eq!(acknowledged.len(), 3, "{live}");
+    let mut acknowledged = migrated["acknowledged"].as_array().unwrap().clone();
+    assert_eq!(acknowledged.len(), 3, "{migrated}");
     for entry in &mut acknowledged {
         entry["baseline"] = json!(baseline);
     }
