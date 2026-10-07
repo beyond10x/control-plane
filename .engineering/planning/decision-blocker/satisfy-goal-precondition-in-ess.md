@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:satisfy-goal-precondition-in-ess
 kind: decision-blocker
-status: open
+status: cleared
 title: Declare SatisfyGoal's receipt-revision precondition in ESS, or keep it as host code?
 relations:
 - blocks: story:acceptance-edit-ordering
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-07T03:20:40Z", actor: "human:timo", revision: 3}
 ---
 ## Question
 
@@ -31,3 +33,13 @@ ESS 0.53.0 cannot declare SatisfyGoal's precondition "the satisfaction receipt n
 | C | ask the ESS repository for a predicate over a structured String field, then declare it | depends on another repository's release |
 
 Recommendation: A, with C filed as a need. The rule is enforced and tested in both orders; B changes the command to fit the language rather than declaring the existing rule.
+
+## Decided
+
+Option A for wave 5, 2026-10-07: the host guard stays, and the limit is recorded here. Option B (an added SatisfyGoal input) is refused.
+
+Follow-up, in order:
+
+1. ESS 0.55.0 refuses the same predicate over the String receipt (`[unobservable_fact] … cannot select goal_revision from String`), so the pin does not move for this.
+2. A receipt declared as a structure lets ESS 0.53.0 and 0.55.0 validate the predicate; story:typed-satisfaction-receipt carries that change, planned for wave 6.
+3. No need goes to the ESS repository while the typed receipt can express the rule.
