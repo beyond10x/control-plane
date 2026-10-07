@@ -1547,6 +1547,84 @@ async fn target_moved_past_uncertain_head_closes_intent() {
     );
 }
 
+/// An assignment holds its repository from its claim until it is merged or cancelled, so a
+/// queued assignment on the same repository waits. It records why, once: the assignment that
+/// holds the repository. Here the first workspace's assignment holds it with an unresolved
+/// publication while a second workspace queues work on the same repository.
+#[tokio::test]
+async fn queued_assignment_records_once_which_assignment_holds_its_repository() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let holder = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let other = fixture.root.join("second");
+    std::fs::create_dir(&other).unwrap();
+    let second_goal = {
+        let mut store = fixture.store.lock().await;
+        let workspace = store
+            .execute(
+                "RegisterWorkspace",
+                json!({"path":other,"name":"second workspace"}),
+                Actor::Operator,
+            )
+            .await
+            .unwrap()["published"][0]["payload"]["workspace_id"]
+            .clone();
+        store.execute("RegisterRepository",json!({"workspace_id":workspace,"path":fixture.root.join("repos/repo0"),"name":"repo0","common_dir":"","base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
+        let goal=store.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Return 42 in the shared repository","acceptance":"requested_answer passes on the reviewed merged target","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+        store
+            .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+            .await
+            .unwrap();
+        goal
+    };
+    supervisor.tick().await.unwrap();
+    let queued = rows(&fixture.store, "AssignmentList")
+        .await
+        .into_iter()
+        .find(|a| a["goal_id"] == second_goal)
+        .expect("the second workspace's goal queued an assignment");
+    assert_eq!(queued["state"], "Queued", "{queued}");
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let waiting = rows(&fixture.store, "AssignmentList")
+        .await
+        .into_iter()
+        .find(|a| a["assignment_id"] == queued["assignment_id"])
+        .unwrap();
+    assert_eq!(
+        (waiting["state"].as_str(), &waiting["attempt"]),
+        (Some("Queued"), &queued["attempt"]),
+        "{waiting}"
+    );
+    let history = fixture
+        .store
+        .lock()
+        .await
+        .activity_history(second_goal.as_str().unwrap())
+        .unwrap();
+    let recorded = history["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["assignment_id"] == queued["assignment_id"])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        recorded.len(),
+        1,
+        "ten fleet ticks over the waiting assignment recorded {} activities: {recorded:?}",
+        recorded.len()
+    );
+    let newest = &history["fleet"][queued["assignment_id"].as_str().unwrap()];
+    let holder_id = holder["assignment_id"].as_str().unwrap();
+    assert!(
+        newest["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(holder_id)),
+        "the waiting assignment's newest activity does not name {holder_id}, which holds the \
+         repository: {newest}"
+    );
+}
+
 #[tokio::test]
 async fn repository_execution_is_exclusive() {
     let fixture = fixture(1).await;

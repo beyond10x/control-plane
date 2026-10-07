@@ -269,11 +269,12 @@ fn remote_main(fixture: &Fixture) -> String {
 }
 
 /// A publisher whose merge becomes visible on the target after it exited (a merge queue, an
-/// auto-merge, a fetch mirror behind the push URL): the first candidate lands one fleet tick
-/// later than `published_candidate_still_reconciles` lands it. The reviewed, tested candidate
-/// of this assignment is then on its target, which is what the assignment exists to achieve.
+/// auto-merge, a fetch mirror behind the push URL): the candidate lands one fleet tick later
+/// than `published_candidate_still_reconciles` lands it, inside the grace period and before
+/// the intent is closed. The reviewed, tested candidate of this assignment is then on its
+/// target, and the open intent reconciles it to Merged.
 #[tokio::test]
-async fn candidate_landing_after_its_close_still_reconciles() {
+async fn candidate_landing_within_the_grace_window_still_reconciles() {
     let fixture = fixture().await;
     let supervisor = Supervisor::new(
         fixture.store.clone(),
