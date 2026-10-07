@@ -29,6 +29,14 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
     );
     String::from_utf8(output.stdout).unwrap()
 }
+/// A new workspace directory that holds no repository. Fixtures live under the source
+/// checkout's `.scratch`, so discovering a plain directory there would resolve to that checkout
+/// (detached in pull-request CI, where it has no `origin/HEAD`); a bare repository in the
+/// directory stops Git's discovery at it.
+fn context_directory(path: &Path) {
+    std::fs::create_dir(path).unwrap();
+    cmd(path, "git", &["init", "--bare", "--quiet"], &[]);
+}
 /// The goal's progress history (`Store::activity_history`), including its newest acceptance
 /// record, which bounded receipts record once per review.
 async fn history(store: &SharedStore) -> Value {
@@ -1556,7 +1564,7 @@ async fn queued_assignment_records_once_which_assignment_holds_its_repository() 
     let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
     let holder = rows(&fixture.store, "AssignmentList").await[0].clone();
     let other = fixture.root.join("second");
-    std::fs::create_dir(&other).unwrap();
+    context_directory(&other);
     let second_goal = {
         let mut store = fixture.store.lock().await;
         let workspace = store

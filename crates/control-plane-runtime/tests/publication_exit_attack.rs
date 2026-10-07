@@ -29,6 +29,15 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
     String::from_utf8(output.stdout).unwrap()
 }
 
+/// A new workspace directory that holds no repository. Fixtures live under the source
+/// checkout's `.scratch`, so discovering a plain directory there would resolve to that checkout
+/// (detached in pull-request CI, where it has no `origin/HEAD`); a bare repository in the
+/// directory stops Git's discovery at it.
+fn context_directory(path: &Path) {
+    std::fs::create_dir(path).unwrap();
+    cmd(path, "git", &["init", "--bare", "--quiet"], &[]);
+}
+
 async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
     store
         .lock()
@@ -332,7 +341,7 @@ async fn second_workspace_waits_quietly_while_a_closed_assignment_holds_the_repo
 
     // A second workspace registers the same repository and plans its own goal on it.
     let other = fixture.root.join("second");
-    std::fs::create_dir(&other).unwrap();
+    context_directory(&other);
     let second_goal = {
         let mut store = fixture.store.lock().await;
         let workspace = store
@@ -432,7 +441,7 @@ async fn cancelled_goal_frees_the_repository_for_a_second_workspace_in_one_tick(
     let first = rows(&fixture.store, "AssignmentList").await[0].clone();
     assert_eq!(first["state"], "Blocked", "{first}");
     let other = fixture.root.join("second");
-    std::fs::create_dir(&other).unwrap();
+    context_directory(&other);
     let second_goal = {
         let mut store = fixture.store.lock().await;
         let workspace = store
