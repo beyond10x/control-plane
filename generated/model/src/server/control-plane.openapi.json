@@ -8,8 +8,8 @@
     "x-ess-provenance": {
       "system": "controlplane",
       "specification_version": "v1",
-      "source_digest": "81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf",
-      "contract_digest": "slice-sha256/2:003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a"
+      "source_digest": "897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7",
+      "contract_digest": "slice-sha256/2:b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7"
     },
     "x-ess-reached-by": "network"
   },
@@ -2704,11 +2704,25 @@
         },
         "responses": {
           "202": {
-            "description": "Outcome `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.",
+            "description": "Outcomes `rebased` and `applied`: the branch the specification declares for this input. Events this branch emits are published to consumers and listed under `published`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/controlplane.host.RepairAssignment.applied.Response"
+                  "discriminator": {
+                    "mapping": {
+                      "applied": "#/components/schemas/controlplane.host.RepairAssignment.applied.Response",
+                      "rebased": "#/components/schemas/controlplane.host.RepairAssignment.rebased.Response"
+                    },
+                    "propertyName": "outcome"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.RepairAssignment.rebased.Response"
+                    },
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.RepairAssignment.applied.Response"
+                    }
+                  ]
                 }
               }
             }
@@ -7093,6 +7107,9 @@
           },
           "implementor_run": {
             "type": "string"
+          },
+          "base_revision": {
+            "type": "string"
           }
         },
         "required": [
@@ -7166,6 +7183,47 @@
           "outcome",
           "published",
           "error"
+        ],
+        "type": "object"
+      },
+      "controlplane.host.RepairAssignment.rebased.Response": {
+        "additionalProperties": false,
+        "description": "Taken when `defined(base_revision)` holds of the input. A `controlplane.host.Assignment` has moved to `Implementing`, along `repair`. The instance is the one `assignment_id` names. Emits `RepairAssignmentApplied`, published to consumers and listed under `published`.",
+        "properties": {
+          "outcome": {
+            "const": "rebased",
+            "description": "Which declared outcome the command took."
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "items": false,
+            "maxItems": 1,
+            "minItems": 1,
+            "prefixItems": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "event": {
+                    "const": "controlplane.host.RepairAssignmentApplied",
+                    "type": "string"
+                  },
+                  "payload": {
+                    "$ref": "#/components/schemas/controlplane.host.RepairAssignmentApplied.Event"
+                  }
+                },
+                "required": [
+                  "event",
+                  "payload"
+                ],
+                "type": "object"
+              }
+            ],
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published"
         ],
         "type": "object"
       },

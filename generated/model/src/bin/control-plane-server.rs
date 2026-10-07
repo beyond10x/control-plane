@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf
-// contract digest 003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a
+// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
+// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral generated server. Durable storage and production authentication remain ports.

@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 81c7f5e0230fee0d706b0ec2528b81407c999295df8491e6ebc040ba5bdb6bdf
-// contract digest 003b16f133632f8fde01042faa8c7c30286cba0b098ee1c71da99eb0004dbf1a
+// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
+// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -835,6 +835,31 @@ where
 {
     fn repair_assignment(&mut self, input: crate::host::RepairAssignment) -> Result<crate::host::RepairAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // `rebased`: an accepting branch, in declaration order.
+        if decided(Some(Some(&input.base_revision).and_then(|value| value.as_ref()).is_some()), "controlplane.host.RepairAssignment")? {
+            let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+                return Ok(crate::host::RepairAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+            };
+            let _ = &held;
+            let held_state = held.state;
+            let before = held.data.clone();
+            let moved = match held.refine() {
+                crate::host::AnyAssignment::Blocked(instance) => crate::host::AnyAssignment::Implementing(instance.repair()),
+                crate::host::AnyAssignment::Reviewing(instance) => crate::host::AnyAssignment::Implementing(instance.repair()),
+                _ => return Ok(crate::host::RepairAssignmentOutcome::WrongState { error: crate::host::AssignmentStateConflict { state: held_state } }),
+            };
+            let mut next = moved.snapshot();
+            next.data.attempt = before.attempt + 1;
+            next.data.reason = input.reason.clone();
+            next.data.implementor_run = input.implementor_run.clone();
+            next.data.reviewer_run = "".to_owned();
+            next.data.base_revision = match input.base_revision.clone() { Some(value) => value, None => "".to_owned() };
+            next.data.test_revision = "".to_owned();
+            next.data.review_revision = "".to_owned();
+            let answer = crate::host::RepairAssignmentOutcome::Rebased { repair_assignment_applied: crate::host::RepairAssignmentApplied { assignment_id: input.assignment_id.clone(), reason: input.reason.clone(), implementor_run: input.implementor_run.clone() } };
+            AssignmentStorage::put(&mut self.ports, next);
+            return Ok(answer);
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::RepairAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
