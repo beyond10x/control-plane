@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T22:53:54Z",
+  "actor": "human:timo",
+  "artifact": "story:repair-on-moved-target",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "correction 1 in cp-wave5-repair-on-moved-target (unit e184bf9)",
+    "reference": "before the correction: the six adversary cases red (0 passed, 6 failed) and the four new fleet block cases red; after: package gate exit 0 on every step (validate, generated-check, spec-history-check, fmt, clippy, 316 tests, conformance 180 passed), attack binary 6 passed with and without GIT_CEILING_DIRECTORIES, acceptance-check exit 0. No mutation run. Verdict VERIFIED"
+  }
+}

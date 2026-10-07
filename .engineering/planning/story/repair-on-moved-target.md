@@ -20,7 +20,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 4}
@@ -45,3 +45,8 @@ An assignment whose publication was closed as not published after its target mov
 ## Scope
 
 Inferred: ess/domains/host.yaml, generated/, ess/spec-acknowledgements.json, crates/control-plane-core/src/guards.rs, crates/control-plane-runtime/src/fleet.rs (`deliver`), crates/control-plane-runtime/tests/fleet.rs.
+
+## Pre-existing findings (correction 1, not fixed here)
+
+- `deliver` checks that the AEP story is active and scoped only after RepairAssignment, so a resumed assignment whose story left active, or has no scope, spends an attempt on every tick until its attempts run out.
+- A target force-pushed to unrelated history makes `observe_merge` fail on `git merge-base` (exit 1); the publication intent stays Uncertain ("Publication observation unavailable") and never closes.
