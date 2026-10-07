@@ -21,7 +21,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 2
+revision: 3
 ---
 ## Outcome
 
@@ -65,8 +65,8 @@ SatisfyGoal's precondition "the receipt names the goal's current revision" is de
 
 - ess/domains/host.yaml declares the receipt structure, the conversion to the Goal's text field and the `stale-revision` outcome of SatisfyGoal, and `ess specify validate --path ess --strict-requires` passes.
 - `satisfy_with_a_receipt_for_an_old_revision_is_a_declared_refusal`: SatisfyGoal with a receipt naming an earlier revision gets the declared `stale-revision` outcome from the generated behaviour, and the goal stays Running.
-- `recorded_satisfactions_still_replay`: the recorded-history fixture opens and every view equals its recorded views after the change.
-- The change ids `ess verify diff` reports are acknowledged in ess/spec-acknowledgements.json (`spec-history-check`), and the synthesized conformance scenarios for the new outcome pass (`conformance`).
+- `recorded_satisfactions_still_replay`: the recorded history fixture opens and every view equals its recorded views after the change.
+- The change ids `ess verify diff` reports are acknowledged in ess/spec-acknowledgements.json (`cargo run --locked -p control-plane-xtask -- spec-history-check`), and the synthesized conformance scenarios for the new outcome pass (`cargo run --locked -p control-plane-xtask -- conformance`).
 - The revision comparison in guards.rs for SatisfyGoal is removed once the generated rule covers it, and story:acceptance-edit-ordering's cases still pass.
 
 ## Scope

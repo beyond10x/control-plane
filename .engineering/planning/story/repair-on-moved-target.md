@@ -20,7 +20,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-07T02:47:22Z", actor: "human:timo", revision: 4}
@@ -39,8 +39,8 @@ An assignment whose publication was closed as not published after its target mov
 
 - The specification declares how a repair takes a fresh base (an input of RepairAssignment or a separate command) in ess/domains/host.yaml, and it validates (`ess specify validate --path ess --strict-requires`, a `task check` step).
 - `repair_after_moved_target_takes_the_current_head`: after a close because the target moved, a repair records the target's current head as the assignment's base, and the next attempt creates a second publication intent.
-- `repair_on_unchanged_target_keeps_its_base`: a repair after a grace-period close on an unchanged target keeps the claimed base.
-- The change ids `ess verify diff` reports are acknowledged in ess/spec-acknowledgements.json (`spec-history-check`, a `task check` step).
+- `repair_on_unchanged_target_keeps_its_base`: a repair after a close at the end of the grace period on an unchanged target keeps the claimed base.
+- The change ids `ess verify diff` reports are acknowledged in ess/spec-acknowledgements.json (`cargo run --locked -p control-plane-xtask -- spec-history-check`, a `task check` step).
 
 ## Scope
 

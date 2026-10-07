@@ -20,7 +20,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 2
+revision: 3
 ---
 ## Outcome
 
@@ -39,7 +39,7 @@ control-plane runs on the newest ESS release, 0.55.0: the specification manifest
 
 - `ess specify validate --path ess --strict-requires` passes with `requires: ess 0.55.0`, and CI installs 0.55.0 with its published checksum.
 - The runtime's authoring reference names 0.55.0 and embeds that release's schema; the planner test above passes with 0.55.0 first on PATH.
-- `generated-check`, `conformance` and `spec-history-check` pass with 0.55.0; every change `ess verify diff` reports between the two compiled models is acknowledged or shown to be none.
+- `cargo run --locked -p control-plane-xtask -- generated-check`, `cargo run --locked -p control-plane-xtask -- conformance` and `cargo run --locked -p control-plane-xtask -- spec-history-check` pass with 0.55.0; every change `ess verify diff` reports between the two compiled models is acknowledged or shown to be none.
 
 ## Scope
 
