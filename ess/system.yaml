@@ -1,0 +1,5 @@
+format: ess/22
+system: controlplane
+version: v1
+domains:
+  - controlplane.host

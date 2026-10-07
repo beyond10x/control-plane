@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:17:16Z",
+  "actor": "human:timo",
+  "artifact": "story:verification",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check integrated dashboard/fleet: 159 real durable conformance scenarios passed, no skipped/unsupported/errors; generated contracts match; 43 runtime tests include observed two-repository delivery and independent adversary regressions; 24 app tests and browser live/form retention checks passed"
+  }
+}

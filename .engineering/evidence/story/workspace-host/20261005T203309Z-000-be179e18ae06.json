@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T20:33:09Z",
+  "actor": "human:timo",
+  "artifact": "story:workspace-host",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo test -p control-plane-core: baseline exit 101; 0 passed, 3 failed",
+    "reference": "crates/control-plane-core/src/tests.rs: durability, idempotency and process exclusion"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:02:19Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-console",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p control-plane-app: 12 passed, zero failures or skips",
+    "reference": "git:90430d6"
+  }
+}

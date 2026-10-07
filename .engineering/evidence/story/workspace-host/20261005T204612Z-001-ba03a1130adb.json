@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T20:46:12Z",
+  "actor": "human:timo",
+  "artifact": "story:workspace-host",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: original and independent red cases now pass with assertions unchanged",
+    "reference": "review-result:workspace-host-review-2"
+  }
+}

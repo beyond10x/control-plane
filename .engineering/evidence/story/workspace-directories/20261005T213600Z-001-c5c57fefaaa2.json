@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:36:00Z",
+  "actor": "human:timo",
+  "artifact": "story:workspace-directories",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Core27pass; app14+2pass; durable ESS conformance159pass0other",
+    "reference": "git:1c69a6f"
+  }
+}

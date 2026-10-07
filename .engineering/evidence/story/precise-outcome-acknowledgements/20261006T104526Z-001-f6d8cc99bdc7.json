@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T10:45:26Z",
+  "actor": "human:timo",
+  "artifact": "story:precise-outcome-acknowledgements",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo test --locked -p control-plane-xtask spec_history and the adversary's case, at base 9691f41 (the adversary's harness and the unit's red run) and at unit head 921474e",
+    "reference": "VERIFIED: at 9691f41 the terminal_goal_edits_ack_attack case passed the gate with satisfied and cancelled swapped and answering GoalNotFound (3 acknowledged); at 921474e added_outcome_acknowledgement_binds_its_condition passes and the gate refuses condition, error, field-update, position and dropped-sibling changes (bin 18, attack 14, pass-2 attack 12, spec_history_attack 16, spec_history_pass2_attack 12 passed)"
+  }
+}

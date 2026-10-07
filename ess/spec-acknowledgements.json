@@ -1,0 +1,81 @@
+{
+  "format": "control-plane-spec-acknowledgements/2",
+  "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+  "acknowledged": [
+    {
+      "id": "command/controlplane.host.UpdateGoal/outcome-condition-changed/applied",
+      "change": {
+        "category": "command",
+        "subject": "controlplane.host.UpdateGoal",
+        "changed": {
+          "kind": "outcome-condition-changed",
+          "outcome": "applied",
+          "before": "otherwise",
+          "after": "when subject state is Paused or Running"
+        }
+      },
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "Replay answers differently only for a recorded UpdateGoal that was applied to a Satisfied or Cancelled goal; it now answers satisfied or cancelled. Stored history holds none: the operator's store (3602 decisions, 8 UpdateGoal, none on a finished goal) opened with this change on 2026-10-06, and the committed recorded history replayed to its committed views before it was re-recorded."
+    },
+    {
+      "id": "command/controlplane.host.UpdateGoal/outcome-added/satisfied",
+      "change": {
+        "category": "command",
+        "subject": "controlplane.host.UpdateGoal",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "satisfied"
+        }
+      },
+      "outcome": {
+        "name": "satisfied",
+        "condition": {
+          "kind": "subject_state",
+          "state": "Satisfied",
+          "predicate": null
+        },
+        "test_strategy": "construct_input_in_state",
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict"
+      },
+      "command_outcomes": [
+        "applied",
+        "satisfied",
+        "cancelled",
+        "not-found"
+      ],
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Satisfied goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
+    },
+    {
+      "id": "command/controlplane.host.UpdateGoal/outcome-added/cancelled",
+      "change": {
+        "category": "command",
+        "subject": "controlplane.host.UpdateGoal",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "cancelled"
+        }
+      },
+      "outcome": {
+        "name": "cancelled",
+        "condition": {
+          "kind": "subject_state",
+          "state": "Cancelled",
+          "predicate": null
+        },
+        "test_strategy": "construct_input_in_state",
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict"
+      },
+      "command_outcomes": [
+        "applied",
+        "satisfied",
+        "cancelled",
+        "not-found"
+      ],
+      "baseline": "eaa37d4057b4c6b90c6cebccefa28dca4abd411e",
+      "reason": "No stored decision carries a new outcome. It answers only UpdateGoal on a Cancelled goal, which the applied condition change takes out of applied, and stored history holds no such decision (see the applied entry)."
+    }
+  ]
+}

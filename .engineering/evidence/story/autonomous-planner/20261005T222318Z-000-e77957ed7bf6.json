@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:23:18Z",
+  "actor": "human:timo",
+  "artifact": "story:autonomous-planner",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "RED process_exit_retains_actual_status_for_syntax_recovery: real AEP usage error lost structured exit status; live goal also blocked on artifact --help. GREEN typed ProcessExit preserves observed code/stdout/stderr while cancellation remains a distinct fatal error."
+  }
+}

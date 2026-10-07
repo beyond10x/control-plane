@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T06:28:21Z",
+  "actor": "human:timo",
+  "artifact": "story:console-component-tests",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator check of correction 2 (unit head f1de627): cargo test -p control-plane-xtask --test frontend_check --test frontend_check_attack --test frontend_check_pass2_attack, then frontend-check",
+    "reference": "VERIFIED: 7 + 9 + 6 passed, 0 failed; frontend-check passed; pass-2 case inverted_acceptance_test_fails_the_gate now refuses a test.fails acceptance test"
+  }
+}

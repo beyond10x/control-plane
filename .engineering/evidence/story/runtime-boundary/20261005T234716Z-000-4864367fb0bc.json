@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T23:47:16Z",
+  "actor": "human:timo",
+  "artifact": "story:runtime-boundary",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Native Loom missing-file and invalid-ESS recovery regression; red before correction, 33 planner scenarios green after correction",
+    "reference": ".scratch/ess-refusal-green.log"
+  }
+}

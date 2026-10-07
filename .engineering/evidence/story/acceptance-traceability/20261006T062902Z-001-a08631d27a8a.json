@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T06:29:02Z",
+  "actor": "human:timo",
+  "artifact": "story:acceptance-traceability",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator check of correction 2 (unit head a428e6f): cargo test -p control-plane-xtask --test acceptance_traceability --test acceptance_traceability_attack --test acceptance_traceability_pass2_attack",
+    "reference": "VERIFIED: 3 + 7 + 4 passed, 0 failed; unbalanced_fence_does_not_exempt_a_story now refuses a story ending in an open fence"
+  }
+}

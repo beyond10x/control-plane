@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:15:46Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-observability",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Integrated activity normalization, byte paging and fleet details: 43 runtime plus 24 app tests pass; independent activity review ran all 8 normalization regressions; full task check passes"
+  }
+}

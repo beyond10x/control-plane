@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T10:30:32Z",
+  "actor": "human:timo",
+  "artifact": "story:console-projection",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo test --locked -p control-plane-app --lib with the 8 acceptance names, at base 9691f41 and at unit head 35afdbb",
+    "reference": "VERIFIED: new behaviour the base cannot show; the fields do not exist at 9691f41 and the tests written first failed there (9 failed, e.g. server_time missing, planner_activity null); at 35afdbb 8 passed, app 43+2+3+3 and core 44+8 passed with --no-fail-fast"
+  }
+}

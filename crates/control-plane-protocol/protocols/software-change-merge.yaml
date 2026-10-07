@@ -1,0 +1,59 @@
+format: protocol/1
+protocol:
+  id: software.change.merge
+  revision: 1
+  description: Verify, independently review and observe the authorized merge of one candidate.
+artifacts:
+  implementation:
+    description: The exact candidate bound to the target base and verification context.
+evidence_kinds:
+  test_result:
+    description: Required checks actually run by the host, pass or fail.
+  independent_code_review:
+    description: Host-admitted review from a separate execution context, approved or rejected.
+  merge_observation:
+    description: Host observation of the candidate on its intended target, merged or not_merged.
+claims:
+  tests.pass:
+    true_when:
+      evidence: {kind: test_result, result: pass, subject: implementation}
+  implementation.reviewed:
+    true_when:
+      evidence: {kind: independent_code_review, result: approved, subject: implementation}
+  implementation.verified:
+    true_when:
+      all:
+        - claim: tests.pass
+        - claim: implementation.reviewed
+  repository.merged:
+    true_when:
+      evidence: {kind: merge_observation, result: merged, subject: implementation}
+actions:
+  repository.inspect:
+    effect: read
+  repository.edit:
+    effect: write
+  tests.run:
+    effect: read
+    may_produce:
+      - evidence: test_result
+  review.request:
+    effect: read
+    may_produce:
+      - evidence: independent_code_review
+  repository.merge:
+    effect: write
+    precondition:
+      claim: implementation.verified
+    requires:
+      - capability: repository.merge
+  repository.observe:
+    effect: read
+    may_produce:
+      - evidence: merge_observation
+outcomes:
+  accepted:
+    requires:
+      all:
+        - claim: implementation.verified
+        - claim: repository.merged

@@ -1,0 +1,30 @@
+[workspace]
+members = ["crates/*"]
+exclude = ["generated/model"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/beyond10x/control-plane"
+
+[workspace.dependencies]
+controlplane-model = { package = "controlplane", path = "generated/model", features = ["server"] }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "6c6bbcc9c0501c3c222855f3568801f2f30ea25c" }
+eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog", rev = "6c6bbcc9c0501c3c222855f3568801f2f30ea25c" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "=4.6.7", features = ["derive"] }
+uuid = { version = "=1.26.1", features = ["v4"] }
+time = { version = "=0.3.45", features = ["formatting"] }
+fs2 = "0.4"
+tempfile = "3"
+
+[profile.dev]
+debug = 0
+
+[profile.test]
+debug = 0

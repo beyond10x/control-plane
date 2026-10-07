@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T20:46:12Z",
+  "actor": "human:timo",
+  "artifact": "story:workspace-host",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test --locked -p control-plane-core --lib: 17 passed, 0 failed, exit 0",
+    "reference": "review-result:workspace-host-review-2"
+  }
+}

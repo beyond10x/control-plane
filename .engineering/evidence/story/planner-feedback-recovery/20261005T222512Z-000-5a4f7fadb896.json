@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T22:25:12Z",
+  "actor": "human:timo",
+  "artifact": "story:planner-feedback-recovery",
+  "kind": "story",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "RED live API and durable event history: planner Blocked on AEP args artifact --help; repeated unchanged story reads. RED process_exit_retains_actual_status_for_syntax_recovery reproduced erased exit status; GREEN typed exit preserves code 2 and keeps cancellation fatal."
+  }
+}

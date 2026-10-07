@@ -1,0 +1,1773 @@
+use control_plane_core::{Actor, Store};
+use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
+use serde_json::{Value, json};
+use std::{
+    collections::VecDeque,
+    path::Path,
+    process::Command,
+    sync::{Arc, Mutex},
+};
+use tokio::sync::Notify;
+
+struct Scripted(Mutex<VecDeque<Value>>);
+
+/// What the operator inspects for the goal: its recorded receipt and the progress history
+/// (`Store::activity_history`) that bounded receipts no longer repeat.
+async fn evidence(store: &tokio::sync::Mutex<Store>) -> String {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0].clone();
+    let history = store
+        .activity_history(goal["goal_id"].as_str().unwrap())
+        .unwrap();
+    format!("{}\n{history}", goal["planning_receipt"].as_str().unwrap())
+}
+
+/// The goal's newest activities, oldest first.
+async fn activity(store: &tokio::sync::Mutex<Store>) -> Vec<Value> {
+    let store = store.lock().await;
+    let goal = store.query("GoalList").unwrap()[0]["goal_id"].clone();
+    store.activity_history(goal.as_str().unwrap()).unwrap()["activity"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn missing_reads_are_observations_and_planning_can_continue() {
+    let (_, store, config, _, _) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"read","paths":["ess/domains/not-created.yaml"]}),
+        json!({"action":"read_range","path":"ess/domains/not-created.yaml","start_line":1,"line_count":20}),
+        json!({"action":"read_bytes","path":"ess/domains/not-created.yaml","start_byte":0,"byte_count":100}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Missing files did not terminate the valid plan."}),
+        json!({"approved":true,"reason":"Existing scoped story meets acceptance."}),
+    ]))));
+    let report = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model)
+        .tick()
+        .await
+        .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(
+        evidence(&store)
+            .await
+            .contains("File not found: ess/domains/not-created.yaml")
+    );
+}
+
+#[tokio::test]
+async fn no_change_is_not_progress() {
+    let (_, store, config, _, _) = setup(true).await;
+    let write = json!({"action":"write_specification","path":"ess/system.yaml","contents":"format: ess/22\nsystem: demo\nversion: v1\ndomains: [demo.item]\n"});
+    let mut actions = VecDeque::from(vec![write; 4]);
+    actions.push_back(json!({"action":"finish","stories":["story:deliver"],"summary":"Identical writes are not progress."}));
+    actions.push_back(json!({"approved":true,"reason":"Existing plan."}));
+    let report = Supervisor::new(
+        store,
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(Scripted(Mutex::new(actions))),
+    )
+    .tick()
+    .await
+    .unwrap();
+    assert_eq!(report.queued, 0, "{report:?}");
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("4 unchanged observations")),
+        "{report:?}"
+    );
+}
+
+#[tokio::test]
+async fn empty_repository_receives_executable_ess_bootstrap_guidance() {
+    let (fixture, store, config, _, _) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    run(&repo, "git", &["rm", "-r", "ess"], &[]);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Exercise specification bootstrap"],
+        &[],
+    );
+    struct Bootstrap(Mutex<usize>);
+    impl AgentModel for Bootstrap {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            if request.role == "critic" {
+                return Ok(json!({"approved":true,"reason":"Bootstrap validates."}));
+            }
+            assert!(request.prompt.contains("Admitted specification root: ess"));
+            assert!(request.prompt.contains("format: ess/22"));
+            assert!(request.prompt.contains("identity:"));
+            let mut step = self.0.lock().unwrap();
+            let response = match *step {
+                0 => {
+                    json!({"action":"write_specification","path":"ess/system.yaml","contents":"format: ess/22\nsystem: demo\nversion: v1\ndomains: [demo.item]\n"})
+                }
+                1 => {
+                    json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Bootstrapped real ESS before selecting scoped story."})
+                }
+            };
+            *step += 1;
+            Ok(response)
+        }
+    }
+    let report = Supervisor::new(
+        store,
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(Bootstrap(Mutex::new(0))),
+    )
+    .tick()
+    .await
+    .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+}
+impl AgentModel for Scripted {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        let next = self
+            .0
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("unexpected idle model call");
+        if request.role == "critic" {
+            assert!(request.execution_context.starts_with("critic-"));
+        }
+        Ok(next)
+    }
+}
+
+fn run(root: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> String {
+    let out = Command::new(program)
+        .args(args)
+        .envs(env.iter().cloned())
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{program} {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap()
+}
+
+struct Fixture(std::path::PathBuf);
+impl Fixture {
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+// Retain managed fixture records and archives for inspection; never let TempDir
+// recursively delete linked Git worktrees behind the registry's back.
+async fn setup(
+    existing: bool,
+) -> (
+    Fixture,
+    Arc<tokio::sync::Mutex<Store>>,
+    RuntimeConfig,
+    String,
+    String,
+) {
+    let scratch = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/planner");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let temp = Fixture(tempfile::tempdir_in(scratch).unwrap().keep());
+    let repo = temp.path().join("repos/demo");
+    std::fs::create_dir_all(&repo).unwrap();
+    run(&repo, "git", &["init", "--initial-branch=main"], &[]);
+    run(&repo, "git", &["config", "user.name", "Fixture"], &[]);
+    run(
+        &repo,
+        "git",
+        &["config", "user.email", "fixture@example.invalid"],
+        &[],
+    );
+    std::fs::write(repo.join("README.md"), "# Demo\n").unwrap();
+    std::fs::create_dir_all(repo.join("ess/domains")).unwrap();
+    std::fs::write(
+        repo.join("ess/system.yaml"),
+        "format: ess/22\nsystem: demo\nversion: v1\ndomains: [demo.item]\n",
+    )
+    .unwrap();
+    std::fs::write(repo.join("ess/domains/item.yaml"),"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n").unwrap();
+    let config = RuntimeConfig {
+        environment: vec![
+            (
+                "XDG_STATE_HOME".into(),
+                temp.path().join("state").display().to_string(),
+            ),
+            (
+                "XDG_CONFIG_HOME".into(),
+                temp.path().join("config").display().to_string(),
+            ),
+        ],
+        commit_command: vec!["git".into(), "commit".into(), "-m".into()],
+        ..RuntimeConfig::default()
+    };
+    let profile = temp.path().join("profile.toml");
+    std::fs::write(&profile,"version = 1\nname = 'fixture'\nexpire_after_seconds = 604800\nprotect_workspace_root = false\n").unwrap();
+    run(
+        &repo,
+        "worktree",
+        &[
+            "activate",
+            "--profile",
+            profile.to_str().unwrap(),
+            "--workspace",
+            temp.path().join("repos").to_str().unwrap(),
+        ],
+        &config.environment,
+    );
+    if existing {
+        run(
+            &repo,
+            "aep",
+            &[
+                "plan",
+                "reverse",
+                "init",
+                "--protocols",
+                &config.aep_protocols,
+                "--profile",
+                "development.standard",
+            ],
+            &config.environment,
+        );
+        run(
+            &repo,
+            "aep",
+            &[
+                "plan",
+                "artifact",
+                "new",
+                "story",
+                "deliver",
+                "--title",
+                "Deliver requested change",
+            ],
+            &config.environment,
+        );
+        run(
+            &repo,
+            "aep",
+            &[
+                "plan",
+                "artifact",
+                "scope",
+                "story:deliver",
+                "--add",
+                "src/",
+                "--inferred",
+            ],
+            &config.environment,
+        );
+        run(
+            &repo,
+            "aep",
+            &[
+                "plan",
+                "artifact",
+                "move",
+                "story:deliver",
+                "--to",
+                "proposed",
+            ],
+            &config.environment,
+        );
+        run(
+            &repo,
+            "aep",
+            &[
+                "plan",
+                "artifact",
+                "move",
+                "story:deliver",
+                "--to",
+                "active",
+            ],
+            &config.environment,
+        );
+    }
+    run(&repo, "git", &["add", "."], &[]);
+    run(&repo, "git", &["commit", "-m", "fixture"], &[]);
+    let mut store = Store::open(temp.path().join("host.sqlite3")).await.unwrap();
+    let workspace=store.register_workspace(&repo,"demo").await.unwrap()["published"][0]["payload"]["workspace_id"].as_str().unwrap().to_owned();
+    let goal=store.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Deliver requested change","acceptance":"Required checks pass after reviewed merge","max_workers":3,"max_attempts":3,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].as_str().unwrap().to_owned();
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let repository = store.query("RepositoryRegistrationList").unwrap()[0]["repository_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    (
+        temp,
+        Arc::new(tokio::sync::Mutex::new(store)),
+        config,
+        goal,
+        repository,
+    )
+}
+
+#[tokio::test]
+async fn existing_backlog_is_not_duplicated() {
+    let (_temp, store, config, _goal, repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers goal."}),
+        json!({"approved":true,"reason":"Current acceptance and scope cover the goal."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let first = supervisor.tick().await.unwrap();
+    assert_eq!(first.queued, 1, "{first:?}");
+    let rows = store.lock().await.query("AssignmentList").unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(rows[0]["story_id"], format!("{repo}::story:deliver"));
+    assert!(!rows[0]["candidate"].as_str().unwrap().is_empty());
+    assert_eq!(supervisor.tick().await.unwrap().queued, 0);
+    assert!(model.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn aep_prefix_help_is_read_only() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["--help"],"body":null}),
+        json!({"action":"aep","args":["artifact","--help"],"body":null}),
+        json!({"action":"aep","args":["plan","artifact","new","--help"],"body":null}),
+        json!({"action":"aep","args":["aep","plan","artifact","scope","-h"],"body":null}),
+        json!({"action":"aep","args":["new","--help"],"body":null}),
+        json!({"action":"aep","args":["scope","-h"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Read CLI help and reused existing work."}),
+        json!({"approved":true,"reason":"Existing story remains authoritative."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(model.0.lock().unwrap().is_empty());
+    assert!(evidence(&store).await.contains("Usage: aep plan artifact"));
+}
+
+#[tokio::test]
+async fn aep_help_does_not_require_valid_ess_but_finish_still_does() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::write(repo.join("ess/system.yaml"), "invalid: specification\n").unwrap();
+    run(&repo, "git", &["add", "ess/system.yaml"], &[]);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "specification needs repair"],
+        &[],
+    );
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","--help"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Validation must still refuse."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan."}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Unchanged invalid plan must exhaust feedback budget."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        model.0.lock().unwrap().is_empty(),
+        "Help should reach Finish: {report:?}"
+    );
+    assert_eq!(report.queued, 0);
+    assert!(!report.blockers.is_empty());
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("4 unchanged observations")),
+        "{report:?}"
+    );
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+}
+
+#[tokio::test]
+async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["story","show","operator-console"],"body":null}),
+        json!({"action":"aep","args":["show","story:deliver"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Corrected noun-first CLI syntax."}),
+        json!({"approved":true,"reason":"Existing story remains authoritative."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(model.0.lock().unwrap().is_empty());
+    let receipt = evidence(&store).await;
+    assert!(receipt.contains("AEP syntax feedback"));
+    assert!(receipt.contains("operator-console"));
+}
+
+#[tokio::test]
+async fn command_syntax_feedback_allows_correction() {
+    struct Recovering(Mutex<usize>);
+    impl AgentModel for Recovering {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut calls = self.0.lock().unwrap();
+            let answer = match *calls {
+                0 => json!({"action":"aep","args":["list","--not-a-real-option"],"body":null}),
+                1 => {
+                    assert!(request.prompt.contains("--not-a-real-option"));
+                    assert!(request.prompt.contains("AEP syntax feedback"));
+                    assert!(request.prompt.contains("Admitted grammar"));
+                    assert!(request.prompt.contains("Usage:"));
+                    json!({"action":"aep","args":["new","story"],"body":null})
+                }
+                2 => {
+                    assert!(request.prompt.contains("required arguments"));
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Corrected syntax and retained existing story."})
+                }
+                3 => json!({"approved":true,"reason":"Existing authoritative story is unchanged."}),
+                _ => panic!("unexpected model retry"),
+            };
+            *calls += 1;
+            Ok(answer)
+        }
+    }
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Recovering(Mutex::new(0)));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(*model.0.lock().unwrap(), 4);
+    let history = activity(&store).await;
+    let failed = history
+        .iter()
+        .filter(|event| event["action"] == "aep.syntax_rejected")
+        .collect::<Vec<_>>();
+    assert_eq!(failed.len(), 2);
+    assert!(failed.iter().all(|event| event["status"] == "failed"));
+}
+
+#[tokio::test]
+async fn unchanged_reads_preserve_action_history() {
+    struct NeedsMemory(Mutex<Vec<String>>);
+    impl AgentModel for NeedsMemory {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            assert!(request.prompt.contains("Deliver requested change"));
+            if request.role == "critic" {
+                return Ok(json!({"approved":true,"reason":"Existing story is sufficient."}));
+            }
+            assert!(
+                request
+                    .prompt
+                    .contains("Required checks pass after reviewed merge")
+            );
+            let mut prompts = self.0.lock().unwrap();
+            prompts.push(request.prompt.clone());
+            if request
+                .prompt
+                .contains("Repeated unchanged observation (2)")
+            {
+                assert!(request.prompt.contains("Recent attempted actions"));
+                assert!(request.prompt.contains("README.md"));
+                assert!(request.prompt.contains("Choose new evidence"));
+                assert_ne!(prompts[prompts.len() - 1], prompts[prompts.len() - 2]);
+                Ok(
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Repeated read adds no evidence; existing plan is ready."}),
+                )
+            } else {
+                Ok(json!({"action":"read","paths":["README.md"]}))
+            }
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 6;
+    let model = Arc::new(NeedsMemory(Mutex::new(Vec::new())));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(model.0.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn unchanged_aep_reads_stop_with_explicit_stall_reason() {
+    struct Repeats(Mutex<usize>);
+    impl AgentModel for Repeats {
+        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            *self.0.lock().unwrap() += 1;
+            Ok(json!({"action":"aep","args":["show","story:deliver"],"body":null}))
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 6;
+    let model = Arc::new(Repeats(Mutex::new(0)));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("planner stalled after 4 unchanged observations")),
+        "{report:?}"
+    );
+    assert_eq!(*model.0.lock().unwrap(), 4);
+}
+
+#[tokio::test]
+async fn alternating_reads_receive_stall_feedback() {
+    struct Alternates(Mutex<usize>);
+    impl AgentModel for Alternates {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            if request.role == "critic" {
+                return Ok(
+                    json!({"approved":true,"reason":"Existing scoped story satisfies the goal."}),
+                );
+            }
+            let mut calls = self.0.lock().unwrap();
+            *calls += 1;
+            if request
+                .prompt
+                .contains("Repeated unchanged observation (2)")
+            {
+                assert!(request.prompt.contains("Recent attempted actions"));
+                assert!(request.prompt.contains("README.md"));
+                assert!(request.prompt.contains("ess/system.yaml"));
+                Ok(
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Alternating unchanged reads add no evidence."}),
+                )
+            } else {
+                Ok(
+                    json!({"action":"read","paths":[if *calls % 2 == 1 {"README.md"} else {"ess/system.yaml"}]}),
+                )
+            }
+        }
+    }
+    let (_fixture, store, mut config, _goal, _repo) = setup(true).await;
+    config.max_steps = 7;
+    let model = Arc::new(Alternates(Mutex::new(0)));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(*model.0.lock().unwrap(), 4);
+}
+
+#[tokio::test]
+async fn syntax_recovery_has_an_attempt_budget() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let bad = json!({"action":"aep","args":["list","--not-a-real-option"],"body":null});
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        bad.clone(),
+        bad.clone(),
+        bad,
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Must not be reached."}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|reason| reason.contains("AEP syntax error budget exhausted")),
+        "{report:?}"
+    );
+    assert_eq!(model.0.lock().unwrap().len(), 1);
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+}
+
+#[tokio::test]
+async fn prefixed_aep_authority_and_path_violations_are_not_syntax_retries() {
+    for args in [
+        json!(["artifact", "list", "--store", "elsewhere"]),
+        json!(["aep", "plan", "artifact", "new", "evidence", "forged"]),
+        json!([
+            "plan",
+            "artifact",
+            "move",
+            "story:deliver",
+            "--to",
+            "implemented"
+        ]),
+    ] {
+        let (_fixture, store, config, _goal, _repo) = setup(true).await;
+        let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+            json!({"action":"aep","args":args,"body":null}),
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Must not be reached."}),
+        ]))));
+        let supervisor = Supervisor::new(
+            store.clone(),
+            Arc::new(Notify::new()),
+            config,
+            model.clone(),
+        );
+        let report = supervisor.tick().await.unwrap();
+        assert!(!report.blockers.is_empty());
+        assert_eq!(model.0.lock().unwrap().len(), 1);
+        assert_eq!(
+            store.lock().await.query("AssignmentList").unwrap(),
+            json!([])
+        );
+    }
+}
+
+#[tokio::test]
+async fn goal_drives_plan() {
+    let (_temp, store, config, _goal, _repo) = setup(false).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","deliver","--title","Deliver requested change","--from","-"],"body":"## Acceptance\nNamed scenario: delivery_works.\n## Scope\nsrc/\n"}),
+        json!({"action":"aep","args":["scope","story:deliver","--add","src/","--inferred"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"New ESS-backed work."}),
+        json!({"approved":true,"reason":"Validated specification and named scenario."}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap()[0]["goal_revision"],
+        1
+    );
+}
+
+#[tokio::test]
+async fn goal_completion_requires_evidence() {
+    let (_temp, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":[],"summary":"Nothing else to plan."}),
+        json!({"approved":true,"reason":"No further proposal."}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 0);
+    assert_eq!(
+        store.lock().await.query("GoalList").unwrap()[0]["state"],
+        "Running"
+    );
+}
+
+#[tokio::test]
+async fn rejected_plan_is_revised_before_a_fresh_independent_review() {
+    struct RevisingModel(Mutex<usize>, Mutex<Vec<String>>);
+    impl AgentModel for RevisingModel {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut step = self.0.lock().unwrap();
+            if request.role == "critic" {
+                self.1
+                    .lock()
+                    .unwrap()
+                    .push(request.execution_context.clone());
+            }
+            let answer = match *step {
+                0 => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Initial plan"})
+                }
+                1 => {
+                    json!({"approved":false,"reason":"Scope omits the root launcher documentation"})
+                }
+                2 => {
+                    assert!(
+                        request
+                            .prompt
+                            .contains("Scope omits the root launcher documentation")
+                    );
+                    json!({"action":"aep","args":["scope","story:deliver","--add","README.md","--inferred"],"body":null})
+                }
+                3 => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Scope corrected from review feedback"})
+                }
+                4 => json!({"approved":true,"reason":"Revised scope covers the requested change"}),
+                _ => panic!("unexpected model call"),
+            };
+            *step += 1;
+            Ok(answer)
+        }
+    }
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(RevisingModel(Mutex::new(0), Mutex::new(Vec::new())));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model.clone());
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(
+        report.queued, 1,
+        "Review feedback did not reach the planner: {report:?}"
+    );
+    let contexts = model.1.lock().unwrap();
+    assert_eq!(contexts.len(), 2);
+    assert_ne!(contexts[0], contexts[1]);
+}
+
+#[tokio::test]
+async fn rejected_critique_is_durable_and_idle_after_restart() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Review me"}),
+        json!({"approved":false,"reason":"Named acceptance scenarios are missing"}),
+        json!({"action":"aep","args":["scope","story:deliver","--add","README.md","--inferred"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Revised plan"}),
+        json!({"approved":false,"reason":"Named acceptance scenarios are still missing"}),
+    ]))));
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config.clone(),
+        model,
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report.blockers[0].contains("critique rejected"),
+        "{report:?}"
+    );
+    assert!(
+        store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        store.lock().await.query("GoalList").unwrap()[0]["planning_phase"],
+        "Blocked"
+    );
+    drop(supervisor);
+    drop(store);
+    let reopened = Arc::new(tokio::sync::Mutex::new(
+        Store::open(fixture.path().join("host.sqlite3"))
+            .await
+            .unwrap(),
+    ));
+    let idle = Arc::new(Scripted(Mutex::new(VecDeque::new())));
+    let supervisor = Supervisor::new(reopened, Arc::new(Notify::new()), config, idle);
+    assert_eq!(supervisor.tick().await.unwrap().planned, 0);
+}
+
+#[tokio::test]
+async fn model_cannot_write_workflows_when_ess_is_at_root() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::rename(repo.join("ess/system.yaml"), repo.join("system.yaml")).unwrap();
+    std::fs::rename(repo.join("ess/domains"), repo.join("domains")).unwrap();
+    run(&repo, "git", &["add", "."], &[]);
+    run(&repo, "git", &["commit", "-m", "root specification"], &[]);
+    // Each attempt is a refusal the model can correct; the fifth consecutive one ends planning.
+    let write = json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"});
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from(vec![write; 5]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report.blockers[0].contains("refusal budget exhausted")
+            && report.blockers[0].contains("write_not_specification_source"),
+        "{report:?}"
+    );
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let path = Path::new(goals[0]["planning_worktree_path"].as_str().unwrap());
+    assert!(!path.join(".github/workflows/publish.yaml").exists());
+}
+
+#[tokio::test]
+async fn model_cannot_override_aep_store() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","evil","--store","elsewhere","--title","bad"],"body":null}),
+    ]))));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report.blockers[0].contains("path override is forbidden"),
+        "{report:?}"
+    );
+}
+
+#[tokio::test]
+async fn commit_refusal_is_a_blocker_and_never_queues() {
+    let (_fixture, store, mut config, _goal, _repo) = setup(false).await;
+    config.commit_command = vec!["git".into(), "definitely-not-a-command".into()];
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":[],"summary":"Valid adopted store"}),
+        json!({"approved":true,"reason":"No implementation work selected"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert!(
+        report.blockers[0].contains("definitely-not-a-command"),
+        "{report:?}"
+    );
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+}
+
+struct PausingModel {
+    store: Arc<tokio::sync::Mutex<Store>>,
+    goal: String,
+}
+
+struct ObservingModel {
+    store: Arc<tokio::sync::Mutex<Store>>,
+    entered: Mutex<Vec<Value>>,
+}
+
+struct RepeatedReadModel {
+    calls: Mutex<usize>,
+    prompts: Mutex<Vec<usize>>,
+}
+
+struct LongLineModel {
+    calls: Mutex<usize>,
+}
+impl AgentModel for LongLineModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        if request.role == "critic" {
+            return Ok(json!({"approved":true,"reason":"Complete long-line context inspected"}));
+        }
+        let mut calls = self.calls.lock().unwrap();
+        *calls += 1;
+        if *calls == 1 {
+            return Ok(
+                json!({"action":"read_range","path":"single-line.json","start_line":1,"line_count":1}),
+            );
+        }
+        if *calls == 2 {
+            anyhow::ensure!(
+                request.prompt.contains("read_bytes"),
+                "long line omitted its byte continuation instruction"
+            );
+            return Ok(
+                json!({"action":"read_bytes","path":"single-line.json","start_byte":15000,"byte_count":4096}),
+            );
+        }
+        anyhow::ensure!(
+            request.prompt.contains("Final long-line acceptance marker"),
+            "byte continuation lost the tail of a long UTF-8 line"
+        );
+        Ok(json!({"action":"finish","stories":["story:deliver"],"summary":"Read complete context"}))
+    }
+}
+
+#[tokio::test]
+async fn single_long_utf8_line_remains_retrievable_through_byte_pages() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::write(
+        repo.join("single-line.json"),
+        format!("{}Final long-line acceptance marker", "界".repeat(5000)),
+    )
+    .unwrap();
+    run(
+        &repo,
+        "git",
+        &["add", "single-line.json"],
+        &config.environment,
+    );
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Fixture long UTF-8 line"],
+        &config.environment,
+    );
+    let supervisor = Supervisor::new(
+        store,
+        Arc::new(Notify::new()),
+        config,
+        Arc::new(LongLineModel {
+            calls: Mutex::new(0),
+        }),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(
+        report.queued, 1,
+        "long line remained inaccessible: {report:?}"
+    );
+}
+impl AgentModel for RepeatedReadModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        self.prompts.lock().unwrap().push(request.prompt.len());
+        if request.role == "critic" {
+            return Ok(
+                json!({"approved":true,"reason":"The existing scoped story matches the goal"}),
+            );
+        }
+        let mut calls = self.calls.lock().unwrap();
+        *calls += 1;
+        Ok(if *calls <= 8 {
+            json!({"action":"read","paths":[format!("context{}.txt",*calls)]})
+        } else if *calls == 9 {
+            json!({"action":"read_range","path":"context1.txt","start_line":7001,"line_count":1})
+        } else {
+            assert!(request.prompt.contains("Final page acceptance marker"));
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Context inspected; deliver the existing story"})
+        })
+    }
+}
+
+#[tokio::test]
+async fn distinct_large_reads_do_not_exhaust_planner_context() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    for index in 1..=8 {
+        let name = format!("context{index}.txt");
+        std::fs::write(
+            repo.join(&name),
+            format!(
+                "{}Final page acceptance marker\n",
+                "Observed repository context.\n".repeat(7_000)
+            ),
+        )
+        .unwrap();
+        run(&repo, "git", &["add", &name], &config.environment);
+    }
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Add large context fixture"],
+        &config.environment,
+    );
+    let model = Arc::new(RepeatedReadModel {
+        calls: Mutex::new(0),
+        prompts: Mutex::new(Vec::new()),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(
+        report.queued, 1,
+        "Bounded reads prevented planning: {report:?}"
+    );
+    assert!(
+        model
+            .prompts
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|size| *size <= 160 * 1024),
+        "planner sent oversized context"
+    );
+}
+impl AgentModel for ObservingModel {
+    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        let receipt = tokio::runtime::Handle::current().block_on(async {
+            self.store.lock().await.query("GoalList").unwrap()[0]["planning_receipt"].clone()
+        });
+        self.entered
+            .lock()
+            .unwrap()
+            .push(serde_json::from_str(receipt.as_str().unwrap()).unwrap_or(json!({})));
+        Ok(if request.role == "critic" {
+            json!({"approved":true,"reason":"Requested story matches the goal"})
+        } else {
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Deliver existing story"})
+        })
+    }
+}
+
+#[tokio::test]
+async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
+    let (_fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(ObservingModel {
+        store: store.clone(),
+        entered: Mutex::new(Vec::new()),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1);
+    {
+        let observed = model.entered.lock().unwrap();
+        assert_eq!(observed.len(), 2);
+        for (entry, role) in observed.iter().zip(["planner", "critic"]) {
+            assert_eq!(entry["last_activity"]["action"], "model.requested");
+            assert_eq!(entry["last_activity"]["role"], role);
+            assert_eq!(entry["last_activity"]["status"], "running");
+            time::OffsetDateTime::parse(
+                entry["last_activity"]["at"].as_str().unwrap(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap();
+        }
+    }
+    let before = store.lock().await.query("GoalList").unwrap();
+    let history = activity(&store).await;
+    assert!(
+        history
+            .iter()
+            .any(|a| a["action"] == "model.completed" && a["role"] == "critic")
+    );
+    assert_eq!(before[0]["planning_phase"], "Queued");
+    drop(supervisor);
+    drop(model);
+    drop(store);
+    let reopened = Store::open(_fixture.path().join("host.sqlite3"))
+        .await
+        .unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap(), before);
+    assert_eq!(activity(&tokio::sync::Mutex::new(reopened)).await, history);
+}
+impl AgentModel for PausingModel {
+    fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        tokio::runtime::Handle::current().block_on(async {
+            self.store
+                .lock()
+                .await
+                .execute("PauseGoal", json!({"goal_id":self.goal}), Actor::Operator)
+                .await
+        })?;
+        Ok(
+            json!({"action":"finish","stories":["story:deliver"],"summary":"Stale response after operator pause"}),
+        )
+    }
+}
+#[tokio::test]
+async fn pause_during_model_call_prevents_further_effects() {
+    let (_fixture, store, config, goal, _repo) = setup(true).await;
+    let model = Arc::new(PausingModel {
+        store: store.clone(),
+        goal: goal.clone(),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config.clone(),
+        model,
+    );
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 0);
+    assert!(!report.blockers.is_empty());
+    assert_eq!(
+        store.lock().await.query("GoalList").unwrap()[0]["state"],
+        "Paused"
+    );
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap(),
+        json!([])
+    );
+    let retained = store.lock().await.query("GoalList").unwrap()[0]["planning_worktree_id"].clone();
+    store
+        .lock()
+        .await
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(supervisor);
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Resume retained work"}),
+        json!({"approved":true,"reason":"The retained AEP story covers the goal"}),
+    ]))));
+    let resumed = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = resumed.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(
+        store.lock().await.query("AssignmentList").unwrap()[0]["worktree_id"],
+        retained
+    );
+}
+
+#[test]
+fn process_exit_timeout_and_cancellation_are_not_successful_observations() {
+    use control_plane_runtime::process::ProcessRunner;
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+    let cancel = CancellationToken::new();
+    let runner = ProcessRunner {
+        environment: vec![],
+        timeout: Duration::from_millis(30),
+        cancel: cancel.clone(),
+    };
+    let cwd = Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert!(runner.command(cwd, "git", &["not-a-real-command"]).is_err());
+    assert!(
+        runner
+            .command(cwd, "sleep", &["5"])
+            .unwrap_err()
+            .to_string()
+            .contains("timeout")
+    );
+    cancel.cancel();
+    assert!(
+        runner
+            .command(cwd, "git", &["--version"])
+            .unwrap_err()
+            .to_string()
+            .contains("cancelled before")
+    );
+}
+
+#[tokio::test]
+async fn updated_goal_replans_past_stale_queued_assignments() {
+    let (_fixture, store, config, goal, _repo) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Initial goal"}),
+        json!({"approved":true,"reason":"Existing story covers initial acceptance"}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Revalidated for revised acceptance"}),
+        json!({"approved":true,"reason":"Existing story also covers revised acceptance"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    assert_eq!(supervisor.tick().await.unwrap().queued, 1);
+    let update = json!({"goal_id":goal,"objective":"Deliver revised requested change","acceptance":"Revised checks pass after reviewed merge","max_workers":3,"max_attempts":3,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true});
+    assert_eq!(
+        store
+            .lock()
+            .await
+            .execute("UpdateGoal", update, Actor::Operator)
+            .await
+            .unwrap()["outcome"],
+        "applied"
+    );
+    let next = supervisor.tick().await.unwrap();
+    let assignments = store.lock().await.query("AssignmentList").unwrap();
+    assert!(
+        assignments
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["goal_revision"] == 2 && a["state"] == "Queued"),
+        "changed goal must produce current-revision work, not idle behind a stale queued assignment: {next:?}; {assignments}"
+    );
+}
+
+#[tokio::test]
+async fn unavailable_registered_repository_is_a_durable_blocker_not_a_dead_supervisor() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    std::fs::rename(
+        fixture.path().join("repos/demo"),
+        fixture.path().join("repos/offline-demo"),
+    )
+    .unwrap();
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::new())));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let result = supervisor.tick().await;
+    assert!(
+        result.is_ok(),
+        "one unavailable repository must be recorded as a blocker instead of ending Supervisor::run: {result:?}"
+    );
+    assert!(!result.unwrap().blockers.is_empty());
+    assert_eq!(
+        store.lock().await.query("GoalList").unwrap()[0]["planning_phase"],
+        "Blocked"
+    );
+}
+
+#[tokio::test]
+async fn linked_aep_store_cannot_be_mutated_outside_planning_checkout() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let primary = fixture.path().join("repos/demo");
+    let external = fixture.path().join("outside-engineering");
+    std::fs::rename(primary.join(".engineering"), &external).unwrap();
+    std::os::unix::fs::symlink(&external, primary.join(".engineering")).unwrap();
+    run(&primary, "git", &["add", "-A"], &[]);
+    run(
+        &primary,
+        "git",
+        &["commit", "-m", "linked planning store fixture"],
+        &[],
+    );
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","escape","--title","This must stay inside the isolated checkout"],"body":null}),
+        json!({"action":"finish","stories":[],"summary":"Do not approve"}),
+        json!({"approved":false,"reason":"Linked planning store must be rejected"}),
+    ]))));
+    let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model);
+    let result = supervisor.tick().await;
+    assert!(
+        !external.join("planning/story/escape.md").exists(),
+        "model-directed AEP mutation escaped the managed checkout through .engineering symlink: {result:?}"
+    );
+}
+
+struct CountedModel {
+    responses: Mutex<VecDeque<Value>>,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl AgentModel for CountedModel {
+    fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(self
+            .responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("bounded scripted response"))
+    }
+}
+
+#[tokio::test]
+async fn another_workspaces_assignment_does_not_rewake_unchanged_idle_goal() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let model = Arc::new(CountedModel {
+        responses: Mutex::new(VecDeque::from([
+            json!({"action":"finish","stories":[],"summary":"No work selected"}),
+            json!({"approved":true,"reason":"Acceptance evidence still outstanding"}),
+            json!({"action":"finish","stories":[],"summary":"No work selected"}),
+            json!({"approved":true,"reason":"Acceptance evidence still outstanding"}),
+        ])),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let supervisor = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    );
+    supervisor.tick().await.unwrap();
+    assert_eq!(model.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let unrelated = fixture.path().join("repos/unrelated");
+    std::fs::create_dir_all(&unrelated).unwrap();
+    run(&unrelated, "git", &["init", "--initial-branch=main"], &[]);
+    let mut host = store.lock().await;
+    let ws = host
+        .register_workspace(&unrelated, "unrelated")
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .clone();
+    let repository = host
+        .query("RepositoryRegistrationList")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["workspace_id"] == ws)
+        .unwrap()["repository_id"]
+        .clone();
+    let other_goal = host.execute("CreateGoal", json!({"workspace_id":ws,"objective":"Unrelated objective","acceptance":"Unrelated acceptance","max_workers":1,"max_attempts":1,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}), Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+    host.execute("StartGoal", json!({"goal_id":other_goal}), Actor::Operator)
+        .await
+        .unwrap();
+    host.execute("QueueAssignment", json!({"goal_id":other_goal,"repository_id":repository,"story_id":"story:unrelated","case_id":"unrelated-case","worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1}), Actor::Supervisor).await.unwrap();
+    host.execute("PauseGoal", json!({"goal_id":other_goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(host);
+    supervisor.tick().await.unwrap();
+    assert_eq!(
+        model.calls.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "unrelated assignment changed no input of the first workspace, which must remain idle"
+    );
+}
+
+#[tokio::test]
+async fn planning_commit_is_retained_on_a_named_branch() {
+    let (_fixture, store, config, _goal, _repo) = setup(false).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"aep","args":["new","story","deliver","--title","Requested change","--from","-"],"body":"## Acceptance\nNamed scenario: delivery_works.\n"}),
+        json!({"action":"aep","args":["scope","story:deliver","--add","src/","--inferred"],"body":null}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Ready for implementation"}),
+        json!({"approved":true,"reason":"Validated specification and named acceptance"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    assert_eq!(supervisor.tick().await.unwrap().queued, 1);
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let path = Path::new(goals[0]["planning_worktree_path"].as_str().unwrap());
+    let branch = Command::new("git")
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .current_dir(path)
+        .output()
+        .unwrap();
+    assert!(
+        branch.status.success(),
+        "the managed planning checkout must create a branch before its first commit, preserving a named handoff: {}",
+        String::from_utf8_lossy(&branch.stderr)
+    );
+}
+
+#[tokio::test]
+async fn nested_aep_symlinks_are_refused_before_any_model_or_cli_store_access() {
+    for relative in [
+        "planning/story/deliver.md",
+        "planning/journal.jsonl",
+        "planning/evidence",
+    ] {
+        let (fixture, store, config, _goal, _repo) = setup(true).await;
+        let primary = fixture.path().join("repos/demo");
+        let linked = primary.join(".engineering").join(relative);
+        let external = fixture.path().join("external-planning-input");
+        if linked.exists() {
+            std::fs::rename(&linked, &external).unwrap();
+        } else {
+            std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+            std::fs::create_dir(&external).unwrap();
+        }
+        std::os::unix::fs::symlink(&external, &linked).unwrap();
+        run(&primary, "git", &["add", "-A"], &[]);
+        run(
+            &primary,
+            "git",
+            &["commit", "-m", "nested linked store fixture"],
+            &[],
+        );
+        let model = Arc::new(Scripted(Mutex::new(VecDeque::new())));
+        let supervisor = Supervisor::new(store, Arc::new(Notify::new()), config, model);
+        let report = supervisor.tick().await.unwrap();
+        assert!(
+            report
+                .blockers
+                .iter()
+                .any(|reason| reason.contains("AEP store symlink refused")),
+            "{relative}: {report:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unavailable_workspace_does_not_prevent_healthy_workspace_planning() {
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let offline = fixture.path().join("repos/offline-demo");
+    std::fs::rename(fixture.path().join("repos/demo"), &offline).unwrap();
+    let healthy = fixture.path().join("repos/healthy");
+    run(
+        fixture.path(),
+        "git",
+        &[
+            "clone",
+            offline.to_str().unwrap(),
+            healthy.to_str().unwrap(),
+        ],
+        &[],
+    );
+    let mut host = store.lock().await;
+    let workspace=host.register_workspace(&healthy,"healthy").await.unwrap()["published"][0]["payload"]["workspace_id"].clone();
+    let goal=host.execute("CreateGoal",json!({"workspace_id":workspace,"objective":"Healthy workspace","acceptance":"Verified delivery","max_workers":1,"max_attempts":1,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false}),Actor::Operator).await.unwrap()["published"][0]["payload"]["goal_id"].clone();
+    host.execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    drop(host);
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Healthy workspace remains schedulable"}),
+        json!({"approved":true,"reason":"Existing story covers the healthy goal"}),
+    ]))));
+    let supervisor = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model);
+    let report = supervisor.tick().await.unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert!(!report.blockers.is_empty());
+    assert!(
+        store
+            .lock()
+            .await
+            .query("AssignmentList")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["goal_id"] == goal && a["state"] == "Queued")
+    );
+}
+
+/// Recorded missing-file failure, through the actual LLM port, Loom session/loop,
+/// Commission admission, governor, ESS/AEP CLI, durable host and queue boundary.
+#[tokio::test]
+async fn native_loom_recovers_missing_and_invalid_specification_and_queues_validated_plan() {
+    use llm_core::{BoxFuture, Capabilities, Model, Provenance, TurnObservation};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Provider {
+        binding: Provenance,
+        caps: Capabilities,
+        calls: AtomicUsize,
+    }
+    impl Model for Provider {
+        fn provenance(&self) -> &Provenance {
+            &self.binding
+        }
+        fn capabilities(&self) -> &Capabilities {
+            &self.caps
+        }
+        fn turn<'a>(
+            &'a self,
+            request: &'a llm_core::TurnRequest,
+            _: &'a mut dyn llm_core::StreamSink,
+            _: &'a llm_core::Cancel,
+        ) -> BoxFuture<'a, Result<llm_core::TurnOutcome, llm_core::Error>> {
+            Box::pin(async move {
+                request.validate_for(&self.binding, &self.caps)?;
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(request.items.iter().filter(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("Goal: "))).count(), 1, "each native role gets its brief once");
+                if n == 2 {
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("a81a8729dc252830d4e0557176522b59be6ff253") && text.contains("#/definitions/Field"))), "authoritative ESS reference must return through Commission and native Loom session");
+                }
+                if n == 3 {
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::Opaque {payload,..} if payload==&json!({"retained":"provider-state"}))));
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("File not found: ess/domains/item.yaml"))));
+                }
+                if n == 1 {
+                    assert!(request.items.iter().any(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("read_path_syntax"))), "planner refusal must reach native continuation");
+                }
+                let arguments = match n {
+                    0 => json!({"action":"read","paths":["/outside/AGENTS.md"]}),
+                    1 => json!({"action":"ess_schema","pointer":"/definitions/RawEntitySpec"}),
+                    2 => json!({"action":"read","paths":["ess/domains/item.yaml"]}),
+                    3 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
+                    }
+                    4 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: auth.session\nentities:\n  - name: auth.session.Session\n    identity: {name: session_id, type: Uuid}\n    fields: [{name: username, type: String}]\n    lifecycle:\n      initial: Active\n      states: [Active, Revoked]\n      terminal: [Revoked]\n"})
+                    }
+                    5 => {
+                        json!({"action":"aep","args":["new","story","must-not-exist"],"body":null})
+                    }
+                    6 => {
+                        assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("dead_end_state") && text.contains("conflicting_declaration"))), "ESS refusal must return through the native session");
+                        json!({"action":"finish","stories":["story:deliver"],"summary":"Finish must also return invalid ESS feedback without spending a critic review."})
+                    }
+                    7 => {
+                        json!({"action":"write_specification","path":"ess/domains/item.yaml","contents":"domain: demo.item\nentities:\n  - name: demo.item.Item\n    identity: {name: item_id, type: Uuid}\n    fields: []\n    lifecycle:\n      initial: Present\n      states: [Present]\n      terminal: [Present]\n"})
+                    }
+                    8 => {
+                        json!({"action":"finish","stories":["story:deliver"],"summary":"Recovered missing source; actual ESS and AEP validation required."})
+                    }
+                    9 => {
+                        assert!(
+                            !request
+                                .items
+                                .iter()
+                                .any(|item| matches!(item, llm_core::Item::Opaque { .. })),
+                            "independent reviewer must start a separate session"
+                        );
+                        json!({"approved":true,"reason":"Recovered domain and scoped existing story satisfy requested acceptance."})
+                    }
+                    _ => panic!("unexpected paid-equivalent turn {n}"),
+                };
+                Ok(llm_core::TurnOutcome {
+                    stop_reason: llm_core::StopReason::ToolCalls,
+                    items: vec![
+                        llm_core::Item::Opaque {
+                            provenance: self.binding.clone(),
+                            payload: json!({"retained":"provider-state"}),
+                        },
+                        llm_core::Item::ToolCall(llm_core::ToolCall {
+                            call_id: llm_core::CallId::new(format!("call-{n}")).unwrap(),
+                            name: request.tools[0].name.clone(),
+                            arguments,
+                        }),
+                    ],
+                    observation: TurnObservation {
+                        usage: Some(llm_core::Usage {
+                            input_tokens: Some(21),
+                            output_tokens: Some(13),
+                            cached_input_tokens: Some(0),
+                            ..Default::default()
+                        }),
+                        final_usage: true,
+                        ..TurnObservation::new(self.binding.clone())
+                    },
+                })
+            })
+        }
+    }
+    let (fixture, store, config, _, _) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    run(&repo, "git", &["rm", "ess/domains/item.yaml"], &[]);
+    run(
+        &repo,
+        "git",
+        &["commit", "-m", "Reproduce missing domain"],
+        &[],
+    );
+    let provider=Arc::new(Provider{binding:serde_json::from_value(json!({"protocol":"responses","provider":"fixture","account":"test","endpoint":"offline","model":"scripted","binding_revision":"one"})).unwrap(),caps:Capabilities{tools:true,tool_choice:true,temperature:false,top_p:false,reasoning_efforts:vec![],context_window:128000,max_output_tokens:32000},calls:AtomicUsize::new(0)});
+    let sessions = fixture.path().join("loom-sessions");
+    let model = Arc::new(control_plane_runtime::CodexAgentModel::with_provider(
+        sessions.clone(),
+        provider.clone(),
+    ));
+    let report = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model)
+        .tick()
+        .await
+        .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 10);
+    let goals = store.lock().await.query("GoalList").unwrap();
+    let receipt = evidence(&store).await;
+    let planning_tree = goals[0]["planning_worktree_path"].as_str().unwrap();
+    assert!(
+        !Path::new(planning_tree)
+            .join(".engineering/planning/story/must-not-exist.md")
+            .exists(),
+        "invalid ESS must not admit an AEP mutation"
+    );
+    assert!(
+        receipt.contains("provider-observation"),
+        "provider usage must be visible in durable progress"
+    );
+    assert_eq!(
+        std::fs::read_dir(sessions).unwrap().count(),
+        2,
+        "planner and reviewer sessions filed separately"
+    );
+}
+
+#[tokio::test]
+async fn planner_input_refusals_reach_the_model() {
+    let (_, store, config, _, _) = setup(true).await;
+    let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
+        json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"}),
+        json!({"action":"finish","stories":["story:deliver","story:deliver"],"summary":"Duplicate selection."}),
+        json!({"action":"finish","stories":["story:missing"],"summary":"Unknown story."}),
+        json!({"action":"read","paths":["workspace:unregistered/README.md"]}),
+        json!({"action":"finish","stories":["story:deliver"],"summary":"Existing scoped story meets the goal."}),
+        json!({"approved":true,"reason":"Existing scoped story meets acceptance."}),
+    ]))));
+    let report = Supervisor::new(store.clone(), Arc::new(Notify::new()), config, model)
+        .tick()
+        .await
+        .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    let receipt = evidence(&store).await;
+    for code in [
+        "write_outside_specification_root",
+        "duplicate_story_selection",
+        "selection_unknown_story",
+        "context_directory_unknown",
+    ] {
+        assert!(receipt.contains(code), "{code} did not reach the planner");
+    }
+}
+
+#[tokio::test]
+async fn planner_progress_does_not_repeat_the_transcript() {
+    /// Reads six 10 KiB files, then finishes; notes the event data recorded before each turn.
+    struct Reader {
+        store: Arc<tokio::sync::Mutex<Store>>,
+        appended: Mutex<Vec<u64>>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let appended = tokio::runtime::Handle::current()
+                .block_on(async { self.store.lock().await.appended_event_bytes() });
+            let mut seen = self.appended.lock().unwrap();
+            seen.push(appended);
+            Ok(match (request.role.as_str(), seen.len()) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 6 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=6 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(380)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        store: store.clone(),
+        appended: Mutex::new(Vec::new()),
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    assert_eq!(report.queued, 1, "{report:?}");
+    let appended = model.appended.lock().unwrap().clone();
+    assert_eq!(appended.len(), 8, "{appended:?}");
+    // Between two planner turns: the response, the read intent, its observation, governance
+    // events and the next request. Each of them repeated the growing transcript and activity
+    // history before progress was bounded, so every read cost more than the one before.
+    let turns = appended
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .collect::<Vec<_>>();
+    assert!(
+        turns[1..6].iter().all(|bytes| *bytes < 48 * 1024),
+        "{turns:?}"
+    );
+    assert!(
+        turns[5] <= turns[1] + 1024,
+        "progress grows with the transcript: {turns:?}"
+    );
+    assert!(
+        evidence(&store).await.contains("# Note 6"),
+        "the validated plan keeps its observations"
+    );
+}
+
+#[tokio::test]
+async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
+    // story:bounded-progress-records, as narrowed by the coordinator (correction round 2, P1):
+    // the 16 KiB bound is for per-event progress decisions. The validated plan is planning
+    // evidence recorded once per planning attempt (supervisor.rs:435, the engine's output
+    // receipt with its transcript and action history, in the decision's body and again in its
+    // outcome); it is at most 128 KiB here and no later decision repeats it.
+    //
+    // The planner reads nine 12 KiB pages, the 96 KiB working set its transcript keeps. An
+    // observer samples (committed version, appended event data, planning phase) every
+    // millisecond; two samples one version apart give the exact size of the decision between
+    // them. The validated-plan decision runs between two processes (`aep plan artifact
+    // validate` before it, the plan commit after it), so it is sampled on both sides.
+    struct Reader {
+        marks: Mutex<usize>,
+    }
+    impl AgentModel for Reader {
+        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+            let mut marks = self.marks.lock().unwrap();
+            *marks += 1;
+            Ok(match (request.role.as_str(), *marks) {
+                ("critic", _) => {
+                    json!({"approved":true,"reason":"Existing story covers the goal."})
+                }
+                (_, turn) if turn <= 9 => {
+                    json!({"action":"read","paths":[format!("notes/{turn}.md")]})
+                }
+                _ => {
+                    json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story covers the goal."})
+                }
+            })
+        }
+    }
+    let (fixture, store, config, _goal, _repo) = setup(true).await;
+    let repo = fixture.path().join("repos/demo");
+    std::fs::create_dir(repo.join("notes")).unwrap();
+    for turn in 1..=9 {
+        std::fs::write(
+            repo.join(format!("notes/{turn}.md")),
+            format!(
+                "# Note {turn}\n{}",
+                "observed repository detail\n".repeat(450)
+            ),
+        )
+        .unwrap();
+    }
+    run(&repo, "git", &["add", "notes"], &[]);
+    run(&repo, "git", &["commit", "-m", "notes"], &[]);
+    let model = Arc::new(Reader {
+        marks: Mutex::new(0),
+    });
+    async fn sample(store: &tokio::sync::Mutex<Store>) -> (u64, u64, Value) {
+        let store = store.lock().await;
+        let version = *store.subscribe().borrow();
+        let phase = store.query("GoalList").unwrap()[0]["planning_phase"].clone();
+        (version, store.appended_event_bytes(), phase)
+    }
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observer = tokio::spawn({
+        let store = store.clone();
+        let stop = stop.clone();
+        async move {
+            let mut samples = Vec::new();
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                samples.push(sample(&store).await);
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+            samples
+        }
+    });
+    let report = Supervisor::new(
+        store.clone(),
+        Arc::new(Notify::new()),
+        config,
+        model.clone(),
+    )
+    .tick()
+    .await
+    .unwrap();
+    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut samples = observer.await.unwrap();
+    samples.push(sample(&store).await);
+    samples.dedup_by_key(|(version, _, _)| *version);
+    assert_eq!(report.queued, 1, "{report:?}");
+    let validated = samples
+        .windows(2)
+        .find(|pair| pair[0].2 != "Validated" && pair[1].2 == "Validated")
+        .expect("the validated plan was recorded");
+    assert_eq!(
+        validated[1].0 - validated[0].0,
+        1,
+        "the validated-plan decision was not sampled on both sides: {validated:?}"
+    );
+    let size = validated[1].1 - validated[0].1;
+    assert!(
+        size <= 128 * 1024,
+        "the validated-plan decision (version {}) is {size} bytes of event data",
+        validated[1].0
+    );
+    // Every decision after it in this run stays within the per-event bound. Two samples more
+    // than one version apart bound each decision between them by their average.
+    let start = samples
+        .iter()
+        .position(|sample| sample.0 == validated[1].0)
+        .unwrap();
+    let after = samples[start..]
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0, pair[1].1 - pair[0].1))
+        .collect::<Vec<_>>();
+    assert!(!after.is_empty(), "no decision was recorded after the plan");
+    assert!(
+        after
+            .iter()
+            .all(|(decisions, bytes)| *bytes <= 16 * 1024 * decisions),
+        "decisions after the validated plan, as (decisions, bytes): {after:?}"
+    );
+    // The transcript stays in the plan's own record: the goal's last recorded receipt does not
+    // carry it, and its history shows the evidence once.
+    let goal = store.lock().await.query("GoalList").unwrap()[0].clone();
+    assert_eq!(goal["planning_phase"], "Queued");
+    let receipt = goal["planning_receipt"].as_str().unwrap();
+    assert!(
+        !receipt.contains("observed repository detail"),
+        "the last recorded receipt repeats the transcript ({} bytes)",
+        receipt.len()
+    );
+    assert!(evidence(&store).await.contains("# Note 9"));
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T20:24:22Z",
+  "actor": "human:timo",
+  "artifact": "story:precise-outcome-acknowledgements",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave-3 integration gate, task check 12 steps each exit 0 (control-plane/wave-3)",
+    "reference": "commit d32a94d: 338 Rust tests in 35 result lines passed, 0 failed; spec-history-check passed (3 acknowledged); acceptance-check 83 names in 22 stories resolve; frontend-check 1 component test passed; 171/171 conformance; generated and foundation checks passed; ESS 0.53.0 as CI pins it (log $HOME/.cache/cp-wave3/integration/gate-d32a94d.log)"
+  }
+}

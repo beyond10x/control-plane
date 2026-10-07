@@ -1,0 +1,70 @@
+---
+components:
+- component: control-plane
+  summary: Local autonomous engineering service.
+  owns:
+    domains:
+    - controlplane.host
+  accepts:
+    commands:
+    - controlplane.host.AddWorkspaceDirectory
+    - controlplane.host.RemoveWorkspaceDirectory
+    - controlplane.host.RegisterWorkspace
+    - controlplane.host.ArchiveWorkspace
+    - controlplane.host.RegisterRepository
+    - controlplane.host.DisableRepositoryRegistration
+    - controlplane.host.EnableRepositoryRegistration
+    - controlplane.host.CreateGoal
+    - controlplane.host.StartGoal
+    - controlplane.host.PauseGoal
+    - controlplane.host.SatisfyGoal
+    - controlplane.host.CancelGoal
+    - controlplane.host.DeleteGoal
+    - controlplane.host.QueueAssignment
+    - controlplane.host.ClaimAssignment
+    - controlplane.host.ReviewAssignment
+    - controlplane.host.RepairAssignment
+    - controlplane.host.ReadyAssignment
+    - controlplane.host.MergeAssignment
+    - controlplane.host.CompleteAssignment
+    - controlplane.host.BlockAssignment
+    - controlplane.host.CancelAssignment
+    - controlplane.host.UpdateGoal
+    - controlplane.host.ConfigureRepository
+    - controlplane.host.ReconcileAssignment
+    - controlplane.host.PreparePublication
+    - controlplane.host.MarkPublicationUncertain
+    - controlplane.host.ConfirmPublication
+    - controlplane.host.RecordPlanningProgress
+  publishes:
+    events:
+    - controlplane.host.WorkspaceDirectoryCreated
+    - controlplane.host.WorkspaceDirectoryRemoved
+    - controlplane.host.WorkspaceCreated
+    - controlplane.host.ArchiveWorkspaceApplied
+    - controlplane.host.RepositoryRegistrationCreated
+    - controlplane.host.DisableRepositoryRegistrationApplied
+    - controlplane.host.EnableRepositoryRegistrationApplied
+    - controlplane.host.GoalCreated
+    - controlplane.host.StartGoalApplied
+    - controlplane.host.PauseGoalApplied
+    - controlplane.host.SatisfyGoalApplied
+    - controlplane.host.CancelGoalApplied
+    - controlplane.host.GoalDeleted
+    - controlplane.host.AssignmentCreated
+    - controlplane.host.ClaimAssignmentApplied
+    - controlplane.host.ReviewAssignmentApplied
+    - controlplane.host.RepairAssignmentApplied
+    - controlplane.host.ReadyAssignmentApplied
+    - controlplane.host.MergeAssignmentApplied
+    - controlplane.host.CompleteAssignmentApplied
+    - controlplane.host.BlockAssignmentApplied
+    - controlplane.host.CancelAssignmentApplied
+    - controlplane.host.UpdateGoalApplied
+    - controlplane.host.ConfigureRepositoryApplied
+    - controlplane.host.ReconcileAssignmentApplied
+    - controlplane.host.PublicationIntentCreated
+    - controlplane.host.MarkPublicationUncertainApplied
+    - controlplane.host.ConfirmPublicationApplied
+    - controlplane.host.PlanningProgressRecorded
+  reached_by: network

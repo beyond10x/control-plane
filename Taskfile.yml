@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  check:
+    desc: Validate the specification, plan, generated contracts and implementation
+    cmds:
+      - ess specify validate --path ess --strict-requires
+      - aep plan artifact validate
+      - cargo run --locked -p control-plane-xtask -- spec-history-check
+      - cargo run --locked -p control-plane-xtask -- acceptance-check
+      - npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - cargo run --locked -p control-plane-xtask -- frontend-check
+      - cargo fmt -p control-plane-core -p control-plane-protocol -p control-plane-runtime -p control-plane-app -p control-plane-xtask --check
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+      - cargo test --workspace --locked
+      - cargo run --locked -p control-plane-xtask -- generated-check
+      - cargo run --locked -p control-plane-xtask -- conformance
+      - cargo run --locked -p control-plane-xtask -- foundation-check
+
+  generate:
+    desc: Regenerate contracts from the ESS source
+    cmds:
+      - cargo run --locked -p control-plane-xtask -- generate
+
+  run:
+    desc: Start the local control plane
+    cmds:
+      - cargo run --locked -p control-plane-app -- serve {{.CLI_ARGS}}
+
+  frontend:
+    desc: Build Vue assets for embedding in the service binary
+    cmds:
+      - npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - cargo run --locked -p control-plane-xtask -- frontend-build

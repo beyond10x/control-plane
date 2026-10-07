@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-05T20:46:12Z",
+  "actor": "human:timo",
+  "artifact": "story:workspace-host",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:workspace-host-review-1",
+    "reference": "guards.rs:248",
+    "review": "review-result:workspace-host-review-1",
+    "outcome": "fixed"
+  }
+}

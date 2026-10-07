@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:43:27Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-console",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Independent persisted lifecycle regression and real app suite: 17 unit plus 3 integration passed",
+    "reference": "git:3f0dad61c68aeff0e3941da27e39855486586c9a"
+  }
+}

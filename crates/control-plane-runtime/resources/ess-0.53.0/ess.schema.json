@@ -1,0 +1,3872 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RawSpecFile",
+  "description": "One source file, as parsed.\n\nA file may carry the system header, one domain's contents, or both — which is what lets a small specification be one file and a large one be a directory (design §24).",
+  "type": "object",
+  "properties": {
+    "actors": {
+      "description": "Actors declared here.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawActorSpec"
+      }
+    },
+    "bindings": {
+      "description": "Bindings declared here.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawBindingSpec"
+      }
+    },
+    "commands": {
+      "description": "Commands declared here.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawCommandSpec"
+      }
+    },
+    "components": {
+      "description": "Components declared here.\n\nNot under a `domain:` — a component owns domains, so it sits above them, and a component file is one that names no domain of its own.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawComponentSpec"
+      }
+    },
+    "conversions": {
+      "description": "Conversions this specification permits, each with the reason it is permitted.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Conversion"
+      }
+    },
+    "domain": {
+      "description": "The domain this file contributes to, when it contributes to one.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/QualifiedName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "domains": {
+      "description": "The domains this system has.\n\nA roster, not a comment: when the header lists any, the list and the domains the sources contribute have to agree in both directions. Writing it is optional; writing it wrongly is not, because a header that says `billing.invoce` while a file declares `billing.invoice` is a typo that would otherwise change nothing.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/QualifiedName"
+      }
+    },
+    "entities": {
+      "description": "Entities declared here.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawEntitySpec"
+      }
+    },
+    "errors": {
+      "description": "Errors declared here.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawErrorSpec"
+      }
+    },
+    "events": {
+      "description": "Events declared here.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawEventSpec"
+      }
+    },
+    "format": {
+      "description": "The specification language, on the file that carries the header.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FormatVersion"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "naming": {
+      "description": "What that domain is called on the wire and shown as.\n\nOn the file carrying `domain:`, not on the one carrying `system:` — a domain's wire name belongs to the domain, and putting it in the header would make the header the place every context has to be edited.",
+      "default": {},
+      "allOf": [
+        {
+          "$ref": "#/definitions/Naming"
+        }
+      ]
+    },
+    "outcome_groups": {
+      "description": "Outcome groups declared here: one outcome written once for many commands (ess/12).\n\nAbove the domains, like `bindings:`, so any file may carry them. Expanded into their member commands before anything is converted, and never seen by the rest of assembly.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawOutcomeGroup"
+      }
+    },
+    "preconditions": {
+      "description": "The ambient command invocations every scenario runs inside, on the file that carries the header (ess/15, `docs/design/outcome-shapes.md`).",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Precondition"
+      }
+    },
+    "summary": {
+      "description": "What the system is, in one paragraph.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "system": {
+      "description": "The system's namespace.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/QualifiedName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "topology": {
+      "description": "The system's runtime shape.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawTopology"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "types": {
+      "description": "Types declared here.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/NamedType"
+      }
+    },
+    "version": {
+      "description": "The system's version.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Version"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "views": {
+      "description": "Views declared here.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RawViewSpec"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Accepts": {
+      "description": "What an `accepts:` key may say. One word, so a later form has somewhere to go.",
+      "oneOf": [
+        {
+          "description": "The request is accepted and nothing observable changes.",
+          "type": "string",
+          "enum": [
+            "nothing"
+          ]
+        }
+      ]
+    },
+    "Anchor": {
+      "description": "The actual host poll activation anchors the grid.",
+      "oneOf": [
+        {
+          "description": "The actual host poll activation anchors the grid.",
+          "type": "string",
+          "enum": [
+            "host_activation"
+          ]
+        }
+      ]
+    },
+    "AuthoredMappingSchema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/SelectionMapping"
+        }
+      ]
+    },
+    "BindingFailure": {
+      "description": "What happens when the invoked command does not run: `retry`, `drop`, an `escalate:` block naming the event the escalation emits, a `retry:` block stating its attempts and final refusals (ess/16), or `drop`, `retry` and `escalate` keyed, each selecting the refusals it answers with `outcomes:` or `except:` (ess/22).",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/Failure"
+        },
+        {
+          "type": "object",
+          "required": [
+            "escalate"
+          ],
+          "properties": {
+            "escalate": {
+              "$ref": "#/definitions/RawEscalation"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "retry"
+          ],
+          "properties": {
+            "retry": {
+              "$ref": "#/definitions/RetryBound"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "A failure policy selected per refusal of the invoked command (ess/22): `drop`, `retry` and `escalate`, each at most once, each with `outcomes:` or `except:`; exactly one has `except:` and is the fallback for a failure carrying no declared outcome.",
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "drop": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                {
+                  "type": "object",
+                  "anyOf": [
+                    {
+                      "required": [
+                        "outcomes"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "except"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "except": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    },
+                    "outcomes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "escalate": {
+              "type": "object",
+              "anyOf": [
+                {
+                  "required": [
+                    "outcomes"
+                  ]
+                },
+                {
+                  "required": [
+                    "except"
+                  ]
+                }
+              ],
+              "properties": {
+                "emits": {
+                  "type": "string"
+                },
+                "except": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "outcomes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "additionalProperties": false
+            },
+            "retry": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                {
+                  "type": "object",
+                  "anyOf": [
+                    {
+                      "required": [
+                        "outcomes"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "except"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 2.0
+                    },
+                    "except": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    },
+                    "final": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    },
+                    "outcomes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "uniqueItems": true
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "BindingName": {
+      "description": "A binding's identifier, such as `notify-on-invoice-created`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "Cadence": {
+      "description": "Completion does not reset the deadline phase.",
+      "oneOf": [
+        {
+          "description": "Completion does not reset the deadline phase.",
+          "type": "string",
+          "enum": [
+            "fixed_rate"
+          ]
+        }
+      ]
+    },
+    "Cancellation": {
+      "description": "Only acknowledged quiescence ends the poll lifetime.",
+      "oneOf": [
+        {
+          "description": "Only acknowledged quiescence ends the poll lifetime.",
+          "type": "string",
+          "enum": [
+            "stop_acknowledged"
+          ]
+        }
+      ]
+    },
+    "Cardinality": {
+      "description": "How many of the target one source has.\n\nOn the target side only. `min`/`max` on both sides would say a second time what the carrying field's own type already says — `Optional<…>` is `0..1` and a bare id is `1..1` — and two statements of one fact are two statements that can disagree.",
+      "oneOf": [
+        {
+          "description": "At most one.",
+          "type": "string",
+          "enum": [
+            "one"
+          ]
+        },
+        {
+          "description": "Any number.",
+          "type": "string",
+          "enum": [
+            "many"
+          ]
+        }
+      ]
+    },
+    "ComponentName": {
+      "description": "A component's name, such as `invoice-service`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "Consistency": {
+      "description": "How soon a view reflects a command that has already returned.\n\nThis decides whether a generated scenario asserts the view with `expect` or with `eventually` — which is the entire reason the field exists. Getting it wrong in the model is how a generated suite acquires a sleep.",
+      "oneOf": [
+        {
+          "description": "The view is current as soon as the command that changed it returns.\n\nOnly for an implementation that reads the same store it wrote, or one that carries a consistency token from the write to the read.",
+          "type": "string",
+          "enum": [
+            "read_your_writes"
+          ]
+        },
+        {
+          "description": "The view catches up some time after the command returns.\n\nThe default, because assuming read-your-writes and being wrong produces a flaky suite, while assuming eventual and being wrong produces a slower but correct one.",
+          "type": "string",
+          "enum": [
+            "eventual"
+          ]
+        }
+      ]
+    },
+    "Conversion": {
+      "description": "A conversion someone decided to allow.\n\nDesign §20 requires that a mapping's two types \"be compatible, or an explicit conversion must exist\". This is that conversion, and it is a declaration rather than an inference on purpose: `Email` and `VerifiedEmail` are both a `String` underneath, and the entire value of naming them apart is that the model refuses to treat one as the other. Someone has to write down that this particular crossing is intended, so that the next reader can find who decided it.",
+      "type": "object",
+      "required": [
+        "because",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "because": {
+          "description": "Why this crossing is allowed.\n\nRequired. A conversion with no reason is the thing this declaration exists to prevent: a silent widening that someone added to make a build pass.",
+          "type": "string"
+        },
+        "from": {
+          "description": "The type a value has.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "to": {
+          "description": "The type it may be used as.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Delivery": {
+      "description": "How many times the command may run.\n\nTwo words, and they are not two points on one scale: they say which side of the invocation the risk sits on. Under [`AtLeastOnce`](Self::AtLeastOnce) the command may run again, so the handler carries the cost; under [`AtMostOnce`](Self::AtMostOnce) it may not run at all, so [`RawBindingSpec::on_failure`] carries it. Neither is \"exactly once\", and nothing here will ever spell that word — see [`AtMostOnce`](Self::AtMostOnce).",
+      "oneOf": [
+        {
+          "description": "At least once, so the command must be idempotent.\n\nStated rather than assumed because \"exactly once\" is what everyone believes they have until a retry proves otherwise.",
+          "type": "string",
+          "enum": [
+            "at_least_once"
+          ]
+        },
+        {
+          "description": "At most once: one attempt, and no redelivery.\n\nWhat it promises is a bound, not an arrival. The transport makes the invocation once; if that attempt does not land, nothing here delivers it again, and what happens instead is [`RawBindingSpec::on_failure`]'s to say — `retry` puts the attempts back, `escalate` publishes the event that says the work was lost, `drop` records that losing it is acceptable. So a binding that says `at_most_once` and `drop` has written down that this event's effect can disappear, which is the decision review F3 exists to make an author type.\n\nWhat it does **not** promise is exactly-once. A single attempt whose result is never read — the shape that made this word necessary — cannot distinguish \"did not happen\" from \"happened, and the acknowledgement was lost\", so the handler is owed no delivery and the caller is owed no confirmation. Duplicates are excluded; loss is not.\n\nThe handler is therefore not obliged to be idempotent by *this* word. That is the whole difference from [`AtLeastOnce`](Self::AtLeastOnce), and every projection that turns the guarantee into an obligation — the `OpenAPI` `Idempotency-Key`, the conformance redelivery scenario — reads it here rather than assuming.",
+          "type": "string",
+          "enum": [
+            "at_most_once"
+          ]
+        }
+      ]
+    },
+    "Direction": {
+      "description": "Which way a ranking key runs.",
+      "oneOf": [
+        {
+          "description": "Smallest first. The default, because it is the one a reader assumes when nothing says.",
+          "type": "string",
+          "enum": [
+            "ascending"
+          ]
+        },
+        {
+          "description": "Largest first.",
+          "type": "string",
+          "enum": [
+            "descending"
+          ]
+        }
+      ]
+    },
+    "Eligibility": {
+      "description": "The host samples eligibility at received-tick dispatch.",
+      "oneOf": [
+        {
+          "description": "The host samples eligibility at received-tick dispatch.",
+          "type": "string",
+          "enum": [
+            "host_boolean"
+          ]
+        }
+      ]
+    },
+    "Empty": {
+      "description": "The empty map `count` takes: no other spelling of \"no argument\" is accepted.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "EnumVariant": {
+      "description": "An enum variant: a bare name, or a mapping that also declares its wire spelling.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/NamedEnumVariant"
+        }
+      ]
+    },
+    "ExplicitPayloadSource": {
+      "type": "object",
+      "properties": {
+        "cleared": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "else": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawPayloadSource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generated": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "increment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawIncrement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "response": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExternalRef": {
+      "description": "One record outside this model, named as `provider:key`.",
+      "type": "string",
+      "not": {
+        "pattern": "^[a-z0-9-]+://"
+      },
+      "pattern": "^[a-z0-9-]+:[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000]([\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028-\\u2029\\u202F\\u205F\\u3000])?$"
+    },
+    "Failure": {
+      "description": "What happens when the command does not run.\n\nThe word only. What an [`Escalate`](Self::Escalate) publishes is beside it — on [`RawFailure::emits`] as a document writes it, on [`BindingSpec::escalation`] once validated — so that this stays the one token every projection prints as \"the word an author wrote\".",
+      "oneOf": [
+        {
+          "description": "Try again, on whatever schedule the transport provides.\n\nObservable without anything further being declared: a retry is another invocation of the command, which [`Delivery::AtLeastOnce`] already obliges the handler to survive.",
+          "type": "string",
+          "enum": [
+            "retry"
+          ]
+        },
+        {
+          "description": "Surface it to a person, and publish the declared event that says so.\n\nThe event is required — see [`BindingSpec::escalation`]. Surfacing something to a person is an effect outside the system, and a specification that names one without saying how the system shows it happened has written a requirement no oracle can check.",
+          "type": "string",
+          "enum": [
+            "escalate"
+          ]
+        },
+        {
+          "description": "Give up silently.\n\nLegal, and never a default: a system that loses work is a decision, and the decision has to be findable in the document that made it.\n\nDeliberately the one policy with nothing to observe. Publishing an event here would make it a notification, which is a different decision that already has a word.",
+          "type": "string",
+          "enum": [
+            "drop"
+          ]
+        }
+      ]
+    },
+    "Field": {
+      "description": "One field of a struct or an event.",
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "code": {
+          "description": "The identifier a code emitter spells this as, when the one it would derive is taken.\n\nA target that has no dotted type names flattens a qualified name to one identifier, so `billing.invoice.Invoice.State` and an authored `billing.invoice.InvoiceState` both want to be `InvoiceState`. One of them has to move, and this says which — because the author knows which name carries meaning and an emitter does not.\n\nIt is deliberately not a per-target map. A name that differs between Rust and Go is two names to keep in step, and nothing in this model has ever needed one: the collision is a property of flattening, which every such target does the same way.\n\nOnly code emitters read it. Wire names, document schemas and the qualified name itself are untouched, so setting it cannot break a deployed consumer — which is the whole reason it is a separate key rather than a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "description": "What a person is shown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "naming": {
+          "description": "The same naming, written nested as commands and events write theirs. Not beside the flat keys.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presence": {
+          "description": "How an absent value travels, on an `Optional<T>` field (ess/15). A field key rather than a naming key, so no other construct's `naming:` can declare one.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Presence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "One line about what it is, for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Its type.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "wire": {
+          "description": "What this is called on the wire — an HTTP path segment, a topic name, a JSON field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "First": {
+      "description": "There is no immediate periodic call.",
+      "oneOf": [
+        {
+          "description": "There is no immediate periodic call.",
+          "type": "string",
+          "enum": [
+            "after_period"
+          ]
+        }
+      ]
+    },
+    "First2": {
+      "description": "A bounded predicate and earlier occurrence exclusions.",
+      "type": "object",
+      "required": [
+        "in",
+        "where"
+      ],
+      "properties": {
+        "excluding": {
+          "description": "Earlier selected occurrences excluded by original index.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "in": {
+          "description": "Local input identity.",
+          "type": "string"
+        },
+        "where": {
+          "description": "Existing finite predicate syntax, checked against the item declaration.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FixtureName": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "FormatVersion": {
+      "description": "The specification language version, such as `ess/1`.",
+      "type": "string",
+      "pattern": "^ess/[1-9][0-9]*$"
+    },
+    "HeldStates": {
+      "description": "One held lifecycle state, or a nonempty list of them (ess/18).",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StateName"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateName"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "HostInputContract": {
+      "description": "A binding-local required interface; a declaration is not proof of authentication.",
+      "type": "object",
+      "required": [
+        "authority",
+        "context_fields",
+        "eligibility",
+        "owner",
+        "read_fields"
+      ],
+      "properties": {
+        "authority": {
+          "description": "Binding-local authority name; no credentials are serialized here.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BindingName"
+            }
+          ]
+        },
+        "context_fields": {
+          "description": "Lifetime-constant fields, supplied by the authenticated session.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "eligibility": {
+          "description": "Required host decision before starting a read.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Eligibility"
+            }
+          ]
+        },
+        "owner": {
+          "description": "Existing component responsible for the adapter boundary.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ComponentName"
+            }
+          ]
+        },
+        "read_fields": {
+          "description": "Fresh required read results for each eligible occurrence.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "InputField": {
+      "description": "One field of a command's input, as written: a [`Field`] that may also carry an `example:`.\n\nIts own type rather than a key on [`Field`], which struct, event, error, entity, view, parameter and response fields share: an `example:` there would parse in every one of those positions, and each would have to refuse it by hand — one missed position would be an example silently ignored. Here every other position refuses it as an unknown field by construction. The attributes are [`Field`]'s exactly, and `the_published_input_field_is_a_field_plus_exactly_example` holds the two published schemas to differing by that one property (`docs/design/string-alphabet-and-length.md`, section 2).",
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "code": {
+          "description": "The identifier a code emitter spells this as, when the one it would derive is taken.\n\nA target that has no dotted type names flattens a qualified name to one identifier, so `billing.invoice.Invoice.State` and an authored `billing.invoice.InvoiceState` both want to be `InvoiceState`. One of them has to move, and this says which — because the author knows which name carries meaning and an emitter does not.\n\nIt is deliberately not a per-target map. A name that differs between Rust and Go is two names to keep in step, and nothing in this model has ever needed one: the collision is a property of flattening, which every such target does the same way.\n\nOnly code emitters read it. Wire names, document schemas and the qualified name itself are untouched, so setting it cannot break a deployed consumer — which is the whole reason it is a separate key rather than a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "description": "What a person is shown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "example": {
+          "description": "The value synthesis builds this input from (ess/11). Not a constraint: the input still accepts every value of its type.\n\nAn authored `example: null` is kept as `Some(Node::Null)` rather than read as no example, so validation can refuse it: an example is a value, and `null` is none.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Node"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "naming": {
+          "description": "The same naming, written nested as commands and events write theirs. Not beside the flat keys.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presence": {
+          "description": "How an absent value travels, on an `Optional<T>` field (ess/15). A field key rather than a naming key, so no other construct's `naming:` can declare one.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Presence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "One line about what it is, for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Its type.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "wire": {
+          "description": "What this is called on the wire — an HTTP path segment, a topic name, a JSON field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Invariant": {
+      "description": "A condition every instance must satisfy, as a predicate over its fields — an entity's may also read the pseudo-field `state`, a newtype's reads `value`. Transition legality is not written here: a move that is not declared is already impossible.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      ]
+    },
+    "Lifetime": {
+      "description": "The poll belongs to one authenticated host instance.",
+      "oneOf": [
+        {
+          "description": "The poll belongs to one authenticated host instance.",
+          "type": "string",
+          "enum": [
+            "host_instance"
+          ]
+        }
+      ]
+    },
+    "Missed": {
+      "description": "Retain at most one pending tick; drop excess deadlines.",
+      "oneOf": [
+        {
+          "description": "Retain at most one pending tick; drop excess deadlines.",
+          "type": "string",
+          "enum": [
+            "one_pending_drop_excess"
+          ]
+        }
+      ]
+    },
+    "NamedEnumVariant": {
+      "description": "The mapping form, used only to read and write a variant that declares naming.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "code": {
+          "description": "The identifier a code emitter spells this as, when the one it would derive is taken.\n\nA target that has no dotted type names flattens a qualified name to one identifier, so `billing.invoice.Invoice.State` and an authored `billing.invoice.InvoiceState` both want to be `InvoiceState`. One of them has to move, and this says which — because the author knows which name carries meaning and an emitter does not.\n\nIt is deliberately not a per-target map. A name that differs between Rust and Go is two names to keep in step, and nothing in this model has ever needed one: the collision is a property of flattening, which every such target does the same way.\n\nOnly code emitters read it. Wire names, document schemas and the qualified name itself are untouched, so setting it cannot break a deployed consumer — which is the whole reason it is a separate key rather than a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "description": "What a person is shown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "summary": {
+          "description": "One line about what it is, for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wire": {
+          "description": "What this is called on the wire — an HTTP path segment, a topic name, a JSON field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NamedType": {
+      "description": "What a named type is made of, as parsed.\n\n`deny_unknown_fields` sits here rather than on [`RawNamedType`], which cannot carry it: serde ignores the attribute on a struct with a flattened field. The body is what the keys nothing else claimed are offered to, so refusing an unknown one here is what refuses `invarants:` and `namin:` — each of which used to parse clean and silently drop what the author wrote.",
+      "oneOf": [
+        {
+          "description": "A wrapper around one representation, distinct from it.",
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "of"
+          ],
+          "properties": {
+            "alphabet": {
+              "description": "The characters every value is drawn from (ess/11); only a newtype of `String` takes one.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "invariants": {
+              "description": "Conditions every value must satisfy, as predicates over `value`, what it wraps.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Invariant"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "newtype"
+              ]
+            },
+            "name": {
+              "description": "Its stable identity.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/QualifiedName"
+                }
+              ]
+            },
+            "naming": {
+              "description": "What it is called on the wire and shown as.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Naming"
+                }
+              ]
+            },
+            "of": {
+              "description": "What it wraps.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/TypeRef"
+                }
+              ]
+            },
+            "prefix": {
+              "description": "The text every value starts with (ess/15); only a newtype of `String` takes one.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reading": {
+              "$ref": "#/definitions/ReadingContract"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Named fields.",
+          "type": "object",
+          "required": [
+            "fields",
+            "kind",
+            "name"
+          ],
+          "properties": {
+            "fields": {
+              "description": "Its fields.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Field"
+              }
+            },
+            "invariants": {
+              "description": "Conditions every value must satisfy, as predicates over those fields.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Invariant"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "struct"
+              ]
+            },
+            "name": {
+              "description": "Its stable identity.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/QualifiedName"
+                }
+              ]
+            },
+            "naming": {
+              "description": "What it is called on the wire and shown as.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Naming"
+                }
+              ]
+            },
+            "reading": {
+              "$ref": "#/definitions/ReadingContract"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "One of a fixed set of names.",
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "variants"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "enum"
+              ]
+            },
+            "name": {
+              "description": "Its stable identity.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/QualifiedName"
+                }
+              ]
+            },
+            "naming": {
+              "description": "What it is called on the wire and shown as.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Naming"
+                }
+              ]
+            },
+            "reading": {
+              "$ref": "#/definitions/ReadingContract"
+            },
+            "variants": {
+              "description": "The variants, in declaration order.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnumVariant"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "One of several shapes, distinguished by a tag field.",
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "tag",
+            "variants"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "union"
+              ]
+            },
+            "name": {
+              "description": "Its stable identity.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/QualifiedName"
+                }
+              ]
+            },
+            "naming": {
+              "description": "What it is called on the wire and shown as.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Naming"
+                }
+              ]
+            },
+            "reading": {
+              "$ref": "#/definitions/ReadingContract"
+            },
+            "tag": {
+              "description": "The field carrying the variant's name.",
+              "type": "string"
+            },
+            "variants": {
+              "description": "The variants, by tag value, each with the payload it carries.\n\nA variant written with no type (`Open:` or `Open: ~`) is a unit variant (ess/22, beyond10x/ess#418): it carries nothing, and its value on the wire is the tag alone.",
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/TypeRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "description": "Its stable identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "reading": {
+          "$ref": "#/definitions/ReadingContract"
+        }
+      }
+    },
+    "Naming": {
+      "description": "What a concept is called on the wire, what a person is shown, and what a code emitter spells it.\n\nAll are optional and all default to the qualified name's last segment. The point of separating them is that changing each is a different kind of event: a display change is free, a wire change breaks deployed consumers, a `code` change breaks only a generated source tree, and a qualified-name change breaks the model.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The identifier a code emitter spells this as, when the one it would derive is taken.\n\nA target that has no dotted type names flattens a qualified name to one identifier, so `billing.invoice.Invoice.State` and an authored `billing.invoice.InvoiceState` both want to be `InvoiceState`. One of them has to move, and this says which — because the author knows which name carries meaning and an emitter does not.\n\nIt is deliberately not a per-target map. A name that differs between Rust and Go is two names to keep in step, and nothing in this model has ever needed one: the collision is a property of flattening, which every such target does the same way.\n\nOnly code emitters read it. Wire names, document schemas and the qualified name itself are untouched, so setting it cannot break a deployed consumer — which is the whole reason it is a separate key rather than a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "description": "What a person is shown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "description": "One line about what it is, for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wire": {
+          "description": "What this is called on the wire — an HTTP path segment, a topic name, a JSON field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Node": {
+      "description": "Any JSON/YAML value: null, boolean, number, string, array or object."
+    },
+    "OffsetAuthority": {
+      "description": "Where the offset interpretation can come from.",
+      "oneOf": [
+        {
+          "description": "The declared encoding actually encodes the offset.",
+          "type": "string",
+          "enum": [
+            "encoded_offset"
+          ]
+        },
+        {
+          "description": "Integer Unix seconds define the coordinate, not the source clock identity.",
+          "type": "string",
+          "enum": [
+            "encoding_defined_epoch"
+          ]
+        },
+        {
+          "description": "A fixed formatter offset must be observed for this occurrence.",
+          "type": "string",
+          "enum": [
+            "requires_observation"
+          ]
+        },
+        {
+          "description": "Offset authority is unavailable.",
+          "type": "string",
+          "enum": [
+            "unknown"
+          ]
+        }
+      ]
+    },
+    "OutcomeGroupName": {
+      "description": "An outcome group's identifier, such as `remote-backed`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "OutcomeName": {
+      "description": "The lower-kebab name of one outcome, such as `accepted`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "Overlap": {
+      "description": "One complete read/apply operation per host lifetime.",
+      "oneOf": [
+        {
+          "description": "One complete read/apply operation per host lifetime.",
+          "type": "string",
+          "enum": [
+            "serial_per_instance"
+          ]
+        }
+      ]
+    },
+    "Paging": {
+      "description": "How a view's rows are paged: which declared parameters carry the page and its size, how pages are numbered, and whether the answer carries the filtered count.",
+      "type": "object",
+      "required": [
+        "page",
+        "size"
+      ],
+      "properties": {
+        "first_page": {
+          "description": "The number of the first page: `0` (the default) or `1`.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "page": {
+          "description": "The declared parameter that selects the page.",
+          "type": "string"
+        },
+        "size": {
+          "description": "The declared parameter that bounds how many rows a page holds.",
+          "type": "string"
+        },
+        "total": {
+          "description": "Whether the answer carries the number of rows the filter admits, beside the page.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Period": {
+      "description": "Positive, whole seconds, written `PT<seconds>S`; unlike elapsed observations, a period cannot be zero.",
+      "type": "string",
+      "pattern": "^PT([1-9][0-9]{0,8}|[1-3][0-9]{9}|4[01][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[01][0-9]{2}|42949672[0-8][0-9]|429496729[0-5])S$"
+    },
+    "PeriodicCause": {
+      "description": "The only initially admitted periodic profile, with every choice explicit.",
+      "type": "object",
+      "required": [
+        "anchor",
+        "cadence",
+        "cancellation",
+        "every",
+        "first",
+        "host",
+        "lifetime",
+        "missed",
+        "overlap"
+      ],
+      "properties": {
+        "anchor": {
+          "description": "Deadline anchor.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Anchor"
+            }
+          ]
+        },
+        "cadence": {
+          "description": "Cadence rule.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Cadence"
+            }
+          ]
+        },
+        "cancellation": {
+          "description": "End-of-lifetime observation.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Cancellation"
+            }
+          ]
+        },
+        "every": {
+          "description": "A strictly positive whole-second interval.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Period"
+            }
+          ]
+        },
+        "first": {
+          "description": "Initial-fire rule.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/First"
+            }
+          ]
+        },
+        "host": {
+          "description": "Required typed host input authority.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HostInputContract"
+            }
+          ]
+        },
+        "lifetime": {
+          "description": "Lifetime owner.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Lifetime"
+            }
+          ]
+        },
+        "missed": {
+          "description": "Missed-period policy.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Missed"
+            }
+          ]
+        },
+        "overlap": {
+          "description": "Concurrency bound.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Overlap"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Precondition": {
+      "description": "One ambient command invocation a system runs inside — an open session whose user row exists (ess/15, beyond10x/ess#152, `docs/design/outcome-shapes.md`).\n\nSynthesis runs the list, in order, before every scenario's arrangement, and a generated explorer runs it before every sequence, so the model it compares against starts from the state the preconditions leave. Each must take the command's declared success branch; one that is refused fails the scenario as setup. An input value a deterministic generator cannot choose comes from the command's `fixture_inputs:` (ess/13), written `{fixture: name}` or left out.",
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "as": {
+          "description": "The actor it is invoked as; omitted, the actor the specification grants it to.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command": {
+          "description": "The command invoked.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "input": {
+          "description": "Its input by declared field: a literal, or `{fixture: name}`.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Predicate": {
+      "description": "A condition over facts: the compact expression form (`tests.unit.failed == 0`), a list (implicit `all`), or a mapping using `all`, `any`, `not`, `none`, `forall`, `exists` or a fact path with an operator constraint. A text fact is tested against a text literal, map form only, with `starts_with`, `ends_with` or `contains`, and without ASCII case with `equals_ignore_case` (one literal) or `in_ignore_case` (a list). From `ess/22` a comparison operand may be the explicit fact `{fact: <path>}`, two `Timestamp` facts compare as instants in the closed form `{compare: {left, op, right, as: timestamp}}`, and a comparison operand may be one fact moved by one constant, `{offset: {fact: <path>, add|subtract: <magnitude>}}` — a whole number for an `Integer`, a whole number of `s`, `m` or `h` for a `Timestamp`. Either operand may be the UTF-8 byte length of a `String`, `{utf8_bytes: <path>}`, with the comparison written `{compare: {left, op, right}}` where it stands on the left. From `ess/22` `distinct: {in: <list>, as: <name>, by: <name>.<member>}` holds when no two elements of a list share a key: the element, or the one scalar member `by` names. A string operator may compare with a view parameter, `{param: <name>}`, or a command input, `{input: <name>}`. A command guard may hold an instant to a calendar window at UTC or a fixed offset, `{window: {at: now | <path>, days: [mon, …], from: \"HH:MM\", to: \"HH:MM\", offset: Z | ±HH:MM}}`; a named time zone is refused.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      ]
+    },
+    "Presence": {
+      "description": "How an absent value of an `Optional<T>` field is spelled on the wire (beyond10x/ess#139, ess/15).\n\nAn `Optional` that declares neither admits both spellings, as it always did. A field that declares one is held to it by the published JSON Schema and by a conformance suite's payload shape, so an implementation that swaps the two fails.",
+      "oneOf": [
+        {
+          "description": "The key is always sent; an absent value is an explicit `null`.",
+          "type": "string",
+          "enum": [
+            "null_when_absent"
+          ]
+        },
+        {
+          "description": "The key is left out when the value is absent, and never sent as `null`.",
+          "type": "string",
+          "enum": [
+            "omitted_when_absent"
+          ]
+        }
+      ]
+    },
+    "QualifiedName": {
+      "description": "Stable logical identity, such as `billing.invoice.CreateInvoice`. Not a wire name.",
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*(\\.[A-Za-z][A-Za-z0-9_-]*)*$"
+    },
+    "Ranking": {
+      "description": "One ranking key of a view: a field it projects, and which way that field runs.\n\nWritten `priority desc`, or `queued_at` for the ascending default.",
+      "type": "object",
+      "required": [
+        "direction",
+        "field"
+      ],
+      "properties": {
+        "direction": {
+          "description": "Which way it runs.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Direction"
+            }
+          ]
+        },
+        "field": {
+          "description": "The projected field the rows are ordered by.",
+          "type": "string"
+        }
+      }
+    },
+    "RawActorSpec": {
+      "description": "An actor, as parsed.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "attributes": {
+          "description": "What its credential carries about it (ess/16).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "may": {
+          "description": "The commands it may invoke.\n\nAbsent means it may invoke none, which is a legitimate thing to say: an actor that only observes still belongs in the model, because \"who is in this picture\" is part of what the specification describes.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "description": "Its stable logical identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawAffect": {
+      "description": "One `affects:` entry as written.",
+      "type": "object",
+      "required": [
+        "entity",
+        "where"
+      ],
+      "properties": {
+        "entity": {
+          "description": "The entity whose rows change.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "moves": {
+          "description": "The move every selected row resting in its `from` states takes, written `<Entity>.<transition>` over `entity` (ess/22, beyond10x/ess#229); a selected row resting elsewhere is skipped.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sets": {
+          "description": "What every selected row comes to hold.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawPayloadSource"
+          }
+        },
+        "where": {
+          "description": "The rows selected, over the entity's fields, `input.` and `subject.`.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawAggregate": {
+      "description": "An aggregate as written: a map with exactly one function key and, beside a function that reads a value, `skip_absent: true`; beside any function, `where:`, the rows of the group this measure reads (ess/22).",
+      "oneOf": [
+        {
+          "description": "`{count: {}}`.",
+          "type": "object",
+          "required": [
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "$ref": "#/definitions/Empty"
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{count_distinct: field}`, optionally with `skip_absent: true`.",
+          "type": "object",
+          "required": [
+            "count_distinct"
+          ],
+          "properties": {
+            "count_distinct": {
+              "type": "string"
+            },
+            "skip_absent": {
+              "description": "Absent values of the argument are skipped, as SQL skips NULL (ess/15). Written `true` or not at all.",
+              "type": "boolean",
+              "const": true
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{sum: field}`, optionally with `skip_absent: true`.",
+          "type": "object",
+          "required": [
+            "sum"
+          ],
+          "properties": {
+            "skip_absent": {
+              "description": "Absent values of the argument are skipped, as SQL skips NULL (ess/15). Written `true` or not at all.",
+              "type": "boolean",
+              "const": true
+            },
+            "sum": {
+              "type": "string"
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{min: field}`, optionally with `skip_absent: true`.",
+          "type": "object",
+          "required": [
+            "min"
+          ],
+          "properties": {
+            "min": {
+              "type": "string"
+            },
+            "skip_absent": {
+              "description": "Absent values of the argument are skipped, as SQL skips NULL (ess/15). Written `true` or not at all.",
+              "type": "boolean",
+              "const": true
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{max: field}`, optionally with `skip_absent: true`.",
+          "type": "object",
+          "required": [
+            "max"
+          ],
+          "properties": {
+            "max": {
+              "type": "string"
+            },
+            "skip_absent": {
+              "description": "Absent values of the argument are skipped, as SQL skips NULL (ess/15). Written `true` or not at all.",
+              "type": "boolean",
+              "const": true
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{avg: field}`, optionally with `skip_absent: true`.",
+          "type": "object",
+          "required": [
+            "avg"
+          ],
+          "properties": {
+            "avg": {
+              "type": "string"
+            },
+            "skip_absent": {
+              "description": "Absent values of the argument are skipped, as SQL skips NULL (ess/15). Written `true` or not at all.",
+              "type": "boolean",
+              "const": true
+            },
+            "where": {
+              "$ref": "#/definitions/Predicate"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RawBindingSpec": {
+      "description": "A binding, as a document says it.",
+      "type": "object",
+      "required": [
+        "delivery",
+        "invoke",
+        "name",
+        "on_failure",
+        "when"
+      ],
+      "properties": {
+        "delivery": {
+          "description": "How many times the command may run. Required.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Delivery"
+            }
+          ]
+        },
+        "invoke": {
+          "description": "What it does.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawInvocation"
+            }
+          ]
+        },
+        "mapping": {
+          "description": "How the event's fields become the command's input.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AuthoredMappingSchema"
+          }
+        },
+        "name": {
+          "description": "Its identifier, unique in the system.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "on_failure": {
+          "description": "What happens when it does not run. Required.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BindingFailure"
+            }
+          ]
+        },
+        "refs": {
+          "description": "The records outside this model that explain it, such as `jira:DEV-630`.\n\nEmpty by default. See [`crate::refs`] for why this is a reference and not a paragraph.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          }
+        },
+        "selection_inputs": {
+          "description": "Typed lists prepared once for this binding occurrence.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SelectionInput"
+          }
+        },
+        "selections": {
+          "description": "Finite selectors in authored evaluation order.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Selection"
+          }
+        },
+        "summary": {
+          "description": "What it is for, in one line.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "when": {
+          "description": "What it reacts to.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawTrigger"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCallerSource": {
+      "description": "`{caller: <attribute>}` (ess/16, #168), written alone.\n\nRecognised by its exact shape — one key, `caller`, holding a text — so `caller` is no source keyword: any other mapping under a `caller` key is a nested mapping, as it was before `ess/16`. A document below `ess/16` whose struct happens to have this shape is read back as that nested mapping by [`read_below_ess_16`].",
+      "type": "object",
+      "required": [
+        "caller"
+      ],
+      "properties": {
+        "caller": {
+          "description": "An attribute every actor that may invoke the command declares.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCommandGroup": {
+      "description": "One first-level word in a command tree, as a document says it.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "commands": {
+          "description": "The commands under it.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        },
+        "name": {
+          "description": "The word, as typed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "summary": {
+          "description": "What the group is, in one line. Becomes the group's `--help` text.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "views": {
+          "description": "The views read under it.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCommandLineSurface": {
+      "description": "Where a command-line surface puts each command it accepts, as a document says it.\n\n# Why this is declared and paths are not\n\nA command's own path is derived, the way an `OpenAPI` path already is: `naming.wire` gives it one token. Which *activity* it belongs under cannot be derived from anything — `doctor` and `providers` are both reads, `init` and `connect` are both first-run, and no field in the model says so. That judgement is the whole content of this block, and writing it here is what lets a checker answer \"does every command have exactly one place\" at all.",
+      "type": "object",
+      "required": [
+        "binary"
+      ],
+      "properties": {
+        "binary": {
+          "description": "What the binary is called, as typed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "commands": {
+          "description": "Commands that sit at the top level, under no group.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        },
+        "groups": {
+          "description": "The groups, each a first-level word with commands under it.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawCommandGroup"
+          }
+        },
+        "views": {
+          "description": "Views read at the top level, under no group.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCommandSpec": {
+      "description": "A command as written in a document, before validation.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "fixture_inputs": {
+          "description": "Independently provisioned conformance inputs, keyed by declared input field.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/FixtureName"
+          }
+        },
+        "input": {
+          "description": "What the caller supplies.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InputField"
+          }
+        },
+        "name": {
+          "description": "Its stable identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "outcomes": {
+          "description": "Everything it can result in.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawOutcome"
+          }
+        },
+        "refs": {
+          "description": "The records outside this model that explain it, such as `jira:DEV-630`.\n\nEmpty by default. See [`crate::refs`] for why this is a reference and not a paragraph.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          }
+        },
+        "response": {
+          "description": "Closed fields of the response returned by this command.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawComponentOwns": {
+      "description": "What a component owns.",
+      "type": "object",
+      "properties": {
+        "domains": {
+          "description": "The domains, by qualified name.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawComponentSetting": {
+      "description": "One configuration input a component declares, as a document says it.\n\nThe type is a [`TypeRef`], so `types:` is reused entire — invariants included — rather than growing a second type language beside it. Configuration is unbounded per application, and what keeps this list from becoming that language is that it declares nothing of its own beyond a name and three flags.",
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "description": "Its identity, spelt the way a word a person types is.\n\nThe charset is published, because it is checkable there: a schema that accepts what [`CliName::new`] refuses would hand an author a green editor and a red `ess validate`.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "required": {
+          "description": "Whether a value must be present.\n\nA restatement of the type, and optional: unstated is unchecked — see [`ComponentSpec::validate_settings`] for why silence is not a contradiction — and answered by the type, which is [`requires_a_value`].",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "secret": {
+          "description": "Whether the model may not hold the value.",
+          "default": false,
+          "type": "boolean"
+        },
+        "summary": {
+          "description": "What it is, in one line, for generated documentation.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Its type: anything the specification declares.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "value": {
+          "description": "A public literal the specification fixes.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawComponentSpec": {
+      "description": "What a component is made of, as a document says it.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "accepts": {
+          "description": "The commands it accepts.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawComponentSurface"
+            }
+          ]
+        },
+        "cli": {
+          "description": "Where each accepted command sits in the command tree, when this is a command-line surface.\n\nUnstated is absent, and absent digests as it did before the key existed. Only meaningful beside [`Reach::CommandLine`]; anywhere else it is refused.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawCommandLineSurface"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Its name — a single segment, like `invoice-service`.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "owns": {
+          "description": "The domains it owns.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawComponentOwns"
+            }
+          ]
+        },
+        "publishes": {
+          "description": "The events it publishes.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawComponentSurface"
+            }
+          ]
+        },
+        "reached_by": {
+          "description": "Who reaches its accepted commands and the views its domains declare.\n\nUnstated is [`Reach::InProcess`] — the shape every specification here had before the word existed, and the one a reader assumes when nothing says otherwise.",
+          "default": "in_process",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Reach"
+            }
+          ]
+        },
+        "refs": {
+          "description": "The records outside this model that explain it, such as `jira:DEV-630`.\n\nEmpty by default. See [`crate::refs`] for why this is a reference and not a paragraph.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          }
+        },
+        "settings": {
+          "description": "The configuration inputs it reads.\n\nUnstated is empty, and empty serialises out, so a specification written before this key existed digests exactly as it did — the same position `reached_by` and `cli:` took.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawComponentSetting"
+          }
+        },
+        "summary": {
+          "description": "What it is, in one line.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawComponentSurface": {
+      "description": "The commands a component accepts, or the events it publishes.\n\nOne shape for both because the document spells them the same way (§5) and a second shape would be a second thing to keep in step.",
+      "type": "object",
+      "properties": {
+        "commands": {
+          "description": "Commands, when this is an `accepts:` block.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        },
+        "events": {
+          "description": "Events, when this is a `publishes:` block.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCountSource": {
+      "description": "`{count: changed}` as written.",
+      "type": "object",
+      "required": [
+        "count"
+      ],
+      "properties": {
+        "count": {
+          "description": "`changed`: the rows the outcome changed.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawEntitySpec": {
+      "description": "An entity, as parsed.\n\nA lifecycle is required rather than defaulted. An entity with one state says so in three lines; a default would invent a state name the author never wrote, and every generated enum, diagram and stored value would then carry a word from this file rather than from the specification.",
+      "type": "object",
+      "required": [
+        "identity",
+        "lifecycle",
+        "name"
+      ],
+      "properties": {
+        "fields": {
+          "description": "What it holds.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "identity": {
+          "description": "How the entity is identified.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Field"
+            }
+          ]
+        },
+        "invariants": {
+          "description": "What must hold of every instance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Invariant"
+          }
+        },
+        "lifecycle": {
+          "description": "Its lifecycle, under `lifecycle`.\n\n§4.7 writes `states` and `transitions` as keys of the entity itself. They are nested here instead, because flattening them would cost every unknown-key check in the document: serde ignores `deny_unknown_fields` on a struct that flattens *and* on the struct flattened into it, so `invariant:` for `invariants:` would silently drop every invariant an author wrote. A nested key is a small deviation; a specification that quietly means something else is not.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawStateMachine"
+            }
+          ]
+        },
+        "name": {
+          "description": "Its stable logical identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "relations": {
+          "description": "What it owns and what it names.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RelationSpec"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawErrorSpec": {
+      "description": "An error as written in a document, before validation.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "fields": {
+          "description": "What the error carries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "name": {
+          "description": "Its stable identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "Explicit transport spelling and presentation metadata.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "summary": {
+          "description": "One line saying what went wrong.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawEscalation": {
+      "description": "What an `escalate:` block says, as a document says it.\n\nOne key, so that adding a second way to observe an escalation later is a key beside `emits:` rather than a change to the shape of `on_failure:`.",
+      "type": "object",
+      "properties": {
+        "emits": {
+          "description": "The event the system publishes when it escalates.\n\nOptional here and required by [`BindingSpec::validate`], so that `escalate:` with an empty block is refused by the same rule as `escalate` written bare.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawEventSpec": {
+      "description": "An event as written in a document, before validation.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "fields": {
+          "description": "What the fact records.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "name": {
+          "description": "Its stable identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawGroupOutcome": {
+      "description": "One outcome of a group: always an external refusal.",
+      "type": "object",
+      "required": [
+        "error",
+        "external",
+        "name"
+      ],
+      "properties": {
+        "error": {
+          "description": "The error it reports.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "external": {
+          "description": "What outside the input decides this branch.",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the outcome is called in every member.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OutcomeName"
+            }
+          ]
+        },
+        "refs": {
+          "description": "The records outside this model that explain it.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          }
+        },
+        "summary": {
+          "description": "One line for generated documentation.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawIncrement": {
+      "description": "The amount of an `{increment: …}`: a whole number, an unquoted decimal, or quoted decimal text.",
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "RawInstances": {
+      "description": "What `instances:` holds as written.",
+      "type": "object",
+      "required": [
+        "where"
+      ],
+      "properties": {
+        "where": {
+          "description": "The rows selected: a predicate over the entity's stored fields, with `input.` operands.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawInvocation": {
+      "description": "What a binding does.",
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "description": "The command.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawNestedSources": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/RawPayloadSource"
+      }
+    },
+    "RawOutcome": {
+      "description": "One outcome as written in a document, before validation.\n\n`when`, `external` and `wrong_state` are the three spellings of a condition; writing none of them is the default branch. In ess/6, `when` beside `external` states input eligibility while retaining an independently arranged external cause. Other conflicts are refused.\n\n`creates`, `moves` and `updates` are the three spellings of a [`Subject`], and follow the same shape for the same reason: three keys an author writes at most one of, rather than one key whose value is sometimes a keyword and sometimes a name. Writing none of them says the outcome changes no entity, which is the honest answer for `SendEmail`.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "accepts": {
+          "description": "`nothing`: the request is accepted and nothing observable changes (ess/15, beyond10x/ess#144). Admitted under `when:` or as the default, on a branch with no subject, no event and no error.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Accepts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "affects": {
+          "description": "Secondary effects on the rows filters select (ess/16, beyond10x/ess#175): beside one existing subject only.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawAffect"
+          }
+        },
+        "compensates": {
+          "description": "`true` marks an `external:` refusal that changes the one row its `instance:` names before it answers its `error:` (ess/22, beyond10x/ess#197, `docs/design/refusal-with-effect.md`). The change is spelled with `moves:` or `updates:` and `sets:`; `false` is the document without the key.",
+          "type": "boolean"
+        },
+        "creates": {
+          "description": "The entity a new instance of which this outcome brings into existence.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deletes": {
+          "description": "The existing entity this outcome removes (ess/15, beyond10x/ess#151).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "emits": {
+          "description": "The events it emits.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          }
+        },
+        "error": {
+          "description": "The error it reports.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "existing_instance": {
+          "description": "`true` when this is the branch taken because a record already carries the identity the command's creating branch would create (ess/16, beyond10x/ess#164).\n\nThe refusal half of create-or-refuse: alone, naming its `error:`, beside a `creates:` whose identity the caller supplies. The create-or-update half is `unknown_instance: true` on the `creates:` branch itself.",
+          "type": "boolean"
+        },
+        "external": {
+          "description": "What outside the input decides this branch.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_absent": {
+          "description": "`true` when this is the branch taken for a request that carries no input at all (ess/16).\n\nAn absent request body, as distinct from `{}` and from a body lacking a field (beyond10x/ess#170). Beside `unknown_instance:`, alone, naming its `error:`.",
+          "type": "boolean"
+        },
+        "instance": {
+          "description": "Which field carries the identity of the instance this outcome acts on.\n\nRequired beside `creates`, `moves` and `updates`, and meaningless without one. The verb decides which surface the name is read from — see [`Subject::surface`].",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instances": {
+          "description": "Every stored row a filter selects, instead of `instance:` (ess/16, beyond10x/ess#167): beside `moves:` or `updates:` only.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawInstances"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "into": {
+          "description": "The declared state a `creates:` brings its instance into, where it is not the lifecycle's `initial` (ess/15, beyond10x/ess#150). Admitted only beside `creates:`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StateName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moves": {
+          "description": "The transition this outcome takes, written as the entity's name followed by the transition's own — `billing.invoice.Invoice.settle`.\n\nOne name rather than an entity and a transition written separately, because a transition is declared *inside* an entity: `billing.invoice.Invoice.State` is already spelt this way by [`EntitySpec::state_type`](crate::entity::EntitySpec::state_type), and two keys that only mean something together are two keys an author can write half of.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "What this outcome is called.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OutcomeName"
+            }
+          ]
+        },
+        "one_time_response": {
+          "description": "Outcome-local names of required String response fields (ess/21).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "payload": {
+          "description": "Where the emitted events' payload fields come from, for the fields the author determines.\n\nKeyed by emitted event, then by that event's field, and sparse on both levels — see [`PayloadSource`] for why an absent field is a statement rather than an omission. From `ess/19` a block keyed by the error the outcome reports says where that error's fields come from ([`Outcome::error_payload`]).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/RawPayloadSource"
+            }
+          }
+        },
+        "preserves": {
+          "description": "The existing entity whose state and fields this silent branch preserves (ess/6).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refs": {
+          "description": "The records outside this model that explain it, such as `jira:DEV-630`.\n\nEmpty by default. See [`crate::refs`] for why this is a reference and not a paragraph.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalRef"
+          }
+        },
+        "refuses": {
+          "description": "Whether the command *refuses* in those states, or accepts and changes nothing.\n\nAbsent means it refuses, which is what every wrong-state branch written before this key existed meant, and it is the answer that needs an `error:`. `refuses: false` is the other answer and the reason the key exists: a command can be deliberately idempotent, answering from a state none of its moves start from without acting and without reporting anything. Before this, a specification had no way to write that down — so an author with an idempotent command either claimed a refusal the implementation never makes, or said nothing at all about those states.\n\nA key rather than \"leave `error:` out\", because those are not the same document: a branch missing its `error:` is a mistake the validator has caught since `wrong_state:` shipped, and making the omission mean *accepts* would turn every one of those mistakes into a silent claim.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "replays": {
+          "description": "The originating success of this same command, retained without another effect (ess/7).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OutcomeName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "returns": {
+          "description": "The outcome returns the command's typed response (ess/17), without implying effects.",
+          "type": "boolean"
+        },
+        "sets": {
+          "description": "Which fields of the subject this outcome sets, and from where.\n\nKeyed by the entity's own field, and sparse for the reason [`PayloadSource`] gives about a payload: a field with no declared source is the implementation's to choose, and saying so by omission is a statement rather than a gap.\n\nA [`PayloadTable`] and not a map, for the reason that type exists: `serde_yaml` keeps the last of two identical keys, so a document that set one field two contradictory ways would parse clean and lose a line.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawPayloadSource"
+          }
+        },
+        "summary": {
+          "description": "One line for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unknown_instance": {
+          "description": "`true` when this is the branch taken for an identity no record carries (ess/15).\n\nBeside `wrong_state:`, and answered first: an id the system never held is a different behaviour from an id in a state no move starts from (beyond10x/ess#145). Like `wrong_state:` it names an `error:`, or declares `refuses: false` for an accepted no-op.",
+          "type": "boolean"
+        },
+        "updates": {
+          "description": "The entity this outcome changes without moving along its lifecycle.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "when": {
+          "description": "A predicate over the command's input.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "when_related": {
+          "description": "A row of another entity, named by an identity the input carries: absent (`exists: false`), or present and satisfying a predicate over its stored fields, composed with `when` (ess/18, beyond10x/ess#211).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawRelatedGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "when_state_changes": {
+          "description": "Whether this branch's `moves:` changes the lifecycle state the subject already holds, composed with `when`.\n\n`true` is the **first** report of the state the move arrives at; `false` is a restatement of the state already held. It names no state — the transition declares its arrival state and its `from` set, and this picks a side of that set. Admitted only beside `moves:`, for the reason the [module documentation](self) gives: nothing else declares an arrival state to compare against.\n\nAn `Option<bool>` and not a `bool`, because `false` is a condition rather than an absence — the distinction [`refuses`](Self::refuses) draws for the same reason. `wrong_state: false` is the same document as leaving that key out; `when_state_changes: false` is not.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "when_subject": {
+          "description": "An independently observed subject fact: an enum field equal to a variant (ess/6), or a predicate over the subject's declared fields (ess/9).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawSubjectFact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "when_subject_state": {
+          "description": "Equality against the existing subject's declared lifecycle state, composed with `when`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HeldStates"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wrong_state": {
+          "description": "`true` when this is the branch taken because the subject is in a state no move starts from.\n\nA flag and not a list of states: the states are already declared, once, as the `from` sets of this command's transitions. `wrong_state: false` is the same document as leaving the key out, because that is what the word means; what makes the branch a declaration is the `error:` beside it, which is required.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawOutcomeGroup": {
+      "description": "One outcome group as written: which commands, and the outcomes each of them gains.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "actor": {
+          "description": "Every command this actor `may:` invoke.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "commands": {
+          "description": "Explicit membership, by fully qualified command name.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          },
+          "uniqueItems": true
+        },
+        "domain": {
+          "description": "Every command declared in a file whose `domain:` is this name.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "except": {
+          "description": "Commands the `actor:` or `domain:` selector would include and the group skips.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifiedName"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "description": "Its identity, unique across the specification.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OutcomeGroupName"
+            }
+          ]
+        },
+        "outcomes": {
+          "description": "The outcomes each member gains, after its own.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawGroupOutcome"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawPayloadSource": {
+      "description": "Closed authored payload source; strings retain their original interpretation.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "$ref": "#/definitions/ExplicitPayloadSource"
+        },
+        {
+          "$ref": "#/definitions/RawRelatedSource"
+        },
+        {
+          "$ref": "#/definitions/RawCallerSource"
+        },
+        {
+          "$ref": "#/definitions/RawCountSource"
+        },
+        {
+          "$ref": "#/definitions/RawNestedSources"
+        },
+        {
+          "description": "`{related: {entity, where, field}}` (ess/22, beyond10x/ess#299).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawRelatedSelection"
+            }
+          ]
+        }
+      ]
+    },
+    "RawRelated": {
+      "description": "What `related:` holds: the field holding the other row's identity, and the field read there.",
+      "type": "object",
+      "required": [
+        "field",
+        "via"
+      ],
+      "properties": {
+        "field": {
+          "description": "A field of the entity `via` names.",
+          "type": "string"
+        },
+        "via": {
+          "description": "A field of the subject, or `input.<field>`; from `ess/22` (beyond10x/ess#285) also a list of two: that, then a field of the row it names.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawRelatedVia"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawRelatedGuard": {
+      "description": "`when_related:` as a document writes it: one row named by an input identity (`via`), or, from `ess/22`, the rows a selector selects (`entity`, `where`) with one test of them.",
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Over a selector (ess/22): one comparison of the number of rows selected with a nonnegative whole number, `{eq: 1}`; the operator is `eq`, `ne`, `lt`, `lte`, `gt` or `gte`.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "entity": {
+          "description": "The entity whose rows a selector selects (ess/22). Written with `where`, never beside `via`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exists": {
+          "description": "`false`: the branch is taken when no row carries that identity. Written instead of `predicate`, never beside it. Over a selector (ess/22): whether any row is selected.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "forall": {
+          "description": "Over a selector (ess/22): what every selected row satisfies; true of no rows.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "predicate": {
+          "description": "What must hold of that row's stored fields — and of the input, read under `input.` — for the branch to be taken. Written instead of `exists`, never beside it.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "via": {
+          "description": "The input field that carries the other entity's identity, written `input.<field>`. Never beside `entity`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "where": {
+          "description": "What a row of `entity` must satisfy to be selected (ess/22): its fields bare, the input under `input.`, the addressed subject under `subject.`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawRelatedSelection": {
+      "description": "`{related: {entity, where, field}}` (ess/22, beyond10x/ess#299): one field of the one row a selector selects. Recognised by its exact shape — one key, `related`, holding exactly `entity` (a qualified name), `where` and `field` — and nothing else; below `ess/22` the same shape is read back as the nested mapping it was.",
+      "type": "object",
+      "required": [
+        "related"
+      ],
+      "properties": {
+        "related": {
+          "$ref": "#/definitions/RawSelected"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawRelatedSource": {
+      "description": "`{related: {via: <field>, field: <field>}}` (ess/16, #166): written alone, because its value is a mapping of its own rather than one more keyword beside the others.\n\nRecognised by its exact shape — one key, `related`, holding exactly `via` and `field` as text — and by nothing else, so `related` is no source keyword: any other mapping under a `related` key is a nested mapping, as it was before `ess/16`. A document below `ess/16` whose struct happens to have this shape is read back as that nested mapping by [`related_value::read_below_ess_16`], so no earlier document changes meaning.",
+      "type": "object",
+      "required": [
+        "related"
+      ],
+      "properties": {
+        "related": {
+          "$ref": "#/definitions/RawRelated"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawRelatedVia": {
+      "description": "`via:` as written: one reference, or (ess/22, beyond10x/ess#285) a chain of them.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      ]
+    },
+    "RawReplicas": {
+      "description": "A replica range.",
+      "type": "object",
+      "required": [
+        "min"
+      ],
+      "properties": {
+        "max": {
+          "description": "The ceiling, when there is one.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min": {
+          "description": "The floor. Below this the system is not correct, not merely slower.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawSelected": {
+      "description": "What `related:` holds in a filtered read: the entity, the selector, and the field read.",
+      "type": "object",
+      "required": [
+        "entity",
+        "field",
+        "where"
+      ],
+      "properties": {
+        "entity": {
+          "description": "The entity whose rows are candidates.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "field": {
+          "description": "The field of the one selected row.",
+          "type": "string"
+        },
+        "where": {
+          "description": "What a candidate must satisfy: its fields bare, the input under `input.`, the addressed subject under `subject.`.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawStateMachine": {
+      "description": "An entity's lifecycle, as parsed.\n\nTransitions are a sequence rather than §4.7's mapping keyed by name, because a mapping cannot hold two transitions with the same name: a duplicate would be swallowed by the YAML parser instead of reported, and the rule against it would be unenforceable.",
+      "type": "object",
+      "required": [
+        "initial",
+        "states"
+      ],
+      "properties": {
+        "initial": {
+          "description": "Where a new entity starts.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StateName"
+            }
+          ]
+        },
+        "states": {
+          "description": "Every state the entity can be in.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateName"
+          },
+          "uniqueItems": true
+        },
+        "terminal": {
+          "description": "States the entity may rest in forever.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateName"
+          },
+          "uniqueItems": true
+        },
+        "transitions": {
+          "description": "The moves that are permitted.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Transition"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawSubjectFact": {
+      "description": "What `when_subject:` says about the existing subject: one of two closed shapes, never both.\n\n`{field, equals}` is the ess/6 form and keeps its bytes. `{predicate}` is the ess/9 form (`docs/design/cross-record-and-stored-field-guards.md`): any predicate over the subject's declared fields. A document writing keys of both shapes in one branch is refused while it is read, because which of the two it meant is not something a later check can recover.",
+      "anyOf": [
+        {
+          "description": "Equality of one declared enum field against one of its variants (ess/6).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawSubjectField"
+            }
+          ]
+        },
+        {
+          "description": "A predicate over the subject's declared fields (ess/9).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawSubjectPredicate"
+            }
+          ]
+        }
+      ]
+    },
+    "RawSubjectField": {
+      "description": "A bounded fact on an existing subject, not the command input or lifecycle state.",
+      "type": "object",
+      "required": [
+        "equals",
+        "field"
+      ],
+      "properties": {
+        "equals": {
+          "description": "One declared variant of that field's enum.",
+          "type": "string"
+        },
+        "field": {
+          "description": "The declared enum field to observe.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawSubjectPredicate": {
+      "description": "A predicate over the existing subject's declared stored fields (ess/9).",
+      "type": "object",
+      "required": [
+        "predicate"
+      ],
+      "properties": {
+        "predicate": {
+          "description": "What must hold of the subject's declared fields, read immediately before selection.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawTopology": {
+      "description": "The topology, as a document says it.",
+      "type": "object",
+      "properties": {
+        "workloads": {
+          "description": "One entry per component that runs.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawWorkload"
+          },
+          "propertyNames": {
+            "$ref": "#/definitions/ComponentName"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawTrigger": {
+      "description": "What a binding reacts to.",
+      "type": "object",
+      "properties": {
+        "context_authority": {
+          "description": "The binding-local name of the external channel whose authority binds the event's delivery context (ess/18). Required beside `context_fields`.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BindingName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context_fields": {
+          "description": "The typed delivery context each occurrence of the event arrives with, read in `mapping:` as `context.<field>` (ess/18). Only for an event an external channel delivers.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "event": {
+          "description": "The event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "periodic": {
+          "description": "A periodic cause, exclusive with event.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PeriodicCause"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "where": {
+          "description": "A finite typed predicate over the event payload; the binding invokes only when it holds (ess/22, beyond10x/ess#268). Only for an event cause; see the `condition` module.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawViewField": {
+      "description": "One view field as written: a [`Field`] that may declare `aggregate:`.\n\nA sibling of [`Field`] rather than [`Field`] flattened, so `Field`'s `deny_unknown_fields` keeps refusing `aggregate:` at every other position a field is written.",
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "aggregate": {
+          "description": "What it computes over the group's rows, where it is an aggregate.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawAggregate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "description": "The identifier a code emitter spells this as, when the one it would derive is taken.\n\nA target that has no dotted type names flattens a qualified name to one identifier, so `billing.invoice.Invoice.State` and an authored `billing.invoice.InvoiceState` both want to be `InvoiceState`. One of them has to move, and this says which — because the author knows which name carries meaning and an emitter does not.\n\nIt is deliberately not a per-target map. A name that differs between Rust and Go is two names to keep in step, and nothing in this model has ever needed one: the collision is a property of flattening, which every such target does the same way.\n\nOnly code emitters read it. Wire names, document schemas and the qualified name itself are untouched, so setting it cannot break a deployed consumer — which is the whole reason it is a separate key rather than a rename.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "description": "What a person is shown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "summary": {
+          "description": "One line about what it is, for generated documentation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Its type. For an aggregate field, exactly the function's result type.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "wire": {
+          "description": "What this is called on the wire — an HTTP path segment, a topic name, a JSON field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawViewSpec": {
+      "description": "A view as written in a document, before validation.",
+      "type": "object",
+      "required": [
+        "name",
+        "source"
+      ],
+      "properties": {
+        "consistency": {
+          "description": "How soon it reflects a command that has already returned. Defaults to `eventual`.",
+          "default": "eventual",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Consistency"
+            }
+          ]
+        },
+        "fields": {
+          "description": "What it exposes inline. A field may declare `aggregate:`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawViewField"
+          }
+        },
+        "filter": {
+          "description": "Which instances it contains.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Predicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "group_by": {
+          "description": "The view fields the admitted rows are partitioned by. Absent or `[]`: not grouped.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "description": "Its stable identity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "naming": {
+          "description": "What it is called on the wire and shown as.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Naming"
+            }
+          ]
+        },
+        "order_by": {
+          "description": "The order the rows are ranked in, most significant key first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Ranking"
+          }
+        },
+        "paging": {
+          "description": "How its rows are paged (ess/16). Absent: every read answers every row.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Paging"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "params": {
+          "description": "What the caller must supply to ask for this view.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Field"
+          }
+        },
+        "shape": {
+          "description": "A reusable named struct describing what it exposes.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "description": "The entity it projects.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawWorkload": {
+      "description": "One workload, as a document says it.",
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "description": "How many instances.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawReplicas"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requires": {
+          "description": "What it needs in order to run.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "stateless": {
+          "description": "Whether an instance holds state that outlives a request.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Reach": {
+      "description": "Where the callers of a component's surface are.\n\n# A fact about the system, not a protocol\n\nThe model has no transport construct and this is not one: neither variant names a wire format, a port, a path or a verb. What it states is who issues the commands — a question a specification answers about its own design, and the one thing a generator cannot infer. `invoice-service` and `email-service` in the normative example are reached in process, and that is why the one transport their bindings determine is an in-process log; a component reached across a network has callers that are not deployed with it, and its surface has to exist on a wire.\n\n# What follows from `network`, and what does not\n\nWhich wire is *derived*, never chosen: this repository projects exactly one contract for a component's command surface — the `OpenAPI` document `ess-gen` writes for every component — and an `OpenAPI` document is an HTTP contract. So a `network` surface is served over HTTP because that is the only contract that already exists for it, and a synthesised server that spoke anything else would contradict the document committed beside it. No variant here says `http`, and adding one would be the transport DSL design §7 sketches and this model has not taken.",
+      "oneOf": [
+        {
+          "description": "Every caller is deployed with it, so the surface never leaves the process.\n\nThe default, and the only reading of silence that does not invent a deployment: a specification that has not said where its callers are has not said its surface crosses anything.",
+          "type": "string",
+          "enum": [
+            "in_process"
+          ]
+        },
+        {
+          "description": "At least one caller is not deployed with it, so the surface crosses a process boundary.\n\nThe declaration that makes the published `OpenAPI` document load-bearing rather than documentary: something outside has to issue these commands, and the only way it can is over the contract.",
+          "type": "string",
+          "enum": [
+            "network"
+          ]
+        },
+        {
+          "description": "Every caller is a person at a terminal, typing.\n\nDeployed with it, like [`Self::InProcess`], and yet the surface does leave the process: it leaves as a *grammar* rather than a call, and a grammar is a contract a person reads. That is the fact neither other variant can state, and the reason this one exists.\n\nWhich contract follows is derived here too. [`Self::Network`] derives an `OpenAPI` document because that is the one contract this repository projects for a command surface on a wire; `command_line` derives the `clap` tree and completion scripts `ess generate synthesize --target clap` writes, for the same reason. No variant names a wire, a port, a path or a verb, and this one does not either.",
+          "type": "string",
+          "enum": [
+            "command_line"
+          ]
+        }
+      ]
+    },
+    "ReadingContract": {
+      "description": "Closed attachment to a directly String/Integer-backed named newtype.",
+      "type": "object",
+      "required": [
+        "encoding",
+        "origins"
+      ],
+      "properties": {
+        "encoding": {
+          "description": "Scalar representation.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ReadingEncoding"
+            }
+          ]
+        },
+        "origins": {
+          "description": "At most three distinct origin alternatives; this is not runtime evidence.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReadingOrigin"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReadingEncoding": {
+      "description": "Wire representation of a clock reading, separate from its observed source.",
+      "oneOf": [
+        {
+          "description": "Text carries its effective numeric offset or UTC marker.",
+          "type": "string",
+          "enum": [
+            "offset_date_time_text"
+          ]
+        },
+        {
+          "description": "Millisecond local text has a literal, non-authoritative Z suffix.",
+          "type": "string",
+          "enum": [
+            "local_date_time_millis_literal_z"
+          ]
+        },
+        {
+          "description": "Exact integer seconds since the Unix coordinate origin.",
+          "type": "string",
+          "enum": [
+            "unix_seconds"
+          ]
+        }
+      ]
+    },
+    "ReadingOrigin": {
+      "description": "One declared origin alternative.",
+      "type": "object",
+      "required": [
+        "offset",
+        "role"
+      ],
+      "properties": {
+        "offset": {
+          "description": "What offset evidence is required.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OffsetAuthority"
+            }
+          ]
+        },
+        "role": {
+          "description": "Which process role could have produced the value.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ReadingRole"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReadingRole": {
+      "description": "Possible production role; a declaration does not observe which alternative occurred.",
+      "oneOf": [
+        {
+          "description": "The producing process supplied the reading.",
+          "type": "string",
+          "enum": [
+            "producer_process"
+          ]
+        },
+        {
+          "description": "The consuming process supplied a fallback reading.",
+          "type": "string",
+          "enum": [
+            "consumer_process"
+          ]
+        },
+        {
+          "description": "The original source branch is unavailable.",
+          "type": "string",
+          "enum": [
+            "unknown"
+          ]
+        }
+      ]
+    },
+    "RelationKind": {
+      "description": "Which claim a relation makes about the entity at its other end.\n\nTwo kinds and no `ownership: true` flag on one kind, because the two are checked by different rules — an `owns` target has at most one owner across the whole specification and a `references` target has none — and a boolean would hide that difference behind a default.",
+      "oneOf": [
+        {
+          "description": "The target belongs to the source: it has one owner, and this is it.",
+          "type": "string",
+          "enum": [
+            "owns"
+          ]
+        },
+        {
+          "description": "The target is named by the source and belongs to nobody in particular.",
+          "type": "string",
+          "enum": [
+            "references"
+          ]
+        }
+      ]
+    },
+    "RelationSpec": {
+      "description": "One relation an entity declares to another.\n\nDeclared on the source only. Declaring it on both ends would be two statements of one fact, and the reverse direction is derivable: an `owns` target has at most one owner, so *who owns me* is a lookup rather than a declaration. `docs/design/ess-entity-relations-design-v0.1.md` §2 is the shape, and [`validate_relations`] is every rule it has to satisfy.",
+      "type": "object",
+      "required": [
+        "cardinality",
+        "kind",
+        "name",
+        "target",
+        "via"
+      ],
+      "properties": {
+        "cardinality": {
+          "description": "How many of the target one source has.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Cardinality"
+            }
+          ]
+        },
+        "kind": {
+          "description": "Whether the source owns the target or merely names it.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RelationKind"
+            }
+          ]
+        },
+        "name": {
+          "description": "What the relation is called — `invoices`, `clients`.\n\nA name of its own rather than the target's name, because an entity may reach the same target twice for different reasons, and because a projection needs something to call it that is not a type.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "target": {
+          "description": "The entity at the other end.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualifiedName"
+            }
+          ]
+        },
+        "via": {
+          "description": "The field that carries the relation.\n\nFor `owns`, a field **on the target**, typed as the source's identity. For `references`, a field **on the source**, typed as the target's identity — wrapped in `Optional<…>` for an optional `one`, in `List<…>` for `many` — or, for a `one` keyed by the same id, the source's own identity.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RetryBound": {
+      "description": "How many attempts a `retry` makes, and which refusals end it at once.\n\nRead from a document as the block under `retry:`, and serialized the same way, so a binding that states no bound serializes exactly as it did before the block existed. The reader is written by hand so that every refusal names `retry:` — `retry: {emits: …}` is the escalation block under the wrong word, and a message naming only `emits` would not say so.",
+      "type": "object",
+      "required": [
+        "attempts"
+      ],
+      "properties": {
+        "attempts": {
+          "description": "Invocations in all, the first included. At least two: one attempt is `drop`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 2.0
+        },
+        "final": {
+          "description": "Refusals of the invoked command that end the retry at once: an outcome name, or an error the command reports. Each name at most once.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Selection": {
+      "description": "One ordered selection declaration.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "first": {
+          "description": "Lowest eligible occurrence in the declared input.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/First2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "first_present": {
+          "description": "First present result among earlier selectors of the same input.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "description": "Unique local selector identity.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectionInput": {
+      "description": "An explicitly declared binding-local input; conversions use the existing exact registry.",
+      "type": "object",
+      "required": [
+        "as",
+        "from",
+        "name"
+      ],
+      "properties": {
+        "as": {
+          "description": "Required list type after any explicitly declared preparation conversion.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TypeRef"
+            }
+          ]
+        },
+        "from": {
+          "description": "An event field or bounded accessor; never an invented producer field.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Binding-local identity.",
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectionMapping": {
+      "type": "object",
+      "required": [
+        "path",
+        "selection"
+      ],
+      "properties": {
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+          }
+        },
+        "selection": {
+          "type": "string",
+          "pattern": "^_*[A-Za-z][A-Za-z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "StateName": {
+      "description": "One state of an entity's lifecycle, in UpperCamelCase, such as `Draft`.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+    },
+    "Transition": {
+      "description": "A named move between states.\n\nThe name is the transition's own, unqualified, and it is a name *inside the entity*: the entity's own name plus this one is what an outcome writes to say it takes this move, so `settle` on `billing.invoice.Invoice` is written `moves: billing.invoice.Invoice.settle`. It is not a command name, and no command is found by matching one — inferring the driving command from a transition's spelling is exactly the invention the conformance design §19 refuses, which is why the link is declared on the outcome ([`Subject`](crate::command::Subject)) rather than guessed here.\n\n`from` is a set because one move can start in several states — §4.7's `CancelInvoice` leaves both `Draft` and `Issued` — and `to` is one state because a move with two destinations is two moves with different guards.",
+      "type": "object",
+      "required": [
+        "from",
+        "name",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "description": "The states it may start in.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateName"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "description": "Its own name, such as `IssueInvoice`.",
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "to": {
+          "description": "The state it ends in.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StateName"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypeRef": {
+      "description": "A type: a primitive, a named type, or `Optional<T>`, `List<T>` or `Map<K, V>`.",
+      "examples": [
+        "Email",
+        "Money",
+        "Optional<CustomerId>",
+        "List<Money>"
+      ],
+      "type": "string"
+    },
+    "Version": {
+      "description": "A major version, written `v1`. A bare `1` is accepted too.",
+      "examples": [
+        "v1",
+        "v3"
+      ],
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$"
+        },
+        {
+          "type": "integer",
+          "maximum": 4294967295.0,
+          "minimum": 1.0
+        }
+      ]
+    }
+  }
+}

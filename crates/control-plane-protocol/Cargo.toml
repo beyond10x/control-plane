@@ -1,0 +1,13 @@
+[package]
+name = "control-plane-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+b10x-canon = { git = "https://github.com/beyond10x/canon", rev = "f6f843c2dd8a47ab2d158dd911669b4e6a73ea6b" }
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_yaml_ng = "0.10"

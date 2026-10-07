@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-05T21:02:19Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-console",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:operator-console-review-1",
+    "review": "review-result:operator-console-review-1",
+    "outcome": "no-op"
+  }
+}

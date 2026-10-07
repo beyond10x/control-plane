@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T21:23:30Z",
+  "actor": "human:timo",
+  "artifact": "story:operator-console",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Chrome150 native form at localhost8788: same-origin navigation sends Origin:null under no-referrer, POSTgoals403 exact reported refusal",
+    "reference": "git:c372435"
+  }
+}

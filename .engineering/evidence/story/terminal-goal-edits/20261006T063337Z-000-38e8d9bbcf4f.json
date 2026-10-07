@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T06:33:37Z",
+  "actor": "human:timo",
+  "artifact": "story:terminal-goal-edits",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo test -p control-plane-core -- goal_refuses_edit at base bc1efdf and at unit head 1c58835",
+    "reference": "VERIFIED: at bc1efdf satisfied_goal_refuses_edit and cancelled_goal_refuses_edit failed (outcome applied, objective changed); at 1c58835 both pass and conformance adds Goal/state/{Satisfied,Cancelled}/refuses/UpdateGoal (167 -> 171)"
+  }
+}

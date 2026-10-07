@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T05:00:22Z",
+  "actor": "human:timo",
+  "artifact": "story:bounded-progress-records",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "progress_decision_stays_under_16_kib and restart_open_is_bounded on base a09cff6 vs unit b9ceefc (1 KiB detail per event, debug)",
+    "reference": "VERIFIED: base 18,530 bytes at event 4 and 166,640 from event 64, red; unit 2,448 bytes per decision; 10,003 decisions open in 2.11-2.46 s"
+  }
+}

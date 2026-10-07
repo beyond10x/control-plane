@@ -1,0 +1,92 @@
+{
+  "AssignmentList": [
+    {
+      "assignment_id": "768b59fb-34d5-40b2-8445-5f00123a9363",
+      "attempt": 1,
+      "base_revision": "base",
+      "candidate": "c1",
+      "case_id": "ed505bc0-2510-43df-9bcb-b9503c8262b5",
+      "goal_id": "0d4c0095-70e4-431e-a7ce-0f000ee16627",
+      "goal_revision": 1,
+      "implementor_run": "implementor-fixture",
+      "merge_receipt": "observed-target c1",
+      "reason": "Validated and independently critiqued AEP story",
+      "repository_id": "bdceb31a-273b-4248-8e69-f88446681e4e",
+      "review_revision": "c1",
+      "reviewer_run": "reviewer-fixture",
+      "state": "Merged",
+      "story_id": "demo::story:deliver",
+      "test_revision": "c1",
+      "worktree_id": "cp-impl-fixture"
+    }
+  ],
+  "GoalList": [
+    {
+      "acceptance": "requested_answer passes on the reviewed merged target",
+      "goal_id": "0d4c0095-70e4-431e-a7ce-0f000ee16627",
+      "implementor_model": "scripted",
+      "max_attempts": 2,
+      "max_minutes": 30,
+      "max_workers": 1,
+      "merge_authority": true,
+      "objective": "Return 42",
+      "planner_model": "scripted",
+      "planning_fingerprint": "fp-2",
+      "planning_phase": "Queued",
+      "planning_reason": "",
+      "planning_receipt": "{\"acceptance\":{\"at\":\"2026-10-06T03:27:39Z\",\"fingerprint\":\"fp-accept\",\"goal_revision\":1,\"reason\":\"Goal acceptance blocked: final goal review rejected: acceptance obligation unmet\",\"status\":\"failed\"},\"activity\":[{\"action\":\"planning.Provisioning\",\"at\":\"2026-10-06T03:27:39.049708776Z\",\"detail\":\"Planning phase: Provisioning\",\"goal_revision\":1,\"id\":\"73e55668-d957-4e23-bda1-a6d3b9584823\",\"role\":\"planner\",\"status\":\"running\",\"worktree\":\"\"},{\"action\":\"planning.Planning\",\"at\":\"2026-10-06T03:27:39.054382682Z\",\"detail\":\"Planning phase: Planning\",\"goal_revision\":1,\"id\":\"70e61aa9-1630-4a86-9d10-f95a0e81c842\",\"role\":\"planner\",\"status\":\"running\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planner.prepare-branch\",\"at\":\"2026-10-06T03:27:39.059276531Z\",\"detail\":\"prepare-branch\",\"goal_revision\":1,\"id\":\"c4b5661d-b253-497f-b010-ce88ec99bc88\",\"role\":\"planner\",\"status\":\"running\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planner.intent\",\"at\":\"2026-10-06T03:27:39.064724255Z\",\"detail\":\"Reading README.md\",\"goal_revision\":1,\"id\":\"397551f1-8003-4216-899e-5b86052f5f3f\",\"role\":\"planner\",\"status\":\"running\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planner.observation\",\"at\":\"2026-10-06T03:27:39.070477808Z\",\"detail\":\"Repository operation completed\",\"goal_revision\":1,\"id\":\"c8461061-5120-47df-8d56-177e96cca0ea\",\"role\":\"planner\",\"status\":\"completed\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"loom.event\",\"at\":\"2026-10-06T03:27:39.080309625Z\",\"detail\":{\"event\":{\"kind\":\"provider-observation\",\"observation\":{\"usage\":{\"input_tokens\":21,\"output_tokens\":13}}},\"summary\":\"Provider completed this turn; observed usage recorded\"},\"goal_revision\":1,\"id\":\"7aa9dbb9-ecc5-47c7-b19c-689836d7837f\",\"role\":\"planner\",\"status\":\"running\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planner.plan-approved\",\"at\":\"2026-10-06T03:27:39.087138829Z\",\"detail\":\"Independent plan review passed\",\"goal_revision\":1,\"id\":\"cabff5ac-1db1-46ab-8857-f25c3bf0ccbc\",\"role\":\"planner\",\"status\":\"completed\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planning.Validated\",\"at\":\"2026-10-06T03:27:39.094785011Z\",\"detail\":\"Planning phase: Validated\",\"goal_revision\":1,\"id\":\"6fb1f6d6-f043-4b0b-bf83-7d6c5ddb14e5\",\"role\":\"planner\",\"status\":\"completed\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"planning.Queued\",\"at\":\"2026-10-06T03:27:39.1006302Z\",\"detail\":\"Planning phase: Queued\",\"goal_revision\":1,\"id\":\"54a4b25f-89bd-42b9-b233-2907b741bd2d\",\"role\":\"planner\",\"status\":\"waiting\",\"worktree\":\"/srv/control-plane-fixture/plan\"},{\"action\":\"worktree.prepare\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"base\":\"base\",\"tree_id\":\"cp-impl-fixture\"},\"goal_revision\":1,\"role\":\"host\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"loom.event\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"event\":{\"kind\":\"TurnStarted\"},\"role\":\"implementor\",\"summary\":\"implementor model turn started\"},\"goal_revision\":1,\"role\":\"runtime\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"tool.run\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"args\":[\"check\"],\"program\":\"cargo\"},\"goal_revision\":1,\"role\":\"implementor\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"checks.run\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"candidate\":\"c1\",\"command\":\"cargo test\"},\"goal_revision\":1,\"role\":\"host\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"publication.invoke\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"candidate\":\"c1\",\"expected_base\":\"base\",\"operation_id\":\"bddc9a3e-8d34-4267-a7b9-7e251d2bb8b6\",\"target\":\"main\"},\"goal_revision\":1,\"role\":\"host\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"merge.completed\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"receipt\":\"observed-target c1\"},\"goal_revision\":1,\"role\":\"host\",\"status\":\"completed\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"goal.review\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"execution_context\":\"goal-reviewer-fixture\"},\"goal_revision\":1,\"role\":\"goal_reviewer\",\"status\":\"running\",\"worktree\":\"cp-impl-fixture\"},{\"action\":\"blocked\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"reason\":\"Goal acceptance blocked: final goal review rejected: acceptance obligation unmet\"},\"goal_revision\":1,\"role\":\"goal_reviewer\",\"status\":\"failed\",\"worktree\":\"cp-impl-fixture\"}],\"fleet\":{\"768b59fb-34d5-40b2-8445-5f00123a9363\":{\"action\":\"blocked\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"reason\":\"Goal acceptance blocked: final goal review rejected: acceptance obligation unmet\"},\"goal_revision\":1,\"role\":\"goal_reviewer\",\"status\":\"failed\",\"worktree\":\"cp-impl-fixture\"}},\"last_activity\":{\"action\":\"blocked\",\"assignment_id\":\"768b59fb-34d5-40b2-8445-5f00123a9363\",\"at\":\"2026-10-06T03:27:39Z\",\"detail\":{\"reason\":\"Goal acceptance blocked: final goal review rejected: acceptance obligation unmet\"},\"goal_revision\":1,\"role\":\"goal_reviewer\",\"status\":\"failed\",\"worktree\":\"cp-impl-fixture\"},\"planner\":{\"action_history\":\"Recent attempted actions (2 total steps; bounded history):\\nStep 1: attempted read\\nStep 2: attempted finish\",\"namespace\":\"planner-cp-plan-fixture\",\"revision\":\"planner-cp-plan-fixture\",\"run_id\":\"c48d9ea1-6ce5-42ef-9210-c61e883fee4f\",\"steps\":3,\"transcript\":[\"Repository inspection:\\nREADME.md\",\"Repository scan index: {}\",\"Existing AEP index: []\",\"Observed README.md:\\n# Fixture\"]}}",
+      "planning_repository": "bdceb31a-273b-4248-8e69-f88446681e4e",
+      "planning_revision": 1,
+      "planning_worktree_id": "cp-plan-fixture",
+      "planning_worktree_path": "/srv/control-plane-fixture/plan",
+      "reviewer_model": "scripted",
+      "revision": 1,
+      "satisfaction_receipt": "",
+      "state": "Running",
+      "workspace_id": "e26e2bba-f744-4a3d-b2e1-8cf0782cb0f9"
+    },
+    {
+      "acceptance": "requested_answer passes on the reviewed merged target",
+      "goal_id": "25218b40-8c8a-4897-8181-195081db452b",
+      "implementor_model": "scripted",
+      "max_attempts": 2,
+      "max_minutes": 30,
+      "max_workers": 1,
+      "merge_authority": true,
+      "objective": "Paused follow-up",
+      "planner_model": "scripted",
+      "planning_fingerprint": "",
+      "planning_phase": "Idle",
+      "planning_reason": "",
+      "planning_receipt": "",
+      "planning_repository": "",
+      "planning_revision": 0,
+      "planning_worktree_id": "",
+      "planning_worktree_path": "",
+      "reviewer_model": "scripted",
+      "revision": 1,
+      "satisfaction_receipt": "",
+      "state": "Paused",
+      "workspace_id": "e26e2bba-f744-4a3d-b2e1-8cf0782cb0f9"
+    }
+  ],
+  "PublicationIntentList": [
+    {
+      "assignment_id": "768b59fb-34d5-40b2-8445-5f00123a9363",
+      "candidate": "c1",
+      "expected_base": "base",
+      "publication_id": "bddc9a3e-8d34-4267-a7b9-7e251d2bb8b6",
+      "receipt": "observed-target c1",
+      "state": "Confirmed",
+      "target": "main"
+    }
+  ],
+  "WorkspaceList": [
+    {
+      "name": "fixture",
+      "path": "/srv/control-plane-fixture/workspace",
+      "state": "Registered",
+      "workspace_id": "e26e2bba-f744-4a3d-b2e1-8cf0782cb0f9"
+    }
+  ]
+}

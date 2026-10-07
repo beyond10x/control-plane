@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-05T20:40:47Z",
+  "actor": "human:timo",
+  "artifact": "story:governed-protocols",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p control-plane-protocol: 13 passed, 0 failed, exit 0",
+    "reference": "crates/control-plane-protocol/tests/governed_protocols.rs"
+  }
+}
