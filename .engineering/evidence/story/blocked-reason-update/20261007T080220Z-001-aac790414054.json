@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T08:02:20Z",
+  "actor": "human:timo",
+  "artifact": "story:blocked-reason-update",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "baseline vs treatment in cp-wave5-blocked-reason-update (unit 6067178)",
+    "reference": "baseline 8ab9839: closed_publication_replaces_the_blocked_reason and unchanged_blocked_reason_is_not_replaced red (reason stays 'Publication outcome unresolved'); treatment: both green, adversary planner-run cases green (0 planner runs per replaced reason); mutations M1 to M3 each caught. Verdict VERIFIED"
+  }
+}
