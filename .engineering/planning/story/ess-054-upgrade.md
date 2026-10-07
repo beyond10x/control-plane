@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:ess-054-upgrade
 kind: story
-status: draft
+status: archived
 title: Move control-plane to ESS 0.54.0
 relations:
 - decomposes: epic:bootstrap
@@ -20,7 +20,9 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 2
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-10-07T03:22:02Z", actor: "human:timo", revision: 3}
 ---
 ## Outcome
 

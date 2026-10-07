@@ -749,7 +749,19 @@ async fn fingerprint(
         .context("goal not object")?
         .retain(|key, _| !key.starts_with("planning_"));
     let repositories = repositories.to_vec();
-    let assignments = assignments.to_vec();
+    // The planner reads no assignment (`engine::EngineInput`); their states and evidence decide
+    // whether it runs. A Blocked assignment's reason is replaced whenever its cause changes, so
+    // the reason is left out: a new cause alone gives the planner nothing to plan from.
+    let assignments = assignments
+        .iter()
+        .map(|assignment| {
+            let mut assignment = assignment.clone();
+            if let Some(fields) = assignment.as_object_mut() {
+                fields.remove("reason");
+            }
+            assignment
+        })
+        .collect::<Vec<_>>();
     tokio::task::spawn_blocking(move||->Result<String>{
         let mut inputs=Vec::new();
         for repo in &repositories {

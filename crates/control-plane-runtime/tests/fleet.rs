@@ -872,53 +872,117 @@ async fn changed_revision_invalidates_evidence() {
     );
 }
 
-/// Hands the store to the next party that takes it, and returns once one has. Releasing a
-/// tokio `Mutex` gives it straight to a queued waiter, so a `try_lock` right after the release
-/// fails only when another party queued for the store, or took it, in the meantime. Until then
-/// the store is taken back and offered again.
-fn hand_over(store: &SharedStore, mut held: tokio::sync::OwnedMutexGuard<Store>) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+/// Which of an operator's goal edit and goal acceptance's `SatisfyGoal` reaches the store first.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Order {
+    /// The edit reaches the store after acceptance's post-review check, before `SatisfyGoal`.
+    EditFirst,
+    /// The edit is made in the same window and reaches the store after `SatisfyGoal`.
+    SatisfyFirst,
+}
+
+/// Waits until a process opens the FIFO `gate` for reading, and returns the write end. Closing
+/// it lets that reader go on. Gives up at `deadline`.
+fn wait_for_reader(gate: &Path, deadline: std::time::Instant) -> std::fs::File {
+    use std::os::unix::fs::OpenOptionsExt;
     loop {
-        drop(held);
-        match store.clone().try_lock_owned() {
-            Ok(again) => held = again,
-            Err(_) => return,
+        // Without a reader, a non-blocking open of a FIFO for writing fails with ENXIO.
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(nix::libc::O_NONBLOCK)
+            .open(gate)
+        {
+            Ok(writer) => return writer,
+            Err(error) if error.raw_os_error() == Some(nix::libc::ENXIO) => {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "goal acceptance did not observe the target after its review"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Err(error) => panic!("{}: {error}", gate.display()),
         }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "nobody took the store within 30 s"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
 
-/// An operator edit that lands inside goal acceptance after its post-review revision check and
-/// before `SatisfyGoal` (`satisfy_goals`, fleet.rs). The goal reviewer's turn takes the store,
-/// so after the review the acceptance thread's first store access, that check, waits for it.
-/// The editor hands the store over (nobody else uses it in this test, so the taker is that
-/// check) and at once queues for it again. tokio's `Mutex` is fair: the check sees the reviewed
-/// revision, then the edit runs, while acceptance re-reads the workspace and observes each
-/// target with `git ls-remote`, before its `SatisfyGoal`.
+/// An operator edit made inside goal acceptance, after its post-review check and before its
+/// `SatisfyGoal` (`satisfy_goals`, fleet.rs). The seam does not depend on thread scheduling. In
+/// that window acceptance holds no store lock and observes each target with `git ls-remote`.
+/// When the goal review starts, the repository's `remote.origin.uploadpack` is set to read the
+/// FIFO `gate` first, so that observation, the first contact with `origin` after the review,
+/// waits until the gate's write end closes. The editor opens the write end once the observation
+/// reads the gate. For [`Order::EditFirst`] it applies the edit and then lets the observation
+/// go on. For [`Order::SatisfyFirst`] it lets the observation go on, waits until the store
+/// shows the goal Satisfied, and then sends the edit. Either way the editor restores the
+/// default upload-pack before it closes the gate. It returns the goal as the edit found it and
+/// the edit's result.
 struct EditAfterFinalCheck {
     inner: Scripted,
     store: SharedStore,
     goal: Value,
-    editor: Mutex<Option<std::thread::JoinHandle<Value>>>,
+    repository: PathBuf,
+    gate: PathBuf,
+    order: Order,
+    editor: Mutex<Option<std::thread::JoinHandle<(Value, Value)>>>,
 }
 impl AgentModel for EditAfterFinalCheck {
     fn respond(&self, request: &ModelRequest) -> Result<Value> {
         let mut editor = self.editor.lock().unwrap();
         if request.role == "goal_reviewer" && editor.is_none() {
-            let held = self.store.clone().blocking_lock_owned();
+            let wait = format!(
+                "cat {} >/dev/null; git-upload-pack",
+                shell_words::quote(self.gate.to_str().unwrap())
+            );
+            cmd(
+                &self.repository,
+                "git",
+                &["config", "remote.origin.uploadpack", &wait],
+                &[],
+            );
             let store = self.store.clone();
+            let repository = self.repository.clone();
+            let gate = self.gate.clone();
+            let order = self.order;
             let handle = tokio::runtime::Handle::current();
             let edit = json!({"goal_id":self.goal,"objective":"Return 42 and document it in every registered repository","acceptance":"requested_answer passes and the README names the answer","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true});
             *editor = Some(std::thread::spawn(move || {
-                hand_over(&store, held);
-                let mut store = store.blocking_lock();
-                handle
-                    .block_on(store.execute("UpdateGoal", edit, Actor::Operator))
-                    .unwrap()
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                let observation = wait_for_reader(&gate, deadline);
+                let restore = || {
+                    cmd(
+                        &repository,
+                        "git",
+                        &["config", "--unset", "remote.origin.uploadpack"],
+                        &[],
+                    );
+                };
+                let send = || {
+                    let mut held = store.blocking_lock();
+                    let found = held.query("GoalList").unwrap()[0].clone();
+                    let outcome = handle
+                        .block_on(held.execute("UpdateGoal", edit, Actor::Operator))
+                        .unwrap();
+                    (found, outcome)
+                };
+                match order {
+                    Order::EditFirst => {
+                        let sent = send();
+                        restore();
+                        drop(observation);
+                        sent
+                    }
+                    Order::SatisfyFirst => {
+                        restore();
+                        drop(observation);
+                        while store.blocking_lock().query("GoalList").unwrap()[0]["state"]
+                            != "Satisfied"
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        }
+                        send()
+                    }
+                }
             }));
         }
         drop(editor);
@@ -926,13 +990,18 @@ impl AgentModel for EditAfterFinalCheck {
     }
 }
 
-#[tokio::test]
-async fn goal_edit_during_acceptance_is_not_satisfied() {
+/// Runs goal acceptance with an operator edit placed by `order` and asserts that order's outcome.
+async fn edit_during_acceptance(order: Order) {
     let fixture = fixture(1).await;
+    let gate = fixture.root.join("observation-gate");
+    cmd(&fixture.root, "mkfifo", &[gate.to_str().unwrap()], &[]);
     let model = Arc::new(EditAfterFinalCheck {
         inner: Scripted::new(),
         store: fixture.store.clone(),
         goal: fixture.goal.clone(),
+        repository: PathBuf::from(fixture.repositories[0]["path"].as_str().unwrap()),
+        gate,
+        order,
         editor: Mutex::new(None),
     });
     let supervisor = Supervisor::new(
@@ -943,40 +1012,23 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
     );
     supervisor.tick().await.unwrap();
     let report = supervisor.fleet_tick().await;
-    let edit = model
+    let editor = model
         .editor
         .lock()
         .unwrap()
         .take()
-        .expect("goal acceptance reached its final review")
-        .join()
+        .expect("goal acceptance reached its final review");
+    let (at_edit, edit) = tokio::task::spawn_blocking(move || editor.join().unwrap())
+        .await
         .unwrap();
-    assert_eq!(edit["outcome"], "applied", "{edit}");
     let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
-    assert_eq!(assignments[0]["state"], "Merged", "{assignments}");
-    assert_eq!(assignments[0]["goal_revision"], 1);
+    assert_eq!(
+        assignments[0]["state"], "Merged",
+        "{order:?}: {assignments}"
+    );
+    assert_eq!(assignments[0]["goal_revision"], 1, "{order:?}");
     let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
-    assert_eq!(goal["state"], "Running", "{goal}");
-    assert_eq!(goal["revision"], 2, "{goal}");
-    assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
-    // The edit landed after the post-review check; the check that runs under the same store lock
-    // as SatisfyGoal found it.
     let report = report.unwrap();
-    assert!(
-        report
-            .blockers
-            .iter()
-            .any(|reason| reason.contains("goal changed before its acceptance was recorded")),
-        "{report:?}"
-    );
-    assert!(
-        !report
-            .blockers
-            .iter()
-            .any(|reason| reason.contains("goal changed during final review")),
-        "{report:?}"
-    );
-    // Nothing latches the refusal: the next planning pass plans the edited revision.
     let planned = |model: &EditAfterFinalCheck| {
         model
             .inner
@@ -987,12 +1039,94 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
             .filter(|(role, _)| role == "planner")
             .count()
     };
-    let before = planned(&model);
-    supervisor.tick().await.unwrap();
-    assert!(planned(&model) > before);
-    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
-    assert_eq!(goal["planning_revision"], 2, "{goal}");
-    assert_eq!(goal["state"], "Running", "{goal}");
+    match order {
+        Order::EditFirst => {
+            assert_eq!(
+                at_edit["state"], "Running",
+                "precondition: the edit reached the store before SatisfyGoal: {at_edit}"
+            );
+            assert_eq!(at_edit["revision"], 1, "{at_edit}");
+            assert_eq!(edit["outcome"], "applied", "{edit}");
+            assert_eq!(goal["state"], "Running", "{goal}");
+            assert_eq!(goal["revision"], 2, "{goal}");
+            assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
+            assert_eq!(report.satisfied, 0, "{report:?}");
+            // The edit landed after the post-review check; the check that runs under the same
+            // store lock as SatisfyGoal found it.
+            assert!(
+                report.blockers.iter().any(
+                    |reason| reason.contains("goal changed before its acceptance was recorded")
+                ),
+                "{report:?}"
+            );
+            assert!(
+                !report
+                    .blockers
+                    .iter()
+                    .any(|reason| reason.contains("goal changed during final review")),
+                "{report:?}"
+            );
+            // Nothing latches the refusal: the next planning pass plans the edited revision.
+            let before = planned(&model);
+            supervisor.tick().await.unwrap();
+            assert!(planned(&model) > before);
+            let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+            assert_eq!(goal["planning_revision"], 2, "{goal}");
+            assert_eq!(goal["state"], "Running", "{goal}");
+        }
+        Order::SatisfyFirst => {
+            assert_eq!(
+                at_edit["state"], "Satisfied",
+                "precondition: SatisfyGoal reached the store before the edit: {at_edit}"
+            );
+            // The operator's command result names the refusal and the goal's state.
+            assert_eq!(
+                edit,
+                json!({"outcome":"satisfied","error":"controlplane.host.GoalStateConflict","payload":{"state":"Satisfied"},"published":[]})
+            );
+            assert_eq!(report.satisfied, 1, "{report:?}");
+            assert!(
+                !report
+                    .blockers
+                    .iter()
+                    .any(|reason| reason.contains("goal changed")),
+                "{report:?}"
+            );
+            assert_eq!(goal["state"], "Satisfied", "{goal}");
+            assert_eq!(goal["revision"], 1, "{goal}");
+            assert_eq!(
+                goal["objective"], "Return 42 in every registered repository",
+                "{goal}"
+            );
+            assert_eq!(
+                goal["satisfaction_receipt"],
+                at_edit["satisfaction_receipt"]
+            );
+            let receipt: Value =
+                serde_json::from_str(goal["satisfaction_receipt"].as_str().unwrap()).unwrap();
+            assert_eq!(receipt["kind"], "goal_acceptance", "{receipt}");
+            assert_eq!(receipt["goal_revision"], 1, "{receipt}");
+            // A satisfied goal is not planned or accepted again.
+            let before = planned(&model);
+            supervisor.tick().await.unwrap();
+            supervisor.fleet_tick().await.unwrap();
+            assert_eq!(planned(&model), before);
+            let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+            assert_eq!(goal["state"], "Satisfied", "{goal}");
+            assert_eq!(goal["revision"], 1, "{goal}");
+        }
+    }
+}
+
+/// story:acceptance-edit-ordering. An operator edit made between goal acceptance's post-review
+/// check and its `SatisfyGoal` is ordered with that command by the store, and each order has
+/// one outcome. Edit first: the goal stays Running at the edited revision with no receipt, and
+/// is planned again. SatisfyGoal first: the goal is Satisfied at the revision acceptance
+/// checked, and the edit is refused as `satisfied`.
+#[tokio::test]
+async fn goal_edit_during_acceptance_is_not_satisfied() {
+    edit_during_acceptance(Order::EditFirst).await;
+    edit_during_acceptance(Order::SatisfyFirst).await;
 }
 
 /// Stops the service while the goal reviewer runs: cancels the service's shutdown token and
@@ -1325,7 +1459,14 @@ async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
 /// its intent is Uncertain and its assignment Blocked, with the goal still running. The
 /// supervisor waits `grace` for an unmoved target before it closes the intent.
 async fn unresolved_publication(grace: std::time::Duration) -> (Fixture, Supervisor) {
-    let fixture = fixture(1).await;
+    unresolved_publication_on(fixture(1).await, grace).await
+}
+
+/// [`unresolved_publication`] on a one-repository `fixture` its caller prepared.
+async fn unresolved_publication_on(
+    fixture: Fixture,
+    grace: std::time::Duration,
+) -> (Fixture, Supervisor) {
     fixture.store.lock().await.execute("ConfigureRepository",json!({"repository_id":fixture.repositories[0]["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
     let supervisor = Supervisor::new(
         fixture.store.clone(),
@@ -1552,6 +1693,650 @@ async fn target_moved_past_uncertain_head_closes_intent() {
     assert_eq!(
         rows(&fixture.store, "AssignmentList").await[0]["state"],
         "Blocked"
+    );
+}
+
+/// Another change lands on the fixture's target, built on `base` in a separate clone of its
+/// remote: it adds `NOTES.md`, a file no candidate touches. Returns the target's new head.
+fn land_change(fixture: &Fixture, base: &str) -> String {
+    land_file(
+        fixture,
+        base,
+        "NOTES.md",
+        "Landed while a publication was open.\n",
+    )
+}
+
+/// Another change lands on the fixture's target, built on `base` in a separate clone of its
+/// remote: `contents` written to `file`. Returns the target's new head.
+fn land_file(fixture: &Fixture, base: &str, file: &str, contents: &str) -> String {
+    let remote = fixture.root.join("remotes/repo0.git");
+    let other = fixture.root.join("other-clone");
+    cmd(
+        &fixture.root,
+        "git",
+        &[
+            "clone",
+            "--quiet",
+            remote.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+        &[],
+    );
+    cmd(&other, "git", &["switch", "--quiet", "--detach", base], &[]);
+    std::fs::write(other.join(file), contents).unwrap();
+    cmd(&other, "git", &["add", file], &[]);
+    cmd(
+        &other,
+        "git",
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "an unrelated change",
+        ],
+        &[],
+    );
+    cmd(
+        &other,
+        "git",
+        &["push", "--quiet", "origin", "HEAD:refs/heads/main"],
+        &[],
+    );
+    cmd(&other, "git", &["rev-parse", "HEAD"], &[])
+        .trim()
+        .to_owned()
+}
+
+/// story:repair-on-moved-target. The publisher exits without a merge, another change lands on the
+/// target, and with the goal still running the fleet closes the intent because the target moved
+/// past the head observed when the outcome became uncertain. The repair records the target's
+/// current head as the assignment's base, and the next attempt implements on it: a second intent
+/// expects that head, and its candidate descends from it and keeps the change that landed.
+#[tokio::test]
+async fn repair_after_moved_target_takes_the_current_head() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let base = first["expected_base"].as_str().unwrap();
+    assert_eq!(claimed["base_revision"], base, "{claimed}");
+    let moved = land_change(&fixture, base);
+    supervisor.fleet_tick().await.unwrap();
+
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let closed = intents
+        .iter()
+        .find(|i| i["publication_id"] == first["publication_id"])
+        .unwrap();
+    assert_eq!(closed["state"], "NotPublished", "{intents:?}");
+    assert!(
+        closed["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(&moved) && reason.contains("moved past")),
+        "{closed}"
+    );
+    assert_eq!(
+        (&assignment["base_revision"], assignment["attempt"].as_i64()),
+        (&json!(moved), claimed["attempt"].as_i64().map(|n| n + 1)),
+        "the intent closed because main moved to {moved}; the repair must record that head as the \
+         base: the assignment is {} at attempt {} ({}), intents {intents:?}",
+        assignment["state"],
+        assignment["attempt"],
+        assignment["reason"]
+    );
+    let second = intents
+        .iter()
+        .find(|i| i["publication_id"] != first["publication_id"])
+        .unwrap_or_else(|| panic!("the attempt on {moved} published nothing: {intents:?}"));
+    assert_eq!(
+        (intents.len(), &second["state"], &second["expected_base"]),
+        (2, &json!("Uncertain"), &json!(moved)),
+        "{intents:?}"
+    );
+    let repo = fixture.root.join("repos/repo0");
+    let candidate = second["candidate"].as_str().unwrap();
+    cmd(
+        &repo,
+        "git",
+        &["merge-base", "--is-ancestor", &moved, candidate],
+        &[],
+    );
+    cmd(
+        &repo,
+        "git",
+        &["cat-file", "-e", &format!("{candidate}:NOTES.md")],
+        &[],
+    );
+    assert_eq!(
+        cmd(
+            &repo,
+            "git",
+            &["show", &format!("{candidate}:src/lib.rs")],
+            &[]
+        ),
+        "pub fn answer() -> u32 { 42 }\n"
+    );
+}
+
+/// story:repair-on-moved-target. With no grace period the intent closes at the next observation of
+/// the unmoved target, as it does once the grace period ends. The repair names no new base, so the
+/// assignment keeps the base its claim recorded, and the next attempt publishes a second intent
+/// that expects it.
+#[tokio::test]
+async fn repair_on_unchanged_target_keeps_its_base() {
+    let (fixture, supervisor) = unresolved_publication(std::time::Duration::ZERO).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let base = &claimed["base_revision"];
+    assert_eq!(&first["expected_base"], base, "{first}");
+    supervisor.fleet_tick().await.unwrap();
+
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    let assignment = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let closed = intents
+        .iter()
+        .find(|i| i["publication_id"] == first["publication_id"])
+        .unwrap();
+    assert_eq!(closed["state"], "NotPublished", "{intents:?}");
+    assert!(
+        closed["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("passed since the outcome became uncertain")),
+        "{closed}"
+    );
+    assert_eq!(
+        (&assignment["base_revision"], assignment["attempt"].as_i64()),
+        (base, claimed["attempt"].as_i64().map(|n| n + 1)),
+        "{assignment}"
+    );
+    let second = intents
+        .iter()
+        .find(|i| i["publication_id"] != first["publication_id"])
+        .unwrap_or_else(|| panic!("the retry published nothing: {intents:?}"));
+    assert_eq!(
+        (intents.len(), &second["state"], &second["expected_base"]),
+        (2, &json!("Uncertain"), base),
+        "{intents:?}"
+    );
+}
+
+/// After the publication `first` of the assignment `claimed` closed as not published, the retry
+/// was blocked before its repair: the closed intent is the only one, and the assignment is
+/// Blocked at the attempt and on the base its claim recorded, with a reason that `names_cause`
+/// accepts. Two more ticks over the unchanged cause spend no attempt, keep that reason and commit
+/// no decision.
+async fn assert_blocked_before_the_repair(
+    fixture: &Fixture,
+    supervisor: &Supervisor,
+    first: &Value,
+    claimed: &Value,
+    names_cause: impl Fn(&str) -> bool,
+) {
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    let blocked = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (
+            intents.len(),
+            &intents[0]["publication_id"],
+            intents[0]["state"].as_str()
+        ),
+        (1, &first["publication_id"], Some("NotPublished")),
+        "the retry published again: {intents:?} {blocked}"
+    );
+    assert_eq!(
+        (
+            blocked["state"].as_str(),
+            &blocked["attempt"],
+            &blocked["base_revision"]
+        ),
+        (
+            Some("Blocked"),
+            &claimed["attempt"],
+            &claimed["base_revision"]
+        ),
+        "the retry spent an attempt or took a new base: {blocked}"
+    );
+    assert!(
+        blocked["reason"].as_str().is_some_and(&names_cause),
+        "the reason does not name the cause: {blocked}"
+    );
+    let before = committed(&fixture.store).await;
+    for _ in 0..2 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (now["state"].as_str(), &now["attempt"], &now["reason"]),
+        (Some("Blocked"), &claimed["attempt"], &blocked["reason"]),
+        "two more ticks over the unchanged cause changed the assignment: {now}"
+    );
+    assert_eq!(
+        committed(&fixture.store).await - before,
+        0,
+        "two more ticks over the unchanged cause committed decisions"
+    );
+}
+
+/// story:repair-on-moved-target. A change lands before the claim, so the assignment's base is that
+/// change; while the publication is unresolved the target is rewound to the commit before it, so
+/// it no longer contains the base the assignment's work was built on. With no grace the intent
+/// closes at the next observation, and the retry is blocked before the repair, naming the target
+/// and both revisions, without spending an attempt.
+#[tokio::test]
+async fn rewound_target_blocks_the_retry_without_spending_an_attempt() {
+    let fixture = fixture(1).await;
+    let repo = fixture.root.join("repos/repo0");
+    let rewound = cmd(&repo, "git", &["rev-parse", "HEAD"], &[])
+        .trim()
+        .to_owned();
+    let dropped = land_file(
+        &fixture,
+        &rewound,
+        "NOTES.md",
+        "Landed before the claim; the target drops it later.\n",
+    );
+    let (fixture, supervisor) = unresolved_publication_on(fixture, std::time::Duration::ZERO).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(claimed["base_revision"], dropped, "{claimed}");
+    cmd(
+        &repo,
+        "git",
+        &[
+            "push",
+            "--quiet",
+            "--force",
+            "origin",
+            &format!("{rewound}:refs/heads/main"),
+        ],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    assert_blocked_before_the_repair(&fixture, &supervisor, &first, &claimed, |reason| {
+        reason.contains("main")
+            && reason.contains(&dropped)
+            && reason.contains(&rewound)
+            && reason.contains("no longer contains")
+    })
+    .await;
+}
+
+/// story:repair-on-moved-target. The target moves by a change to the line the candidate changed,
+/// so the earlier work does not merge with the target's current head. The retry is blocked before
+/// the repair, naming the conflicting path, without spending an attempt.
+#[tokio::test]
+async fn conflicting_target_blocks_the_retry_without_spending_an_attempt() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let moved = land_file(
+        &fixture,
+        claimed["base_revision"].as_str().unwrap(),
+        "src/lib.rs",
+        "pub fn answer() -> u32 { 7 }\n",
+    );
+    supervisor.fleet_tick().await.unwrap();
+    assert_blocked_before_the_repair(&fixture, &supervisor, &first, &claimed, |reason| {
+        reason.contains("main")
+            && reason.contains(&moved)
+            && reason.contains("src/lib.rs")
+            && reason.contains("conflict")
+    })
+    .await;
+}
+
+/// story:repair-on-moved-target. A publisher squashes the candidate onto the target: one commit
+/// on the base with the candidate's exact tree, recorded as not published. The earlier work then
+/// changes nothing on the target's current head, so the retry is blocked before the repair,
+/// saying the changes are already on the target, without spending an attempt.
+#[tokio::test]
+async fn candidate_already_on_target_blocks_the_retry_without_spending_an_attempt() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let repo = fixture.root.join("repos/repo0");
+    let squash = cmd(
+        &repo,
+        "git",
+        &[
+            "commit-tree",
+            &format!("{}^{{tree}}", first["candidate"].as_str().unwrap()),
+            "-p",
+            first["expected_base"].as_str().unwrap(),
+            "-m",
+            "Return the requested answer (squashed)",
+        ],
+        &[],
+    )
+    .trim()
+    .to_owned();
+    cmd(
+        &repo,
+        "git",
+        &[
+            "push",
+            "--quiet",
+            "origin",
+            &format!("{squash}:refs/heads/main"),
+        ],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    assert_blocked_before_the_repair(&fixture, &supervisor, &first, &claimed, |reason| {
+        reason.contains("main") && reason.contains(&squash) && reason.contains("already on")
+    })
+    .await;
+}
+
+/// The path of the managed worktree that holds `assignment`'s attempts.
+fn worktree_of(fixture: &Fixture, assignment: &Value) -> PathBuf {
+    let primary = fixture.root.join("repos/repo0");
+    let inspection: Value = serde_json::from_str(&cmd(
+        &primary,
+        "worktree",
+        &["inspect", "--json", "--repo", primary.to_str().unwrap()],
+        &fixture.config.environment,
+    ))
+    .unwrap();
+    let found = inspection["inspections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["record"]["id"] == assignment["worktree_id"])
+        .unwrap_or_else(|| panic!("no managed worktree for {assignment}: {inspection}"));
+    PathBuf::from(found["record"]["path"].as_str().unwrap())
+}
+
+/// story:repair-on-moved-target. An attempt stopped in the middle of a merge (a process killed
+/// while `integrate` ran) leaves the merge in progress in the assignment's worktree; here it is a
+/// merge of a target change that conflicts with the candidate. The retry aborts that merge before
+/// it commits what an earlier attempt left, so the conflicted merge is not committed as such work
+/// and the conflict is decided as one: the retry is blocked before the repair, without spending
+/// an attempt.
+#[tokio::test]
+async fn merge_left_in_progress_is_aborted_before_the_retry_is_decided() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let first = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    let claimed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let moved = land_file(
+        &fixture,
+        claimed["base_revision"].as_str().unwrap(),
+        "src/lib.rs",
+        "pub fn answer() -> u32 { 7 }\n",
+    );
+    let tree = worktree_of(&fixture, &claimed);
+    cmd(&tree, "git", &["fetch", "--quiet", "origin", &moved], &[]);
+    let interrupted = Command::new("git")
+        .current_dir(&tree)
+        .args(["merge", "--no-commit", "--no-ff", &moved])
+        .output()
+        .unwrap();
+    assert!(
+        !interrupted.status.success()
+            && cmd(&tree, "git", &["status", "--porcelain"], &[]).contains("UU src/lib.rs"),
+        "precondition: a conflicted merge is in progress: {interrupted:?}"
+    );
+    supervisor.fleet_tick().await.unwrap();
+    assert_blocked_before_the_repair(&fixture, &supervisor, &first, &claimed, |reason| {
+        reason.contains(&moved) && reason.contains("src/lib.rs") && reason.contains("conflict")
+    })
+    .await;
+    assert_eq!(
+        (
+            cmd(&tree, "git", &["status", "--porcelain"], &[]),
+            cmd(&tree, "git", &["rev-parse", "HEAD"], &[])
+                .trim()
+                .to_owned()
+        ),
+        (
+            String::new(),
+            first["candidate"].as_str().unwrap().to_owned()
+        ),
+        "the merge left in progress was not aborted back to the candidate"
+    );
+}
+
+/// The number of host decisions the store has committed: every record, progress or command.
+async fn committed(store: &SharedStore) -> u64 {
+    *store.lock().await.subscribe().borrow()
+}
+
+/// The assignment's newest recorded activity (`Store::activity_history`).
+async fn newest_activity(store: &SharedStore, assignment: &Value) -> Value {
+    history(store).await["fleet"][assignment["assignment_id"].as_str().unwrap()].clone()
+}
+
+/// An assignment blocked by an unresolved publication stays Blocked when its intent closes as not
+/// published; here the target moved past the head observed when the outcome became uncertain.
+/// Its reason then names the close, not the unresolved outcome first recorded, and ten ticks over
+/// the paused goal record nothing. Resumed, the assignment is attempted again on the target's
+/// current head (story:repair-on-moved-target) and its new publication is unresolved as well:
+/// that cause replaces the reason once, and ten ticks over it record nothing.
+#[tokio::test]
+async fn closed_publication_replaces_the_blocked_reason() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let blocked = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert!(
+        blocked["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication outcome unresolved")),
+        "{blocked}"
+    );
+    let operator = |command: &'static str| {
+        let (store, goal) = (fixture.store.clone(), fixture.goal.clone());
+        async move {
+            store
+                .lock()
+                .await
+                .execute(command, json!({"goal_id":goal}), Actor::Operator)
+                .await
+                .unwrap()
+        }
+    };
+    operator("PauseGoal").await;
+    let since =
+        newest_activity(&fixture.store, &blocked).await["detail"]["uncertain_since"].clone();
+    assert!(
+        since.is_i64(),
+        "the unresolved blocker records its start: {since}"
+    );
+    let base = rows(&fixture.store, "PublicationIntentList").await[0]["expected_base"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let repo = fixture.root.join("repos/repo0");
+    let moved = cmd(
+        &repo,
+        "git",
+        &[
+            "commit-tree",
+            &format!("{base}^{{tree}}"),
+            "-p",
+            &base,
+            "-m",
+            "an unrelated change",
+        ],
+        &[],
+    )
+    .trim()
+    .to_owned();
+    cmd(
+        &repo,
+        "git",
+        &["push", "origin", &format!("{moved}:refs/heads/main")],
+        &[],
+    );
+    supervisor.fleet_tick().await.unwrap();
+    let intent = rows(&fixture.store, "PublicationIntentList").await[0].clone();
+    assert_eq!(intent["state"], "NotPublished", "{intent}");
+    let closed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(closed["state"], "Blocked", "{closed}");
+    assert!(
+        closed["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("closed as not published")),
+        "after the intent closed as not published ({}), the assignment's reason still reads {}",
+        intent["reason"],
+        closed["reason"]
+    );
+    assert_eq!(closed["reason"], intent["reason"], "{closed} {intent}");
+    // The close is blocked before the intent closes, and its blocker carries the intent and the
+    // start of its uncertainty, so a process stopped between the two closes it on the next
+    // observation instead of waiting a new grace period.
+    let blocker = newest_activity(&fixture.store, &closed).await;
+    assert_eq!(
+        (
+            &blocker["action"],
+            &blocker["detail"]["reason"],
+            &blocker["detail"]["publication_id"],
+            &blocker["detail"]["uncertain_since"]
+        ),
+        (
+            &json!("blocked"),
+            &intent["reason"],
+            &intent["publication_id"],
+            &since
+        ),
+        "{blocker}"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &closed["reason"]),
+        "{now}"
+    );
+    assert_eq!(
+        committed(&fixture.store).await - before,
+        0,
+        "ten fleet ticks over the paused goal's closed publication committed decisions"
+    );
+
+    // Resumed: the fleet repairs the assignment on the target's current head and attempts it
+    // again. The new publication is unresolved too, and once the next tick observes it, within
+    // its grace period, that cause replaces the close as the reason.
+    operator("StartGoal").await;
+    supervisor.fleet_tick().await.unwrap();
+    let intents = rows(&fixture.store, "PublicationIntentList").await;
+    let second = intents
+        .iter()
+        .find(|i| i["publication_id"] != intent["publication_id"])
+        .unwrap_or_else(|| panic!("the resumed assignment published nothing: {intents:?}"))
+        .clone();
+    assert_eq!(
+        (second["state"].as_str(), second["expected_base"].as_str()),
+        (Some("Uncertain"), Some(moved.as_str())),
+        "{intents:?}"
+    );
+    supervisor.fleet_tick().await.unwrap();
+    let resumed = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (resumed["state"].as_str(), resumed["attempt"].as_i64()),
+        (Some("Blocked"), closed["attempt"].as_i64().map(|n| n + 1)),
+        "{resumed}"
+    );
+    assert!(
+        resumed["reason"].as_str().is_some_and(|reason| {
+            reason.starts_with("Publication outcome unresolved")
+                && reason.contains(second["candidate"].as_str().unwrap())
+        }),
+        "{resumed}"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &resumed["reason"]),
+        "{now}"
+    );
+    assert_eq!(
+        committed(&fixture.store).await - before,
+        0,
+        "ten fleet ticks over the unchanged unresolved publication committed decisions"
+    );
+}
+
+/// A Blocked assignment whose cause holds, tick after tick, keeps the reason that names it. The
+/// cause here is an unreachable remote whose diagnostics change on every observation (curl reports
+/// how long its attempt took): the failure's class identifies the cause, not the output, so
+/// although every observation words the reason differently, none replaces it or records anything.
+#[tokio::test]
+async fn unchanged_blocked_reason_is_not_replaced() {
+    let (fixture, supervisor) = unresolved_publication(PUBLICATION_GRACE).await;
+    let failing = fixture.root.join("unreachable-upload-pack");
+    std::fs::write(
+        &failing,
+        "#!/bin/sh\necho \"fatal: unable to access 'https://git.example.invalid/repo0.git/': Failed \
+         to connect to git.example.invalid port 443 after $(date +%N) ms: Could not connect to \
+         server\" >&2\nexit 128\n",
+    )
+    .unwrap();
+    cmd(
+        &fixture.root,
+        "chmod",
+        &["755", failing.to_str().unwrap()],
+        &[],
+    );
+    cmd(
+        &fixture.root.join("repos/repo0"),
+        "git",
+        &[
+            "config",
+            "remote.origin.uploadpack",
+            failing.to_str().unwrap(),
+        ],
+        &[],
+    );
+    // The first failed observation is a new cause: the assignment's reason names it.
+    supervisor.fleet_tick().await.unwrap();
+    let blocked = rows(&fixture.store, "AssignmentList").await[0].clone();
+    let cause = newest_activity(&fixture.store, &blocked).await;
+    assert_eq!(blocked["state"], "Blocked", "{blocked}");
+    assert!(
+        cause["detail"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("Publication observation unavailable")),
+        "{cause}"
+    );
+    assert_eq!(
+        blocked["reason"], cause["detail"]["reason"],
+        "the Blocked assignment's reason does not name the cause recorded for it"
+    );
+
+    let before = committed(&fixture.store).await;
+    for _ in 0..10 {
+        supervisor.fleet_tick().await.unwrap();
+    }
+    let after = committed(&fixture.store).await;
+    let now = rows(&fixture.store, "AssignmentList").await[0].clone();
+    assert_eq!(
+        rows(&fixture.store, "PublicationIntentList").await[0]["state"],
+        "Uncertain"
+    );
+    assert_eq!(
+        (now["state"].as_str(), &now["reason"]),
+        (Some("Blocked"), &blocked["reason"]),
+        "an unchanged cause replaced the Blocked assignment's reason"
+    );
+    assert_eq!(
+        after - before,
+        0,
+        "ten fleet ticks over an unchanged cause committed {} decisions; reason now {}",
+        after - before,
+        now["reason"]
     );
 }
 

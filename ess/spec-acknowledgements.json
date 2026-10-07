@@ -1,58 +1,221 @@
 {
   "format": "control-plane-spec-acknowledgements/2",
-  "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
+  "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
   "acknowledged": [
     {
-      "id": "entity/controlplane.host.PublicationIntent/terminal-added/NotPublished",
+      "id": "entity/controlplane.host.Assignment/transition-route-changed/block",
       "change": {
         "category": "entity",
-        "subject": "controlplane.host.PublicationIntent",
+        "subject": "controlplane.host.Assignment",
         "changed": {
-          "kind": "terminal-added",
-          "state": "NotPublished"
+          "after": "Blocked, Implementing, Merging, Queued, ReadyToMerge, Reviewing -> Blocked",
+          "before": "Implementing, Merging, Queued, ReadyToMerge, Reviewing -> Blocked",
+          "kind": "transition-route-changed",
+          "transition": "block"
         }
       },
-      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
-      "reason": "Only ClosePublication, a new command, moves an intent into NotPublished, so no stored decision does: stored history cannot hold a call of a command that did not exist. Every recorded intent replays to the Prepared, Uncertain or Confirmed state it reached, and PreparePublication, MarkPublicationUncertain and ConfirmPublication answer from those states as before. The committed recorded history replayed to its committed views with this change before it was re-recorded."
+      "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
+      "reason": "The block route gains Blocked as a source, so BlockAssignment on a Blocked assignment now applies and replaces its reason where it answered wrong-state; every other answer of BlockAssignment is unchanged (applied from Queued, Implementing, Reviewing, ReadyToMerge and Merging, wrong-state from Merged and Cancelled, not-found). Replay re-answers each recorded call, so only a recorded BlockAssignment answered wrong-state on a Blocked assignment could now differ, and no stored history holds one: in every commit each sender reads the assignment first and sends BlockAssignment only to one that is not Blocked (the fleet's block helper and its repair path in control-plane-runtime fleet.rs), the supervisor's retirement of a superseded queue blocks only Queued assignments and cancels them under the same store lock, and the Operator is not granted the command, so its call is refused before anything is appended. The committed recorded history, whose BlockAssignment refusal is on a Merged assignment, replays to its committed views with this change."
     },
     {
-      "id": "entity/controlplane.host.PublicationIntent/transition-added/close",
+      "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
       "change": {
-        "category": "entity",
-        "subject": "controlplane.host.PublicationIntent",
+        "category": "command",
         "changed": {
-          "kind": "transition-added",
-          "transition": "close"
-        }
+          "kind": "outcome-added",
+          "outcome": "rebased"
+        },
+        "subject": "controlplane.host.RepairAssignment"
       },
-      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
-      "reason": "The close transition is taken only by the applied outcome of ClosePublication, a new command; no stored decision calls it. The transitions of the recorded publication commands are unchanged, so each recorded outcome replays as recorded (see the NotPublished entry)."
-    },
-    {
-      "id": "component/control-plane/accepts-added/controlplane.host.ClosePublication",
-      "change": {
-        "category": "component",
-        "subject": "control-plane",
-        "changed": {
-          "command": "controlplane.host.ClosePublication",
-          "kind": "accepts-added"
-        }
+      "command_outcomes": [
+        "rebased",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.RepairAssignment/outcome-added/rebased",
+      "outcome": {
+        "condition": {
+          "kind": "when",
+          "predicate": "defined(base_revision)"
+        },
+        "emits": [
+          "controlplane.host.RepairAssignmentApplied"
+        ],
+        "name": "rebased",
+        "payload": [
+          {
+            "event": "controlplane.host.RepairAssignmentApplied",
+            "fields": [
+              {
+                "target": "assignment_id",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "uuid"
+                },
+                "value": {
+                  "field": "assignment_id",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "uuid"
+                  }
+                }
+              },
+              {
+                "target": "reason",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "value": {
+                  "field": "reason",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              },
+              {
+                "target": "implementor_run",
+                "target_type": {
+                  "kind": "primitive",
+                  "name": "string"
+                },
+                "value": {
+                  "field": "implementor_run",
+                  "kind": "input_field",
+                  "type_ref": {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "sets": [
+          {
+            "target": "attempt",
+            "target_type": {
+              "kind": "primitive",
+              "name": "integer"
+            },
+            "value": {
+              "by": "1",
+              "kind": "increment"
+            }
+          },
+          {
+            "target": "reason",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "reason",
+              "kind": "input_field",
+              "type_ref": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          },
+          {
+            "target": "implementor_run",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "implementor_run",
+              "kind": "input_field",
+              "type_ref": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          },
+          {
+            "target": "reviewer_run",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          },
+          {
+            "target": "base_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "field": "base_revision",
+              "kind": "input_or_generated",
+              "otherwise": "",
+              "type_ref": {
+                "kind": "optional",
+                "of": {
+                  "kind": "primitive",
+                  "name": "string"
+                }
+              }
+            }
+          },
+          {
+            "target": "test_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          },
+          {
+            "target": "review_revision",
+            "target_type": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "value": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        ],
+        "subject": {
+          "effect": "moves",
+          "entity": "controlplane.host.Assignment",
+          "instance": {
+            "field": {
+              "name": "assignment_id",
+              "naming": {},
+              "type_ref": {
+                "kind": "primitive",
+                "name": "uuid"
+              }
+            },
+            "from": "supplied"
+          },
+          "transition": {
+            "from": [
+              "Blocked",
+              "Reviewing"
+            ],
+            "name": "repair",
+            "to": "Implementing"
+          }
+        },
+        "test_strategy": "construct_input"
       },
-      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
-      "reason": "The component gains a route for a new command. Replay routes only recorded commands, and no stored decision names ClosePublication, so no recorded call reaches the new route; ESS rates the change compatible for history."
-    },
-    {
-      "id": "component/control-plane/publishes-added/controlplane.host.ClosePublicationApplied",
-      "change": {
-        "category": "component",
-        "subject": "control-plane",
-        "changed": {
-          "event": "controlplane.host.ClosePublicationApplied",
-          "kind": "publishes-added"
-        }
-      },
-      "baseline": "72d4ed72157d13400ecccc8653962bff8da8d84e",
-      "reason": "Only the applied outcome of ClosePublication, a new command, publishes this event, so no stored outcome carries it and no recorded outcome changes; ESS rates the change compatible for history."
+      "reason": "The added outcome answers only a RepairAssignment whose input names base_revision, an Optional input added by the same change. No stored decision carries it: before this change every sender (the fleet's repair in control-plane-runtime fleet.rs and the record-history script) sent assignment_id, reason and implementor_run only, and the Operator is not granted the command, so its call is refused before anything is appended. The generated decoder reads an absent base_revision as none, so `defined(base_revision)` holds for no recorded call and each one is still answered by `applied`, whose condition, field updates and payload are unchanged; RepairAssignment's wrong-state and not-found answers are unchanged too. The committed recorded history replays to its committed views with this change."
     }
   ]
 }

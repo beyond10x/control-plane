@@ -974,6 +974,119 @@ async fn satisfaction_receipt_must_name_the_current_goal_revision() {
     }
 }
 
+/// A running goal at revision 1 and the operator's edit of its acceptance criteria.
+async fn running_goal_and_edit(store: &mut Store, path: &Path) -> (String, Value) {
+    let ws = workspace(store, path).await;
+    let goal = goal(store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let mut edit = goal_body(&ws);
+    edit.as_object_mut().unwrap().remove("workspace_id");
+    edit["goal_id"] = json!(goal);
+    edit["acceptance"] = json!("tests, independent review and documentation");
+    (goal, edit)
+}
+
+/// story:acceptance-edit-ordering, the edit first. Goal acceptance checked the goal at revision
+/// 1, then the operator's edit moved it to revision 2. The SatisfyGoal acceptance sends names
+/// revision 1 and is refused before any decision is appended. The goal stays Running at
+/// revision 2 with the edited acceptance criteria and no receipt, also after replay.
+#[tokio::test]
+async fn satisfy_after_edit_names_the_old_revision_and_is_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let (goal, edit) = running_goal_and_edit(&mut store, temp.path()).await;
+    let checked = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(checked["state"], "Running", "{checked}");
+    assert_eq!(checked["revision"], 1, "{checked}");
+    let receipt = json!({"kind":"goal_acceptance","goal_revision":checked["revision"]}).to_string();
+
+    let edited = store
+        .execute("UpdateGoal", edit, Actor::Operator)
+        .await
+        .unwrap();
+    assert_eq!(edited["outcome"], "applied", "{edited}");
+    let current = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(current["revision"], 2, "{current}");
+
+    let version = store.version;
+    let error = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            Actor::Supervisor,
+        )
+        .await
+        .expect_err("a receipt for revision 1 satisfied the goal at revision 2");
+    assert_eq!(
+        format!("{error:#}"),
+        "goal satisfaction receipt names goal revision 1 but the goal is at revision 2"
+    );
+    assert_eq!(store.version, version, "the refusal appended a decision");
+    let after = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(after, current);
+    assert_eq!(after["state"], "Running");
+    assert_eq!(after["revision"], 2);
+    assert_eq!(
+        after["acceptance"],
+        "tests, independent review and documentation"
+    );
+    assert_eq!(after["satisfaction_receipt"], "");
+    drop(store);
+    let reopened = Store::open(&db).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap()[0], current);
+}
+
+/// story:acceptance-edit-ordering, the acceptance first. SatisfyGoal records the receipt for
+/// revision 1, the revision acceptance checked. The operator's edit that arrives afterwards is
+/// refused with the declared `satisfied` outcome. `Store::execute` returns that refusal to the
+/// operator as the command's result: it names the outcome, the error and the goal's state. The
+/// goal keeps its revision, its acceptance criteria and its receipt, also after replay.
+#[tokio::test]
+async fn edit_after_satisfy_is_refused_and_says_why() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let (goal, edit) = running_goal_and_edit(&mut store, temp.path()).await;
+    let checked = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(checked["revision"], 1, "{checked}");
+    let receipt = json!({"kind":"goal_acceptance","goal_revision":checked["revision"]}).to_string();
+    let satisfied = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(satisfied["outcome"], "applied", "{satisfied}");
+    let accepted = store.query("GoalList").unwrap()[0].clone();
+
+    let refused = store
+        .execute("UpdateGoal", edit, Actor::Operator)
+        .await
+        .expect("a declared refusal is the command's result, not an error");
+    assert_eq!(
+        refused,
+        json!({"outcome":"satisfied","error":"controlplane.host.GoalStateConflict","payload":{"state":"Satisfied"},"published":[]})
+    );
+    let after = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(after, accepted);
+    assert_eq!(after["state"], "Satisfied");
+    assert_eq!(after["revision"], 1);
+    assert_eq!(after["acceptance"], "tests and independent review");
+    assert_eq!(after["satisfaction_receipt"], receipt);
+    let named: Value =
+        serde_json::from_str(after["satisfaction_receipt"].as_str().unwrap()).unwrap();
+    assert_eq!(named["goal_revision"], checked["revision"]);
+    drop(store);
+    let reopened = Store::open(&db).await.unwrap();
+    assert_eq!(reopened.query("GoalList").unwrap()[0], accepted);
+}
+
 #[tokio::test]
 async fn cancelled_goal_refuses_edit() {
     let cancel = ("CancelGoal", json!({}), Actor::Operator);
@@ -1348,6 +1461,193 @@ async fn blocked_repair_reacquires_worker_capacity() {
         )
         .await;
     assert!(result.unwrap_err().to_string().contains("worker limit"));
+}
+
+/// BlockAssignment on a Blocked assignment replaces its reason and leaves it Blocked; the reason
+/// survives a restart. Only the Supervisor may send it, and a merged or cancelled assignment still
+/// refuses it.
+#[tokio::test]
+async fn blocked_reason_is_replaced_by_the_supervisor_only() {
+    let temp = adversary_scratch();
+    let path = temp.path().join("repo");
+    repository(&path);
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:blocked").await;
+    claim(&mut store, &id).await.unwrap();
+    let block = |reason: &str| json!({"assignment_id":id,"reason":reason});
+    let row = |store: &Store| {
+        store.query("AssignmentList").unwrap()[0]
+            .as_object()
+            .unwrap()
+            .clone()
+    };
+    let outcome = store
+        .execute("BlockAssignment", block("first cause"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "applied", "{outcome}");
+
+    let refused = store
+        .execute("BlockAssignment", block("operator cause"), Actor::Operator)
+        .await
+        .unwrap_err();
+    assert!(refused.to_string().contains("actor"), "{refused}");
+    assert_eq!(row(&store)["reason"], "first cause");
+
+    let outcome = store
+        .execute("BlockAssignment", block("second cause"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "applied", "{outcome}");
+    let replaced = row(&store);
+    assert_eq!(
+        (&replaced["state"], &replaced["reason"]),
+        (&json!("Blocked"), &json!("second cause")),
+        "{replaced:?}"
+    );
+
+    drop(store);
+    let mut store = Store::open(&database).await.unwrap();
+    assert_eq!(row(&store), replaced, "the replaced reason after a restart");
+    store
+        .execute(
+            "CancelAssignment",
+            json!({"assignment_id":id}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let outcome = store
+        .execute("BlockAssignment", block("too late"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(outcome["outcome"], "wrong-state", "{outcome}");
+    assert_eq!(row(&store)["reason"], "second cause");
+}
+
+/// story:repair-on-moved-target. A repair that names a base revision records it as the
+/// assignment's base (`rebased`); one that names none keeps the base it has (`applied`), as every
+/// repair recorded before the input existed did. A publication must then expect the new base. An
+/// empty base is refused, the Operator cannot repair, and the base survives a restart.
+#[tokio::test]
+async fn repair_takes_a_new_base_only_when_it_names_one() {
+    let temp = adversary_scratch();
+    let path = temp.path().join("repo");
+    repository(&path);
+    let database = temp.path().join("state.sqlite");
+    let mut store = Store::open(&database).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:moved").await;
+    claim(&mut store, &id).await.unwrap();
+    let row = |store: &Store| store.query("AssignmentList").unwrap()[0].clone();
+    let block = json!({"assignment_id":id,"reason":"publication closed as not published"});
+    let repair = |base: Option<&str>| {
+        let mut body =
+            json!({"assignment_id":id,"reason":"retry","implementor_run":"implementor-retry"});
+        if let Some(base) = base {
+            body["base_revision"] = json!(base);
+        }
+        body
+    };
+    store
+        .execute("BlockAssignment", block.clone(), Actor::Supervisor)
+        .await
+        .unwrap();
+
+    let operator = store
+        .execute("RepairAssignment", repair(Some("moved")), Actor::Operator)
+        .await
+        .unwrap_err();
+    assert!(operator.to_string().contains("actor"), "{operator}");
+    let empty = store
+        .execute("RepairAssignment", repair(Some("")), Actor::Supervisor)
+        .await;
+    assert!(
+        empty
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("base revision is empty")),
+        "a repair with an empty base: {empty:?}"
+    );
+    let held = row(&store);
+    assert_eq!(
+        (&held["state"], &held["base_revision"], &held["attempt"]),
+        (&json!("Blocked"), &json!("base"), &json!(1)),
+        "{held}"
+    );
+
+    let rebased = store
+        .execute("RepairAssignment", repair(Some("moved")), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(rebased["outcome"], "rebased", "{rebased}");
+    let moved = row(&store);
+    assert_eq!(
+        (&moved["state"], &moved["base_revision"], &moved["attempt"]),
+        (&json!("Implementing"), &json!("moved"), &json!(2)),
+        "{moved}"
+    );
+
+    store
+        .execute("BlockAssignment", block, Actor::Supervisor)
+        .await
+        .unwrap();
+    let kept = store
+        .execute("RepairAssignment", repair(None), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(kept["outcome"], "applied", "{kept}");
+    let repaired = row(&store);
+    assert_eq!(
+        (&repaired["base_revision"], &repaired["attempt"]),
+        (&json!("moved"), &json!(3)),
+        "{repaired}"
+    );
+
+    let candidate = "candidate-moved";
+    for (command, body) in [
+        (
+            "ReviewAssignment",
+            json!({"assignment_id":id,"candidate":candidate,"test_revision":candidate}),
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":id,"reviewer_run":"reviewer","review_revision":candidate}),
+        ),
+    ] {
+        store
+            .execute(command, body, Actor::Supervisor)
+            .await
+            .unwrap();
+    }
+    let prepare = |base: &str| json!({"assignment_id":id,"candidate":candidate,"target":"main","expected_base":base});
+    let stale = store
+        .execute("PreparePublication", prepare("base"), Actor::Supervisor)
+        .await;
+    assert!(stale.is_err(), "a publication on the old base: {stale:?}");
+    let prepared = store
+        .execute("PreparePublication", prepare("moved"), Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(prepared["outcome"], "created", "{prepared}");
+
+    let reviewed = row(&store);
+    drop(store);
+    let store = Store::open(&database).await.unwrap();
+    assert_eq!(row(&store), reviewed, "the assignment after a restart");
 }
 
 #[tokio::test]

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T23:10:47Z",
+  "actor": "human:timo",
+  "artifact": "story:blocked-reason-update",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave-5 integration gate, package-scoped, 12 steps each exit 0 (control-plane/wave-5)",
+    "reference": "commit f94809c (code as merged at 791681d): package-scoped gate for control-plane-core, control-plane-runtime and control-plane-xtask, 12 steps each exit 0; 316 Rust tests in 32 result lines passed, 0 failed (cargo test -- --list: 316); spec-history-check passed (4 changes since 6341398, 2 acknowledged); acceptance-check 105 names in 27 stories resolve; conformance 180 of 180; generated-check passed; fleet and repair_on_moved_target_attack also passed without GIT_CEILING_DIRECTORIES; ESS 0.53.0 as CI pins it. Full gate: the pull request's CI"
+  }
+}

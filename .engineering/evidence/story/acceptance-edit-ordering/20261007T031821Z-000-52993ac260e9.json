@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T03:18:21Z",
+  "actor": "human:timo",
+  "artifact": "story:acceptance-edit-ordering",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "planted-defect runs in cp-wave5-acceptance-edit-ordering against unit 3bc53cd",
+    "reference": "baseline: unchanged code, 3 named cases green; treatment: fleet re-check removed -> runtime case red (store guard blocks); re-check and guard removed -> runtime case red (goal Satisfied at revision 2 with a revision-1 receipt) and core satisfy_after_edit red; satisfied refusal turned into an error -> core edit_after_satisfy red. Verdict VERIFIED (new behaviour the baseline tests could not show)"
+  }
+}

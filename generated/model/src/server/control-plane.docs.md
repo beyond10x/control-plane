@@ -1,7 +1,7 @@
 <!--
 generated from controlplane v1
-model digest 9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b
-contract digest slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead
+model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
+contract digest slice-sha256/2:b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
 do not edit: regenerate with `ess generate`
 -->
 
@@ -63,6 +63,7 @@ stateDiagram-v2
     Reviewing --> ReadyToMerge: ready (ReadyAssignment)
     ReadyToMerge --> Merging: merge (MergeAssignment)
     Merging --> Merged: complete (CompleteAssignment)
+    Blocked --> Blocked: block (BlockAssignment)
     Implementing --> Blocked: block (BlockAssignment)
     Merging --> Blocked: block (BlockAssignment)
     Queued --> Blocked: block (BlockAssignment)
@@ -83,7 +84,7 @@ Each move is taken by a declared command outcome, and a move nothing takes is re
 
 - `claim` — taken by `controlplane.host.ClaimAssignment` on its `applied` outcome
 - `review` — taken by `controlplane.host.ReviewAssignment` on its `applied` outcome
-- `repair` — taken by `controlplane.host.RepairAssignment` on its `applied` outcome
+- `repair` — taken by `controlplane.host.RepairAssignment` on its `rebased` outcome and `controlplane.host.RepairAssignment` on its `applied` outcome
 - `ready` — taken by `controlplane.host.ReadyAssignment` on its `applied` outcome
 - `merge` — taken by `controlplane.host.MergeAssignment` on its `applied` outcome
 - `complete` — taken by `controlplane.host.CompleteAssignment` on its `applied` outcome
@@ -597,9 +598,9 @@ It takes:
 
 It has three outcomes.
 
-**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Implementing`, `Merging`, `Queued`, `ReadyToMerge` and `Reviewing` to `Blocked`, along the declared move `block`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.BlockAssignmentApplied`. It sets `reason` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Blocked`, `Implementing`, `Merging`, `Queued`, `ReadyToMerge` and `Reviewing` to `Blocked`, along the declared move `block`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.BlockAssignmentApplied`. It sets `reason` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
-**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Blocked`, `Cancelled` and `Merged`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
+**`wrong-state`** — Taken when the subject is resting in a state none of this command's moves start from — a `controlplane.host.Assignment` in `Cancelled` and `Merged`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `controlplane.host.AssignmentStateConflict`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 **`not-found`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `controlplane.host.AssignmentNotFound`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
@@ -993,8 +994,11 @@ It takes:
 - `assignment_id` — `Uuid`
 - `reason` — `String`
 - `implementor_run` — `String`
+- `base_revision` — `Optional<String>`, which may be absent
 
-It has three outcomes.
+It has four outcomes.
+
+**`rebased`** — Taken when `defined(base_revision)` holds of the input. It moves a `controlplane.host.Assignment` from `Blocked` and `Reviewing` to `Implementing`, along the declared move `repair`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.RepairAssignmentApplied`. It sets `attempt` from `its previous value plus 1`, `reason` from `input.reason`, `implementor_run` from `input.implementor_run`, `reviewer_run` from `""`, `base_revision` from `input.base_revision, else ""`, `test_revision` from `""` and `review_revision` from `""`. A test reaches it by constructing an input that satisfies that condition.
 
 **`applied`** — The default branch, taken when no other outcome's condition matched. It moves a `controlplane.host.Assignment` from `Blocked` and `Reviewing` to `Implementing`, along the declared move `repair`. The instance is the one named by the input field `assignment_id`. It emits `controlplane.host.RepairAssignmentApplied`. It sets `attempt` from `its previous value plus 1`, `reason` from `input.reason`, `implementor_run` from `input.implementor_run`, `reviewer_run` from `""`, `test_revision` from `""` and `review_revision` from `""`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
@@ -1398,7 +1402,7 @@ It carries:
 - `reason` — `String`
 - `implementor_run` — `String`
 
-Emitted by `controlplane.host.RepairAssignment` on its `applied` outcome.
+Emitted by `controlplane.host.RepairAssignment` on its `rebased` and `applied` outcomes.
 
 Nothing in this system reacts to it.
 
@@ -1712,4 +1716,4 @@ It may invoke [`ArchiveWorkspace`](#archiveworkspace), [`BlockAssignment`](#bloc
 
 ---
 
-Generated from controlplane v1 · model digest `9c38829b718fc37a19c83d986d606b1bf71db0ac9d8c649a266a54fea251ea2b` · contract digest `slice-sha256/2:1a9232380ffaa1aa950639a9b2ceec80e5466fb5787df27a171b3e721835dead`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from controlplane v1 · model digest `897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7` · contract digest `slice-sha256/2:b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7`. Do not edit this file; change the specification and regenerate it with `ess generate`.

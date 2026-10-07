@@ -164,8 +164,12 @@ impl Host {
                 .await
                 .execute(command, body, Actor::Supervisor)
                 .await?;
+            // `rebased` is RepairAssignment applied with a new base revision.
             ensure!(
-                matches!(result["outcome"].as_str(), Some("applied" | "created")),
+                matches!(
+                    result["outcome"].as_str(),
+                    Some("applied" | "created" | "rebased")
+                ),
                 "{command} refused: {result}"
             );
             Ok(result)
@@ -247,7 +251,14 @@ impl Host {
     }
     /// Record the blocker `detail` and block the assignment unless it already rests. A blocker
     /// unchanged since the assignment's newest record, on an assignment that already rests,
-    /// records nothing: the fleet meets an unresolved publication on every tick.
+    /// records nothing: the fleet meets an unresolved publication on every tick. A changed
+    /// blocker of a Blocked assignment blocks it again with the new reason (`block` takes a
+    /// Blocked assignment too), unless that reason is already its own, so the reason names the
+    /// cause that holds now. A merged or cancelled assignment keeps its reason.
+    ///
+    /// The assignment is blocked before the blocker is recorded. The record is what marks a cause
+    /// as seen, so a process that stops between the two commits leaves the cause unrecorded and
+    /// the next block of it records it, rather than a recorded cause whose reason never landed.
     fn block_with(&self, id: &Value, detail: Value) -> Result<()> {
         let row = self.row("AssignmentList", "assignment_id", id)?;
         let rests = matches!(
@@ -258,14 +269,14 @@ impl Host {
             return Ok(());
         }
         let reason = detail["reason"].clone();
-        self.progress(&row, "blocked", "host", detail)?;
-        if !rests {
+        let replaced = row["state"] == "Blocked" && row["reason"] != reason;
+        if !rests || replaced {
             self.execute(
                 "BlockAssignment",
                 json!({"assignment_id":id,"reason":reason}),
             )?;
         }
-        Ok(())
+        self.progress(&row, "blocked", "host", detail)
     }
     /// Record `detail` under `action` as the assignment's newest activity unless it already is:
     /// the fleet meets a waiting assignment on every tick.
@@ -540,18 +551,131 @@ fn command(
 fn commit(host: &Host, path: &Path, message: &str) -> Result<String> {
     if !git(host, path, &["status", "--porcelain"])?.is_empty() {
         git(host, path, &["add", "--all"])?;
-        let command = host.config.commit_for(path, &host.runner)?;
-        let (program, prefix) = command.split_first().context("commit command empty")?;
-        let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
-        host.config
-            .credentialed(&host.runner)
-            .run(path, program, &args, None)?;
+        record_commit(host, path, message)?;
     }
     ensure!(
         git(host, path, &["status", "--porcelain"])?.is_empty(),
         "candidate worktree remains dirty after commit"
     );
     git(host, path, &["rev-parse", "HEAD"])
+}
+/// Commit what is staged at `path` through the configured commit command.
+fn record_commit(host: &Host, path: &Path, message: &str) -> Result<()> {
+    let command = host.config.commit_for(path, &host.runner)?;
+    let (program, prefix) = command.split_first().context("commit command empty")?;
+    let args = [prefix.to_vec(), vec![message.to_owned()]].concat();
+    host.config
+        .credentialed(&host.runner)
+        .run(path, program, &args, None)?;
+    Ok(())
+}
+/// The answer of a Git command that answers by its exit status (`merge-base --is-ancestor`,
+/// `rev-parse --verify --quiet`): `true` when it exits 0, `false` when it exits 1. Any other
+/// failure is an error.
+fn git_answers(host: &Host, path: &Path, args: &[&str]) -> Result<bool> {
+    match git(host, path, args) {
+        Ok(_) => Ok(true),
+        Err(error)
+            if error
+                .downcast_ref::<ProcessExit>()
+                .is_some_and(|exit| exit.code == Some(1)) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+/// Merge `revision` into the clean worktree at `path` and commit the merge, and nothing else,
+/// through the configured commit command. A merge that changes no file is committed too: the
+/// merge commit is what makes the worktree descend from `revision`. When the merge or its commit
+/// fails, a merge still in progress (`MERGE_HEAD`) is aborted, which leaves the worktree as it was
+/// before the merge; a merge Git refused to start left it so already.
+fn integrate(host: &Host, path: &Path, revision: &str, message: &str) -> Result<()> {
+    ensure!(
+        git(host, path, &["status", "--porcelain"])?.is_empty(),
+        "the candidate worktree has uncommitted changes before merging {revision}"
+    );
+    let merged = (|| -> Result<()> {
+        git(host, path, &["merge", "--no-commit", "--no-ff", revision])
+            .with_context(|| format!("{revision} does not merge into the candidate worktree"))?;
+        record_commit(host, path, message)?;
+        ensure!(
+            git(host, path, &["merge-base", "HEAD", revision])? == revision
+                && git(host, path, &["status", "--porcelain"])?.is_empty(),
+            "the candidate worktree does not descend from {revision} after merging it"
+        );
+        Ok(())
+    })();
+    let Err(error) = merged else {
+        return Ok(());
+    };
+    Err(match abort_merge(host, path) {
+        Ok(()) => error,
+        Err(abort) => error.context(format!("aborting the merge failed too: {abort:#}")),
+    })
+}
+/// Abort the merge in progress in the worktree at `path`, if there is one (`MERGE_HEAD`).
+fn abort_merge(host: &Host, path: &Path) -> Result<()> {
+    if git_answers(
+        host,
+        path,
+        &["rev-parse", "--verify", "--quiet", "MERGE_HEAD"],
+    )? {
+        git(host, path, &["merge", "--abort"])?;
+    }
+    Ok(())
+}
+/// Whether the work in the worktree at `path`, built on `started`, can be carried onto `base`,
+/// the head the target moved to since: an error naming why not, which blocks the assignment
+/// before its repair, so that no attempt is spent on a cause that holds until the target or the
+/// assignment changes. The target must still contain `started`, and the work must merge with
+/// `base` and change something on it. A worktree with no commit of its own beyond `base` carries
+/// nothing, and its attempt implements on `base`.
+fn carried_onto(host: &Host, path: &Path, target: &str, started: &str, base: &str) -> Result<()> {
+    ensure!(
+        git_answers(host, path, &["merge-base", "--is-ancestor", started, base])?,
+        "The target {target} no longer contains {started}, the base this assignment's work was \
+         built on: it is now at {base}, which does not descend from it; cancel or re-plan the \
+         assignment"
+    );
+    if git_answers(host, path, &["merge-base", "--is-ancestor", "HEAD", base])? {
+        return Ok(());
+    }
+    let merge = [
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "--no-messages",
+        "HEAD",
+        base,
+    ];
+    let merged = match git(host, path, &merge) {
+        Ok(merged) => merged,
+        Err(error) => match error.downcast_ref::<ProcessExit>() {
+            // Exit 1 is a conflicted merge: the tree, then one conflicted path per line.
+            Some(exit) if exit.code == Some(1) => bail!(
+                "The work of this assignment conflicts with the target {target} at {base} in {}; \
+                 cancel or re-plan the assignment",
+                exit.stdout
+                    .lines()
+                    .skip(1)
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            _ => return Err(error),
+        },
+    };
+    let tree = merged
+        .lines()
+        .next()
+        .context("git merge-tree printed no tree")?;
+    ensure!(
+        tree != git(host, path, &["rev-parse", &format!("{base}^{{tree}}")])?,
+        "The candidate's changes are already on the target {target} at {base}: merged onto it, \
+         this assignment's work changes nothing; cancel the assignment"
+    );
+    Ok(())
 }
 
 pub async fn run(
@@ -1033,42 +1157,22 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
     } else {
         format!("cp-impl-{}", uuid::Uuid::new_v4())
     };
-    if resumed {
-        // A repair spends an attempt, and the attempt implements on the assignment's own base.
-        // Once the target is no longer at that base, no attempt can publish and no command gives
-        // the assignment another base, so it is blocked here, before the repair.
-        let started = text(initial, "base_revision")?;
-        ensure!(
-            started == base,
-            "The target {target} moved from {started} to {base} since this attempt started; \
-             cancel or re-plan the assignment"
-        );
-        if current["state"] != "Blocked" {
-            // Repair takes a blocked assignment; an interrupted one is blocked first.
-            host.execute(
-                "BlockAssignment",
-                json!({"assignment_id":initial["assignment_id"],"reason":RECOVER}),
-            )?;
-        }
-        host.execute("RepairAssignment",json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run}))?;
+    // A new assignment is claimed before its worktree is created. A resumed one reuses the
+    // worktree of the attempt before it, which is leased before the repair: what decides the
+    // repair is read there.
+    let claimed = if resumed {
+        None
     } else {
         host.execute("ClaimAssignment",json!({"assignment_id":initial["assignment_id"],"worktree_id":tree_id,"implementor_run":run,"base_revision":base}))?;
-    }
-    let assignment = host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
-    if resumed {
+        let assignment = host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
         host.progress(
             &assignment,
-            "attempt.repair",
+            "worktree.prepare",
             "host",
-            json!({"reason":RECOVER}),
+            json!({"base":base,"tree_id":tree_id}),
         )?;
-    }
-    host.progress(
-        &assignment,
-        "worktree.prepare",
-        "host",
-        json!({"base":base,"tree_id":tree_id}),
-    )?;
+        Some(assignment)
+    };
     let path = tree(host, repo, &tree_id, &base)?;
     let lease = Lease::acquire(host, &path, &run)?;
     let result = (|| -> Result<()> {
@@ -1079,13 +1183,74 @@ fn deliver(host: &Host, initial: &Value, goal: &Value, repo: &Value) -> Result<(
                 &["switch", "-c", &format!("control-plane/{run}")],
             )?;
         }
+        let assignment = match claimed {
+            Some(assignment) => assignment,
+            None => {
+                // The writes a failed attempt left uncommitted are its work: they are committed
+                // first, on their own, so that the decision below sees them and an integration
+                // merge carries nothing but the merge. Every merge starts on a clean worktree
+                // (`integrate`), so a merge an interrupted attempt left in progress is aborted
+                // first, back to where it started, rather than committed as such work.
+                host.guard(initial, goal, repo, false)?;
+                abort_merge(host, &path)?;
+                commit(
+                    host,
+                    &path,
+                    "Keep the work an earlier attempt left uncommitted",
+                )?;
+                // A repair spends an attempt, and the attempt implements on the target's current
+                // head. When the target moved since the assignment's base and the earlier work can
+                // be carried onto that head, the repair records it as the new base (the `rebased`
+                // outcome) and the work is merged onto it below; when it cannot, the assignment
+                // is blocked here, before the repair, and every tick while the cause holds blocks
+                // it again with the same reason, spending nothing. On an unchanged target the
+                // repair names no base and keeps its own.
+                let started = text(&current, "base_revision")?;
+                if started != base {
+                    carried_onto(host, &path, target, started, &base)?;
+                }
+                if current["state"] != "Blocked" {
+                    // Repair takes a blocked assignment; an interrupted one is blocked first.
+                    host.execute(
+                        "BlockAssignment",
+                        json!({"assignment_id":initial["assignment_id"],"reason":RECOVER}),
+                    )?;
+                }
+                let mut repair = json!({"assignment_id":initial["assignment_id"],"reason":"Fresh execution after interrupted or blocked attempt","implementor_run":run});
+                if started != base {
+                    repair["base_revision"] = json!(base);
+                }
+                host.execute("RepairAssignment", repair)?;
+                let assignment =
+                    host.row("AssignmentList", "assignment_id", &initial["assignment_id"])?;
+                host.progress(
+                    &assignment,
+                    "attempt.repair",
+                    "host",
+                    json!({"reason":RECOVER}),
+                )?;
+                host.progress(
+                    &assignment,
+                    "worktree.prepare",
+                    "host",
+                    json!({"base":base,"tree_id":tree_id}),
+                )?;
+                assignment
+            }
+        };
         let planned = text(initial, "candidate")?;
         if initial["state"] == "Queued"
             && git(host, &path, &["merge-base", planned, &base])? != planned
         {
             host.guard(&assignment, goal, repo, false)?;
-            git(host, &path, &["merge", "--no-commit", "--no-ff", planned])?;
-            commit(host, &path, "Integrate validated engineering plan")?;
+            integrate(host, &path, planned, "Integrate validated engineering plan")?;
+        }
+        // A resumed attempt reuses the worktree of the attempt before it. When its repair took the
+        // target's current head as the base, that work is merged onto the head, so the candidate
+        // descends from the base its publication names.
+        if git(host, &path, &["merge-base", "HEAD", &base])? != base {
+            host.guard(&assignment, goal, repo, false)?;
+            integrate(host, &path, &base, "Integrate the target's current head")?;
         }
         let story_id = text(&assignment, "story_id")?
             .split_once("::")
@@ -2280,11 +2445,21 @@ fn reconcile_publications(host: &Host) -> Result<()> {
                             ),
                         }
                     );
+                    // Blocked first: a closed intent is never observed again, so a process that
+                    // stopped after the close would leave the assignment's reason unresolved. The
+                    // blocker carries the intent's uncertainty like every blocker of the intent,
+                    // so after a stop before the close the next observation finds the same start
+                    // and closes it.
+                    host.block_publication(
+                        id,
+                        publication,
+                        json!({"reason":reason}),
+                        uncertain.as_ref(),
+                    )?;
                     host.execute(
                         "ClosePublication",
                         json!({"publication_id":publication,"reason":reason}),
                     )?;
-                    host.block(id, &reason)?;
                 }
             }
             Ok(Observation::Missing { head }) if intent["state"] == "Prepared" => {
@@ -2368,8 +2543,10 @@ fn waiting(intent: &Value, uncertain: &Uncertainty, grace: Duration) -> Result<S
         "Publication outcome unresolved: {target} does not show candidate {} yet. The publisher is \
          not run again for this intent. Once {target} moves past {} without it, or {} s after the \
          outcome became uncertain, the intent is closed as not published. The assignment is then \
-         attempted again if {target} is still at the base its attempt started from, and \
-         otherwise blocked until it is cancelled or re-planned",
+         attempted again on the current head of {target}, unless {target} was rewound and no \
+         longer contains the base its work was built on, that work conflicts with the head, or \
+         its changes are already on {target}: then it is blocked instead, without spending an \
+         attempt",
         text(intent, "candidate")?,
         uncertain.head.as_deref().unwrap_or("its observed head"),
         grace.as_secs()
@@ -3236,10 +3413,16 @@ mod blocker_tests {
         *host.store.blocking_lock().subscribe().borrow()
     }
 
-    /// A blocker the store records bounded, because it is long, is still recognised as the
-    /// assignment's last one: repeating it appends nothing, and a different one appends again.
-    #[test]
-    fn long_unchanged_blocker_appends_once() {
+    /// A store holding one queued assignment of a running goal, and the fleet host over it.
+    /// Fields drop in order: the host and its store before the runtime and the directory.
+    struct Blocking {
+        host: Host,
+        assignment: Value,
+        _runtime: tokio::runtime::Runtime,
+        _temp: tempfile::TempDir,
+    }
+
+    fn blocking() -> Blocking {
         let temp = tempfile::tempdir().unwrap();
         let repo = temp.path().join("repo");
         std::fs::create_dir(&repo).unwrap();
@@ -3290,32 +3473,107 @@ mod blocker_tests {
             },
             deadline: None,
         };
+        Blocking {
+            host,
+            assignment,
+            _runtime: runtime,
+            _temp: temp,
+        }
+    }
+
+    /// A blocker the store records bounded, because it is long, is still recognised as the
+    /// assignment's last one: repeating it appends nothing, and a different one appends again.
+    #[test]
+    fn long_unchanged_blocker_appends_once() {
+        let blocking = blocking();
+        let (host, assignment) = (&blocking.host, &blocking.assignment);
         let long = format!(
             "Publication observation unavailable: {}",
             "fatal: could not read from remote repository. ".repeat(40)
         );
-        let start = committed(&host);
-        host.block(&assignment, &long).unwrap();
+        let start = committed(host);
+        host.block(assignment, &long).unwrap();
         assert_eq!(
-            committed(&host) - start,
+            committed(host) - start,
             2,
             "the first block records progress and blocks the assignment"
         );
-        let blocked = committed(&host);
+        let blocked = committed(host);
         for _ in 0..3 {
-            host.block(&assignment, &long).unwrap();
+            host.block(assignment, &long).unwrap();
         }
         assert_eq!(
-            committed(&host) - blocked,
+            committed(host) - blocked,
             0,
             "an unchanged blocker was recorded again"
         );
-        host.block(&assignment, &format!("{long}, and again"))
+        let changed = format!("{long}, and again");
+        host.block(assignment, &changed).unwrap();
+        assert_eq!(
+            committed(host) - blocked,
+            2,
+            "a changed blocker records progress once and replaces the Blocked assignment's \
+             reason once"
+        );
+        let row = host
+            .row("AssignmentList", "assignment_id", assignment)
             .unwrap();
         assert_eq!(
-            committed(&host) - blocked,
-            1,
-            "a changed blocker records progress once"
+            (&row["state"], &row["reason"]),
+            (&json!("Blocked"), &json!(changed)),
+            "{row}"
         );
+        let replaced = committed(host);
+        for _ in 0..3 {
+            host.block(assignment, &changed).unwrap();
+        }
+        assert_eq!(
+            committed(host) - replaced,
+            0,
+            "an unchanged blocker was recorded again after its reason was replaced"
+        );
+    }
+
+    /// The fleet commits a Blocked assignment's new reason before the blocker that records its
+    /// cause, so a process that stops between the two leaves the reason in place and the blocker
+    /// unrecorded. The next block of that cause records it once and does not send the reason the
+    /// assignment already holds; after that, the cause is unchanged and records nothing.
+    #[test]
+    fn replaced_reason_without_its_blocker_is_recorded_once() {
+        let blocking = blocking();
+        let (host, assignment) = (&blocking.host, &blocking.assignment);
+        host.block(assignment, "first cause").unwrap();
+        // The replacement committed; the process stopped before recording its blocker.
+        host.execute(
+            "BlockAssignment",
+            json!({"assignment_id":assignment,"reason":"second cause"}),
+        )
+        .unwrap();
+        let stopped = committed(host);
+        host.block(assignment, "second cause").unwrap();
+        assert_eq!(
+            committed(host) - stopped,
+            1,
+            "a cause whose reason the assignment already holds is recorded once and not sent again"
+        );
+        let row = host
+            .row("AssignmentList", "assignment_id", assignment)
+            .unwrap();
+        assert_eq!(
+            (&row["state"], &row["reason"]),
+            (&json!("Blocked"), &json!("second cause")),
+            "{row}"
+        );
+        let last = host.last_activity(&row).unwrap();
+        assert_eq!(
+            (&last["action"], &last["detail"]["reason"]),
+            (&json!("blocked"), &json!("second cause")),
+            "{last}"
+        );
+        let recorded = committed(host);
+        for _ in 0..3 {
+            host.block(assignment, "second cause").unwrap();
+        }
+        assert_eq!(committed(host) - recorded, 0);
     }
 }
