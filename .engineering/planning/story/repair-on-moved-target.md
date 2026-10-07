@@ -9,7 +9,18 @@ relations:
 - serves: vision:autonomous-engineering
 - informed_by: review-result:adversary-publication-exit-pass-2
 - depends_on: story:publication-exit
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/control-plane-runtime/src/fleet.rs
+- confidence: inferred
+  path: crates/control-plane-runtime/tests/fleet.rs
+- confidence: inferred
+  path: ess/domains/host.yaml
+- confidence: inferred
+  path: ess/spec-acknowledgements.json
+- confidence: inferred
+  path: generated
+revision: 2
 ---
 ## Outcome
 
