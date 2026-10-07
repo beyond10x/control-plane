@@ -1652,10 +1652,14 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
     // outcome); it is at most 128 KiB here and no later decision repeats it.
     //
     // The planner reads nine 12 KiB pages, the 96 KiB working set its transcript keeps. An
-    // observer samples (committed version, appended event data, planning phase) every
-    // millisecond; two samples one version apart give the exact size of the decision between
-    // them. The validated-plan decision runs between two processes (`aep plan artifact
-    // validate` before it, the plan commit after it), so it is sampled on both sides.
+    // observer samples (committed version, appended event data, planning phase) between every
+    // two holders of the store lock, and every decision is committed under that lock, so two
+    // samples one version apart give the exact size of the decision between them. The
+    // observer holds the lock while it waits and queues its next acquisition before releasing
+    // it; tokio's Mutex is granted in queue order and the tick writes one hold at a time, so
+    // only the writer already waiting takes the lock before the observer samples again. No
+    // timing decides what is sampled: a timed sampler missed the planner's last progress record
+    // before the validated plan (CI run 37563202303).
     struct Reader {
         marks: Mutex<usize>,
     }
@@ -1694,21 +1698,35 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
     let model = Arc::new(Reader {
         marks: Mutex::new(0),
     });
-    async fn sample(store: &tokio::sync::Mutex<Store>) -> (u64, u64, Value) {
-        let store = store.lock().await;
+    fn sample(store: &Store) -> (u64, u64, Value) {
         let version = *store.subscribe().borrow();
         let phase = store.query("GoalList").unwrap()[0]["planning_phase"].clone();
         (version, store.appended_event_bytes(), phase)
     }
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // Taken before the tick starts, so every decision of the tick is bracketed.
+    let held = store.clone().lock_owned().await;
     let observer = tokio::spawn({
         let store = store.clone();
         let stop = stop.clone();
         async move {
-            let mut samples = Vec::new();
+            let mut held = held;
+            let mut samples = vec![sample(&held)];
             while !stop.load(std::sync::atomic::Ordering::SeqCst) {
-                samples.push(sample(&store).await);
+                // A writer arriving now queues behind the observer's hold.
                 tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                // Unconstrained: out of cooperative budget, a lock future returns Pending
+                // without joining the queue.
+                let mut next =
+                    std::pin::pin!(tokio::task::unconstrained(store.clone().lock_owned()));
+                let queued = std::future::poll_fn(|cx| {
+                    std::task::Poll::Ready(next.as_mut().poll(cx).is_pending())
+                })
+                .await;
+                assert!(queued, "the observer holds the lock while it queues");
+                drop(held);
+                held = next.await;
+                samples.push(sample(&held));
             }
             samples
         }
@@ -1724,7 +1742,7 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
     .unwrap();
     stop.store(true, std::sync::atomic::Ordering::SeqCst);
     let mut samples = observer.await.unwrap();
-    samples.push(sample(&store).await);
+    samples.push(sample(&*store.lock().await));
     samples.dedup_by_key(|(version, _, _)| *version);
     assert_eq!(report.queued, 1, "{report:?}");
     let validated = samples
@@ -1742,8 +1760,8 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
         "the validated-plan decision (version {}) is {size} bytes of event data",
         validated[1].0
     );
-    // Every decision after it in this run stays within the per-event bound. Two samples more
-    // than one version apart bound each decision between them by their average.
+    // Every decision after it in this run stays within the per-event bound. A single hold that
+    // records more than one decision bounds each of them by their average.
     let start = samples
         .iter()
         .position(|sample| sample.0 == validated[1].0)
