@@ -872,53 +872,117 @@ async fn changed_revision_invalidates_evidence() {
     );
 }
 
-/// Hands the store to the next party that takes it, and returns once one has. Releasing a
-/// tokio `Mutex` gives it straight to a queued waiter, so a `try_lock` right after the release
-/// fails only when another party queued for the store, or took it, in the meantime. Until then
-/// the store is taken back and offered again.
-fn hand_over(store: &SharedStore, mut held: tokio::sync::OwnedMutexGuard<Store>) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+/// Which of an operator's goal edit and goal acceptance's `SatisfyGoal` reaches the store first.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Order {
+    /// The edit reaches the store after acceptance's post-review check, before `SatisfyGoal`.
+    EditFirst,
+    /// The edit is made in the same window and reaches the store after `SatisfyGoal`.
+    SatisfyFirst,
+}
+
+/// Waits until a process opens the FIFO `gate` for reading, and returns the write end. Closing
+/// it lets that reader go on. Gives up at `deadline`.
+fn wait_for_reader(gate: &Path, deadline: std::time::Instant) -> std::fs::File {
+    use std::os::unix::fs::OpenOptionsExt;
     loop {
-        drop(held);
-        match store.clone().try_lock_owned() {
-            Ok(again) => held = again,
-            Err(_) => return,
+        // Without a reader, a non-blocking open of a FIFO for writing fails with ENXIO.
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(nix::libc::O_NONBLOCK)
+            .open(gate)
+        {
+            Ok(writer) => return writer,
+            Err(error) if error.raw_os_error() == Some(nix::libc::ENXIO) => {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "goal acceptance did not observe the target after its review"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Err(error) => panic!("{}: {error}", gate.display()),
         }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "nobody took the store within 30 s"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
 
-/// An operator edit that lands inside goal acceptance after its post-review revision check and
-/// before `SatisfyGoal` (`satisfy_goals`, fleet.rs). The goal reviewer's turn takes the store,
-/// so after the review the acceptance thread's first store access, that check, waits for it.
-/// The editor hands the store over (nobody else uses it in this test, so the taker is that
-/// check) and at once queues for it again. tokio's `Mutex` is fair: the check sees the reviewed
-/// revision, then the edit runs, while acceptance re-reads the workspace and observes each
-/// target with `git ls-remote`, before its `SatisfyGoal`.
+/// An operator edit made inside goal acceptance, after its post-review check and before its
+/// `SatisfyGoal` (`satisfy_goals`, fleet.rs). The seam does not depend on thread scheduling. In
+/// that window acceptance holds no store lock and observes each target with `git ls-remote`.
+/// When the goal review starts, the repository's `remote.origin.uploadpack` is set to read the
+/// FIFO `gate` first, so that observation, the first contact with `origin` after the review,
+/// waits until the gate's write end closes. The editor opens the write end once the observation
+/// reads the gate. For [`Order::EditFirst`] it applies the edit and then lets the observation
+/// go on. For [`Order::SatisfyFirst`] it lets the observation go on, waits until the store
+/// shows the goal Satisfied, and then sends the edit. Either way the editor restores the
+/// default upload-pack before it closes the gate. It returns the goal as the edit found it and
+/// the edit's result.
 struct EditAfterFinalCheck {
     inner: Scripted,
     store: SharedStore,
     goal: Value,
-    editor: Mutex<Option<std::thread::JoinHandle<Value>>>,
+    repository: PathBuf,
+    gate: PathBuf,
+    order: Order,
+    editor: Mutex<Option<std::thread::JoinHandle<(Value, Value)>>>,
 }
 impl AgentModel for EditAfterFinalCheck {
     fn respond(&self, request: &ModelRequest) -> Result<Value> {
         let mut editor = self.editor.lock().unwrap();
         if request.role == "goal_reviewer" && editor.is_none() {
-            let held = self.store.clone().blocking_lock_owned();
+            let wait = format!(
+                "cat {} >/dev/null; git-upload-pack",
+                shell_words::quote(self.gate.to_str().unwrap())
+            );
+            cmd(
+                &self.repository,
+                "git",
+                &["config", "remote.origin.uploadpack", &wait],
+                &[],
+            );
             let store = self.store.clone();
+            let repository = self.repository.clone();
+            let gate = self.gate.clone();
+            let order = self.order;
             let handle = tokio::runtime::Handle::current();
             let edit = json!({"goal_id":self.goal,"objective":"Return 42 and document it in every registered repository","acceptance":"requested_answer passes and the README names the answer","max_workers":3,"max_attempts":2,"max_minutes":1,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true});
             *editor = Some(std::thread::spawn(move || {
-                hand_over(&store, held);
-                let mut store = store.blocking_lock();
-                handle
-                    .block_on(store.execute("UpdateGoal", edit, Actor::Operator))
-                    .unwrap()
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                let observation = wait_for_reader(&gate, deadline);
+                let restore = || {
+                    cmd(
+                        &repository,
+                        "git",
+                        &["config", "--unset", "remote.origin.uploadpack"],
+                        &[],
+                    );
+                };
+                let send = || {
+                    let mut held = store.blocking_lock();
+                    let found = held.query("GoalList").unwrap()[0].clone();
+                    let outcome = handle
+                        .block_on(held.execute("UpdateGoal", edit, Actor::Operator))
+                        .unwrap();
+                    (found, outcome)
+                };
+                match order {
+                    Order::EditFirst => {
+                        let sent = send();
+                        restore();
+                        drop(observation);
+                        sent
+                    }
+                    Order::SatisfyFirst => {
+                        restore();
+                        drop(observation);
+                        while store.blocking_lock().query("GoalList").unwrap()[0]["state"]
+                            != "Satisfied"
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        }
+                        send()
+                    }
+                }
             }));
         }
         drop(editor);
@@ -926,13 +990,18 @@ impl AgentModel for EditAfterFinalCheck {
     }
 }
 
-#[tokio::test]
-async fn goal_edit_during_acceptance_is_not_satisfied() {
+/// Runs goal acceptance with an operator edit placed by `order` and asserts that order's outcome.
+async fn edit_during_acceptance(order: Order) {
     let fixture = fixture(1).await;
+    let gate = fixture.root.join("observation-gate");
+    cmd(&fixture.root, "mkfifo", &[gate.to_str().unwrap()], &[]);
     let model = Arc::new(EditAfterFinalCheck {
         inner: Scripted::new(),
         store: fixture.store.clone(),
         goal: fixture.goal.clone(),
+        repository: PathBuf::from(fixture.repositories[0]["path"].as_str().unwrap()),
+        gate,
+        order,
         editor: Mutex::new(None),
     });
     let supervisor = Supervisor::new(
@@ -943,40 +1012,23 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
     );
     supervisor.tick().await.unwrap();
     let report = supervisor.fleet_tick().await;
-    let edit = model
+    let editor = model
         .editor
         .lock()
         .unwrap()
         .take()
-        .expect("goal acceptance reached its final review")
-        .join()
+        .expect("goal acceptance reached its final review");
+    let (at_edit, edit) = tokio::task::spawn_blocking(move || editor.join().unwrap())
+        .await
         .unwrap();
-    assert_eq!(edit["outcome"], "applied", "{edit}");
     let assignments = fixture.store.lock().await.query("AssignmentList").unwrap();
-    assert_eq!(assignments[0]["state"], "Merged", "{assignments}");
-    assert_eq!(assignments[0]["goal_revision"], 1);
+    assert_eq!(
+        assignments[0]["state"], "Merged",
+        "{order:?}: {assignments}"
+    );
+    assert_eq!(assignments[0]["goal_revision"], 1, "{order:?}");
     let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
-    assert_eq!(goal["state"], "Running", "{goal}");
-    assert_eq!(goal["revision"], 2, "{goal}");
-    assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
-    // The edit landed after the post-review check; the check that runs under the same store lock
-    // as SatisfyGoal found it.
     let report = report.unwrap();
-    assert!(
-        report
-            .blockers
-            .iter()
-            .any(|reason| reason.contains("goal changed before its acceptance was recorded")),
-        "{report:?}"
-    );
-    assert!(
-        !report
-            .blockers
-            .iter()
-            .any(|reason| reason.contains("goal changed during final review")),
-        "{report:?}"
-    );
-    // Nothing latches the refusal: the next planning pass plans the edited revision.
     let planned = |model: &EditAfterFinalCheck| {
         model
             .inner
@@ -987,12 +1039,94 @@ async fn goal_edit_during_acceptance_is_not_satisfied() {
             .filter(|(role, _)| role == "planner")
             .count()
     };
-    let before = planned(&model);
-    supervisor.tick().await.unwrap();
-    assert!(planned(&model) > before);
-    let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
-    assert_eq!(goal["planning_revision"], 2, "{goal}");
-    assert_eq!(goal["state"], "Running", "{goal}");
+    match order {
+        Order::EditFirst => {
+            assert_eq!(
+                at_edit["state"], "Running",
+                "precondition: the edit reached the store before SatisfyGoal: {at_edit}"
+            );
+            assert_eq!(at_edit["revision"], 1, "{at_edit}");
+            assert_eq!(edit["outcome"], "applied", "{edit}");
+            assert_eq!(goal["state"], "Running", "{goal}");
+            assert_eq!(goal["revision"], 2, "{goal}");
+            assert_eq!(goal["satisfaction_receipt"], "", "{goal}");
+            assert_eq!(report.satisfied, 0, "{report:?}");
+            // The edit landed after the post-review check; the check that runs under the same
+            // store lock as SatisfyGoal found it.
+            assert!(
+                report.blockers.iter().any(
+                    |reason| reason.contains("goal changed before its acceptance was recorded")
+                ),
+                "{report:?}"
+            );
+            assert!(
+                !report
+                    .blockers
+                    .iter()
+                    .any(|reason| reason.contains("goal changed during final review")),
+                "{report:?}"
+            );
+            // Nothing latches the refusal: the next planning pass plans the edited revision.
+            let before = planned(&model);
+            supervisor.tick().await.unwrap();
+            assert!(planned(&model) > before);
+            let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+            assert_eq!(goal["planning_revision"], 2, "{goal}");
+            assert_eq!(goal["state"], "Running", "{goal}");
+        }
+        Order::SatisfyFirst => {
+            assert_eq!(
+                at_edit["state"], "Satisfied",
+                "precondition: SatisfyGoal reached the store before the edit: {at_edit}"
+            );
+            // The operator's command result names the refusal and the goal's state.
+            assert_eq!(
+                edit,
+                json!({"outcome":"satisfied","error":"controlplane.host.GoalStateConflict","payload":{"state":"Satisfied"},"published":[]})
+            );
+            assert_eq!(report.satisfied, 1, "{report:?}");
+            assert!(
+                !report
+                    .blockers
+                    .iter()
+                    .any(|reason| reason.contains("goal changed")),
+                "{report:?}"
+            );
+            assert_eq!(goal["state"], "Satisfied", "{goal}");
+            assert_eq!(goal["revision"], 1, "{goal}");
+            assert_eq!(
+                goal["objective"], "Return 42 in every registered repository",
+                "{goal}"
+            );
+            assert_eq!(
+                goal["satisfaction_receipt"],
+                at_edit["satisfaction_receipt"]
+            );
+            let receipt: Value =
+                serde_json::from_str(goal["satisfaction_receipt"].as_str().unwrap()).unwrap();
+            assert_eq!(receipt["kind"], "goal_acceptance", "{receipt}");
+            assert_eq!(receipt["goal_revision"], 1, "{receipt}");
+            // A satisfied goal is not planned or accepted again.
+            let before = planned(&model);
+            supervisor.tick().await.unwrap();
+            supervisor.fleet_tick().await.unwrap();
+            assert_eq!(planned(&model), before);
+            let goal = fixture.store.lock().await.query("GoalList").unwrap()[0].clone();
+            assert_eq!(goal["state"], "Satisfied", "{goal}");
+            assert_eq!(goal["revision"], 1, "{goal}");
+        }
+    }
+}
+
+/// story:acceptance-edit-ordering. An operator edit made between goal acceptance's post-review
+/// check and its `SatisfyGoal` is ordered with that command by the store, and each order has
+/// one outcome. Edit first: the goal stays Running at the edited revision with no receipt, and
+/// is planned again. SatisfyGoal first: the goal is Satisfied at the revision acceptance
+/// checked, and the edit is refused as `satisfied`.
+#[tokio::test]
+async fn goal_edit_during_acceptance_is_not_satisfied() {
+    edit_during_acceptance(Order::EditFirst).await;
+    edit_during_acceptance(Order::SatisfyFirst).await;
 }
 
 /// Stops the service while the goal reviewer runs: cancels the service's shutdown token and
