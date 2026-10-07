@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:publication-exit
 kind: story
-status: active
+status: implemented
 title: A publication the remote never received can be closed and retried
 relations:
 - decomposes: epic:unattended-operation
@@ -26,10 +26,11 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
 - {from: "proposed", to: "active", at: "2026-10-06T20:26:27Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"review_outcome":4}}, executor: "agent:claude-wave-coordinator"}
+- {from: "active", to: "implemented", at: "2026-10-07T02:17:27Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":1,"review_outcome":6}}}
 ---
 ## Outcome
 
