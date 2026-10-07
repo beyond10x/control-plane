@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:merge-bootstrap-into-main
 kind: decision-blocker
-status: open
+status: cleared
 title: Merge pull request 1 (bootstrap into main) before wave 4?
 relations:
 - blocks: epic:bootstrap
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-07T01:15:01Z", actor: "human:timo", revision: 3}
 ---
 ## Question
 
@@ -26,3 +28,7 @@ Should pull request 1 (control-plane/bootstrap into main, waves 1 to 3 at e77e53
 | B | keep it open until wave 4 is on control-plane/bootstrap and its gate is green, then merge once | main stays empty until the build hold lifts and wave 4 closes |
 
 Recommendation: A. Waves 1 to 3 are green and main has had nothing but the initial commit since the repository started.
+
+## Decided
+
+Option A, 2026-10-07. Pull request 1 was marked ready and merged into main with a merge commit, 72d4ed7 (parents 268e6a1 and e77e533), so control-plane/wave-4 keeps its ancestry. Wave 4 and later waves open their pull request against main. control-plane/bootstrap was deleted once main contained it.
