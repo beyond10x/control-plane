@@ -20,7 +20,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 3
+revision: 4
 ---
 ## Outcome
 
@@ -34,6 +34,8 @@ control-plane runs on the newest ESS release, 0.55.0: the specification manifest
 - Waves 3 to 5 gate with ESS 0.53.0 first on PATH (`ess specify toolchain install 0.53.0`, binary in the ESS toolchain cache), matching CI.
 
 - story:typed-satisfaction-receipt's specification trial (a struct receipt with a declared conversion) validates under ESS 0.55.0 (`controlplane v1 — 3 file(s), valid`, 2026-10-07); this story lands first so that story runs on the new pin.
+
+- ESS 0.55.0 takes an exclusive lock on the nearest existing ancestor of an `ess generate` output root that does not exist yet; with the shared temporary directory as that ancestor, concurrent runs from other sessions fail with "output ownership busy … (os error 11)" (seen on 2026-10-07 in another repository's gate). Until ESS releases its fix, this repository's gates run `ess generate` with `TMPDIR=<tree>/.scratch/tmp` or with the output's parent created first; a step that fails only on that error is rerun with the private TMPDIR, and the rerun is named in the pull request.
 
 ## Acceptance
 
