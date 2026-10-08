@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T00:51:02Z",
+  "actor": "human:timo",
+  "artifact": "story:console-goal-cards",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "cargo run --locked -p control-plane-xtask -- acceptance-check",
+    "reference": "ae6053e: exit 1, 10 of 115 names name no test; 563a649: exit 0, 115 names resolve"
+  }
+}
