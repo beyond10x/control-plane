@@ -28,6 +28,31 @@ const VIEWS: &str = concat!(
     "/tests/fixtures/recorded-history.views.json"
 );
 const DISAGREES: &str = "generated behavior disagrees with durable history";
+const ACKNOWLEDGEMENTS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../ess/spec-acknowledgements.json"
+);
+
+/// The `(command, outcome)` of each `outcome-added` change acknowledged against the gate's
+/// baseline in `ess/spec-acknowledgements.json`.
+fn acknowledged_added_outcomes() -> Result<BTreeSet<(String, String)>> {
+    let file: Value = serde_json::from_slice(&fs::read(ACKNOWLEDGEMENTS)?)?;
+    Ok(file["acknowledged"]
+        .as_array()
+        .context("acknowledged is an array")?
+        .iter()
+        .filter(|entry| entry["change"]["changed"]["kind"] == "outcome-added")
+        .filter_map(|entry| {
+            Some((
+                entry["change"]["subject"]
+                    .as_str()?
+                    .trim_start_matches("controlplane.host.")
+                    .to_owned(),
+                entry["change"]["changed"]["outcome"].as_str()?.to_owned(),
+            ))
+        })
+        .collect())
+}
 
 fn declared(method: &str, prefix: &str) -> BTreeSet<&'static str> {
     ROUTES
@@ -156,9 +181,13 @@ async fn recorded_history_replays() -> Result<()> {
                 .map(move |outcome| (command, status.clone(), outcome))
         })
         .collect();
+    // A refusal the committed fixture predates is acknowledged as `outcome-added` and recorded by
+    // `declared_admission_refusals_are_recorded_and_replay` (src/tests.rs) instead.
+    let added = acknowledged_added_outcomes()?;
     let unrecorded: Vec<_> = refusals
         .iter()
         .filter(|(command, _, outcome)| !answered.contains(&(*command, outcome.as_str())))
+        .filter(|(command, _, outcome)| !added.contains(&(command.to_string(), outcome.clone())))
         .map(|(command, status, outcome)| format!("{command} {status} {outcome}"))
         .collect();
     ensure!(

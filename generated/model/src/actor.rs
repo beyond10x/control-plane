@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
+// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Every actor the specification declares, and the commands each may invoke — as data.
@@ -56,31 +56,22 @@ pub fn may(actor: Actor) -> &'static [&'static str] {
             "controlplane.host.UpdateGoal",
         ],
         Actor::Supervisor => &[
-            "controlplane.host.ArchiveWorkspace",
             "controlplane.host.BlockAssignment",
             "controlplane.host.CancelAssignment",
-            "controlplane.host.CancelGoal",
             "controlplane.host.ClaimAssignment",
             "controlplane.host.ClosePublication",
             "controlplane.host.CompleteAssignment",
             "controlplane.host.ConfirmPublication",
-            "controlplane.host.CreateGoal",
-            "controlplane.host.DisableRepositoryRegistration",
-            "controlplane.host.EnableRepositoryRegistration",
             "controlplane.host.MarkPublicationUncertain",
             "controlplane.host.MergeAssignment",
-            "controlplane.host.PauseGoal",
             "controlplane.host.PreparePublication",
             "controlplane.host.QueueAssignment",
             "controlplane.host.ReadyAssignment",
             "controlplane.host.ReconcileAssignment",
             "controlplane.host.RecordPlanningProgress",
-            "controlplane.host.RegisterRepository",
-            "controlplane.host.RegisterWorkspace",
             "controlplane.host.RepairAssignment",
             "controlplane.host.ReviewAssignment",
             "controlplane.host.SatisfyGoal",
-            "controlplane.host.StartGoal",
         ],
     }
 }

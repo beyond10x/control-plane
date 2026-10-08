@@ -1,6 +1,13 @@
 use super::*;
 use serde_json::json;
 
+/// Whether the store refused a command: a host rule's error, or a refusal the specification declares.
+fn refused(answer: &Result<Value>) -> bool {
+    answer
+        .as_ref()
+        .map_or(true, |answer| answer.get("error").is_some())
+}
+
 fn scratch() -> tempfile::TempDir {
     let root = std::path::PathBuf::from(std::env::var_os("HOME").unwrap())
         .join(".cache/control-plane-host");
@@ -315,8 +322,8 @@ async fn review_and_publication_require_current_independent_evidence() {
         )
         .await
         .unwrap();
-    assert!(store.execute("ReadyAssignment",json!({"assignment_id":assignment,"reviewer_run":format!("impl-{assignment}"),"review_revision":"candidate"}),Actor::Supervisor).await.is_err());
-    assert!(store.execute("ReadyAssignment",json!({"assignment_id":assignment,"reviewer_run":"reviewer","review_revision":"stale"}),Actor::Supervisor).await.is_err());
+    assert!(refused(&store.execute("ReadyAssignment",json!({"assignment_id":assignment,"reviewer_run":format!("impl-{assignment}"),"review_revision":"candidate"}),Actor::Supervisor).await));
+    assert!(refused(&store.execute("ReadyAssignment",json!({"assignment_id":assignment,"reviewer_run":"reviewer","review_revision":"stale"}),Actor::Supervisor).await));
     store.execute("ReadyAssignment",json!({"assignment_id":assignment,"reviewer_run":"reviewer","review_revision":"candidate"}),Actor::Supervisor).await.unwrap();
     assert!(
         store
@@ -1579,7 +1586,7 @@ async fn repair_takes_a_new_base_only_when_it_names_one() {
     assert!(
         empty
             .as_ref()
-            .is_err_and(|error| error.to_string().contains("base revision is empty")),
+            .is_ok_and(|answer| answer["outcome"] == "base-missing"),
         "a repair with an empty base: {empty:?}"
     );
     let held = row(&store);
@@ -2404,4 +2411,230 @@ async fn adversary_rejected_acceptance_is_recorded_once_and_survives_restart() {
         reopened.activity_history(&goal).unwrap()["acceptance"],
         acceptance
     );
+}
+
+/// The `(command, outcome)` of every refusal this branch adds to the specification, read from
+/// the `outcome-added` acknowledgements in `ess/spec-acknowledgements.json`. The committed
+/// history fixture predates them, so this test, not the fixture, records each one.
+fn acknowledged_added_outcomes() -> std::collections::BTreeSet<(String, String)> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ess/spec-acknowledgements.json");
+    let acknowledged: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    acknowledged["acknowledged"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["change"]["changed"]["kind"] == "outcome-added")
+        .map(|entry| {
+            let command = entry["change"]["subject"].as_str().unwrap();
+            (
+                command.trim_start_matches("controlplane.host.").to_owned(),
+                entry["change"]["changed"]["outcome"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// Every added admission refusal answers through `Store::execute`, is recorded, and replays:
+/// the store reopens over those decisions to the same views.
+#[tokio::test]
+async fn declared_admission_refusals_are_recorded_and_replay() {
+    let temp = scratch();
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:refusals").await;
+    claim(&mut store, &id).await.unwrap();
+    store
+        .execute(
+            "ReviewAssignment",
+            json!({"assignment_id":id,"candidate":"candidate","test_revision":"candidate"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    let unknown = "00000000-0000-4000-8000-000000000000";
+    let limits = |workers: i64, attempts: i64, minutes: i64| {
+        let mut body = goal_body(&ws);
+        body["max_workers"] = json!(workers);
+        body["max_attempts"] = json!(attempts);
+        body["max_minutes"] = json!(minutes);
+        body
+    };
+    let queue = |goal_id: &str, revision: i64| {
+        json!({"goal_id":goal_id,"repository_id":repo,"story_id":"story:refused","case_id":"case",
+            "worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"",
+            "reviewer_run":"","goal_revision":revision})
+    };
+    let calls = [
+        (
+            "CreateGoal",
+            limits(0, 1, 1),
+            Actor::Operator,
+            "workers-invalid",
+        ),
+        (
+            "CreateGoal",
+            limits(1, 0, 1),
+            Actor::Operator,
+            "attempts-invalid",
+        ),
+        (
+            "CreateGoal",
+            limits(1, 1, 0),
+            Actor::Operator,
+            "minutes-invalid",
+        ),
+        (
+            "QueueAssignment",
+            queue(unknown, 1),
+            Actor::Supervisor,
+            "goal-not-found",
+        ),
+        (
+            "QueueAssignment",
+            queue(&goal, 2),
+            Actor::Supervisor,
+            "goal-not-current",
+        ),
+        (
+            "ClaimAssignment",
+            json!({"assignment_id":id,"worktree_id":"tree","implementor_run":"","base_revision":"base"}),
+            Actor::Supervisor,
+            "evidence-missing",
+        ),
+        (
+            "RepairAssignment",
+            json!({"assignment_id":id,"reason":"retry","implementor_run":""}),
+            Actor::Supervisor,
+            "evidence-missing",
+        ),
+        (
+            "RepairAssignment",
+            json!({"assignment_id":id,"reason":"retry","implementor_run":"retry","base_revision":""}),
+            Actor::Supervisor,
+            "base-missing",
+        ),
+        (
+            "ReviewAssignment",
+            json!({"assignment_id":id,"candidate":"candidate","test_revision":"other"}),
+            Actor::Supervisor,
+            "tests-not-current",
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":id,"reviewer_run":"","review_revision":"candidate"}),
+            Actor::Supervisor,
+            "reviewer-missing",
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":id,"reviewer_run":format!("impl-{id}"),"review_revision":"candidate"}),
+            Actor::Supervisor,
+            "review-not-independent",
+        ),
+        (
+            "ReadyAssignment",
+            json!({"assignment_id":id,"reviewer_run":"reviewer","review_revision":"stale"}),
+            Actor::Supervisor,
+            "evidence-not-current",
+        ),
+        (
+            "CompleteAssignment",
+            json!({"assignment_id":id,"merge_receipt":""}),
+            Actor::Supervisor,
+            "receipt-missing",
+        ),
+        (
+            "ReconcileAssignment",
+            json!({"assignment_id":id,"merge_receipt":""}),
+            Actor::Supervisor,
+            "receipt-missing",
+        ),
+    ];
+    let mut answered = std::collections::BTreeSet::new();
+    for (command, body, actor, outcome) in calls {
+        let at = *store.subscribe().borrow();
+        let answer = store.execute(command, body, actor).await.unwrap();
+        assert_eq!(answer["outcome"], outcome, "{command}: {answer}");
+        assert!(answer.get("error").is_some(), "{command}: {answer}");
+        assert_eq!(
+            *store.subscribe().borrow(),
+            at + 1,
+            "{command}: one decision"
+        );
+        answered.insert((command.to_owned(), outcome.to_owned()));
+    }
+    assert_eq!(answered, acknowledged_added_outcomes());
+    let views = ["AssignmentList", "GoalList", "RepositoryRegistrationList"]
+        .map(|view| store.query(view).unwrap());
+    drop(store);
+    let reopened = Store::open(&db).await.unwrap();
+    for (view, before) in ["AssignmentList", "GoalList", "RepositoryRegistrationList"]
+        .iter()
+        .zip(views)
+    {
+        assert_eq!(reopened.query(view).unwrap(), before, "{view} after replay");
+    }
+}
+
+/// A queued assignment, with its store, for the evidence cases below.
+async fn queued_assignment(temp: &tempfile::TempDir) -> (Store, String) {
+    let repo_path = temp.path().join("repo");
+    repository(&repo_path);
+    let mut store = Store::open(temp.path().join("state.sqlite")).await.unwrap();
+    let ws = workspace(&mut store, temp.path()).await;
+    let repo = register_repository(&mut store, &ws, &repo_path).await;
+    let goal = goal(&mut store, &ws).await;
+    store
+        .execute("StartGoal", json!({"goal_id":goal}), Actor::Operator)
+        .await
+        .unwrap();
+    let id = assignment(&mut store, &goal, &repo, "story:evidence-part").await;
+    (store, id)
+}
+
+/// ClaimAssignment's `evidence-missing` part `input.worktree_id == ""` alone: a claim of a
+/// queued assignment that names an implementor run and a base but no worktree is refused.
+#[tokio::test]
+async fn claim_without_worktree_is_evidence_missing() {
+    let temp = scratch();
+    let (mut store, id) = queued_assignment(&temp).await;
+    let answer = store
+        .execute(
+            "ClaimAssignment",
+            json!({"assignment_id":id,"worktree_id":"","implementor_run":"impl","base_revision":"base"}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer["outcome"], "evidence-missing", "{answer}");
+}
+
+/// ReviewAssignment's `tests-not-current` part `input.candidate == ""` alone: an empty candidate
+/// with an equally empty test revision, so `input.candidate != input.test_revision` does not hold.
+#[tokio::test]
+async fn review_of_empty_candidate_is_tests_not_current() {
+    let temp = scratch();
+    let (mut store, id) = queued_assignment(&temp).await;
+    claim(&mut store, &id).await.unwrap();
+    let answer = store
+        .execute(
+            "ReviewAssignment",
+            json!({"assignment_id":id,"candidate":"","test_revision":""}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer["outcome"], "tests-not-current", "{answer}");
 }
