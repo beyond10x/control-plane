@@ -5,7 +5,12 @@
 export const evidencePath = id => `/api/goals/${encodeURIComponent(id)}/evidence`
 
 /** The goal id an evidence console path names, or ''. */
-export const evidenceGoal = path => { const match = /^\/goals\/([^/]+)\/evidence\/?$/.exec(path || ''); return match ? decodeURIComponent(match[1]) : '' }
+export function evidenceGoal(path) {
+  const match = /^\/goals\/([^/]+)\/evidence\/?$/.exec(path || '')
+  if (!match) return ''
+  // A malformed escape (a bare `%`) is kept as the raw segment rather than blanking the page.
+  try { return decodeURIComponent(match[1]) } catch { return match[1] }
+}
 
 /** A receipt stored as a JSON string, parsed; an empty or unreadable receipt is null. */
 export function receipt(text) {
@@ -26,6 +31,29 @@ export function latestCheck(evidence) {
   if (!checks.length) return null
   const event = checks.reduce((latest, next) => String(next.at || '') >= String(latest.at || '') ? next : latest)
   return { command: event.detail.command, candidate: event.detail.candidate || event.detail.observed_head || '', at: event.at || '' }
+}
+
+/** The text shown when a tested candidate's command has left the bounded history. */
+export const commandNotRetained = 'command outside the retained activity (last 64 entries)'
+
+/**
+ * Each assignment whose checks passed, from durable assignment state: the candidate is its
+ * `test_revision` (ReviewAssignment records it after the checks); the command is the retained
+ * `checks.run` for that assignment and candidate, or null once the bounded history (the latest
+ * 64 activities) no longer holds it. The evidence JSON carries no repository settings.
+ */
+export function testedCandidates(evidence) {
+  const checks = activity(evidence).filter(event => event?.action === 'checks.run' && typeof event?.detail?.command === 'string')
+  return (Array.isArray(evidence?.assignments) ? evidence.assignments : []).filter(assignment => assignment.test_revision).map(assignment => {
+    const ran = checks.filter(event => event.assignment_id === assignment.assignment_id && event.detail.candidate === assignment.test_revision).at(-1)
+    return { id: assignment.assignment_id, story: assignment.story_id || '', candidate: assignment.test_revision, command: ran ? ran.detail.command : null, at: ran?.at || '' }
+  })
+}
+
+/** The latest retained goal acceptance check (`goal.checks`), or null. */
+export function goalCheck(evidence) {
+  const event = activity(evidence).filter(event => event?.action === 'goal.checks' && typeof event?.detail?.command === 'string').at(-1)
+  return event ? { command: event.detail.command, candidate: event.detail.observed_head || '', at: event.at || '' } : null
 }
 
 /** Each assignment with the reviewer run that approved it and the commit its merge receipt published. */

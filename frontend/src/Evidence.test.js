@@ -62,3 +62,17 @@ test('evidence_view_handles_a_goal_without_merges', async () => {
   expect(timeline[1]).toContain('Planning started')
   expect(wrapper.get('a.download').attributes('href')).toBe(`/api/goals/${cancelled.goal.goal_id}/evidence`)
 })
+
+test('evidence_view_shows_the_tested_candidate_after_the_history_drops_its_check', async () => {
+  // The history keeps the latest 64 activities; a minute of review streaming pushes `checks.run`
+  // out of it. The assignment's durable `test_revision` still names the candidate tested.
+  const streamed = Array.from({ length: 64 }, (_, index) => ({ id: `s${index}`, assignment_id: merged.assignments[0].assignment_id, at: `2026-10-06T09:10:${String(index).padStart(2, '0')}Z`, action: 'loom.event', role: 'runtime', status: 'running', worktree: 'tree-alpha', detail: { summary: `Receiving model response (${index + 1} streamed events)` } }))
+  const evidence = { ...merged, goal: { ...merged.goal, activity_history: { activity: streamed, fleet: {} } }, history: { activity: streamed, fleet: {} } }
+  serve(evidence)
+  const wrapper = mount(Evidence, { props: { goalId: merged.goal.goal_id }, attachTo: document.body })
+  await flushPromises()
+  const check = wrapper.get('[data-test="latest-check"]').text()
+  expect(check).not.toContain('No check recorded')
+  expect(check).toContain('2222222bbbbbbb')
+  expect(check).toContain('command outside the retained activity (last 64 entries)')
+})
