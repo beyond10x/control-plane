@@ -12,5 +12,5 @@ tempfile.workspace = true
 tokio.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 control-plane-core = { path = "../control-plane-core" }
-ess-conformance = { git = "https://github.com/beyond10x/ess", rev = "a81a8729dc252830d4e0557176522b59be6ff253" }
-ess-primitives = { git = "https://github.com/beyond10x/ess", rev = "a81a8729dc252830d4e0557176522b59be6ff253" }
+ess-conformance = { git = "https://github.com/beyond10x/ess", rev = "84ee8d38eb69e3a4507de801fdcb248232ed6e6e" }
+ess-primitives = { git = "https://github.com/beyond10x/ess", rev = "84ee8d38eb69e3a4507de801fdcb248232ed6e6e" }

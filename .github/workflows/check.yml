@@ -58,7 +58,7 @@ jobs:
             tar -xzf "$RUNNER_TEMP/$asset.tar.gz" -C "$RUNNER_TEMP"
             echo "$RUNNER_TEMP/$asset" >> "$GITHUB_PATH"
           done <<'TOOLS'
-          ess 0.53.0 40e8c9acd9bb5016387215cb5461090eb4765805ce7c8858d4b02284e6908914
+          ess 0.56.0 97bf08aad9e0c1615b70636a08aae4e0fe3a7a63e92c1dfe75e7503fff2a4a6f
           aep 0.68.0 02bf6a2c4bc9a3ffd717edfb365f665491005004f159774a8847d3cbd18c5e91
           worktree 0.8.2 8be61b3ee06e3a49c02416b52f5269e270846c105432ef3c2f5b63f30241b737
           TOOLS
