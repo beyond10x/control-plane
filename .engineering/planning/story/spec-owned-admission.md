@@ -27,7 +27,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
@@ -48,10 +48,13 @@ The admission rules the product relies on are declared in the specification wher
 Re-scoped on 2026-10-08 (decision-blocker:admission-selectors-not-synthesized, option A).
 
 - `admission_rules_are_declared`: each missing row of the design review (its table marks 15: rows 1–11 and 14–17) is either a declared guard with synthesized scenarios, or listed in a host-facts section of the specification's README with the reason; rows 1–4 (second running goal per workspace, one active change per Git common directory, worker limit, repository disabled) are host facts quoting the ESS 0.56.0 refusal each met.
-- `queue_guards_are_refused_in_conformance`: the synthesized scenarios for QueueAssignment's declared refusals (goal missing, goal not Running or at a stale revision, repository missing) pass against the conformance target, and the target runs them through the same admission path as the console and runtime; run against today's `ContractStore` target, a scenario that depends on admission fails or is absent.
+- `queue_guards_are_refused_in_conformance`: the synthesized scenarios for QueueAssignment's declared refusals (goal missing, goal not Running or at a stale revision) pass through the console/runtime admission path; the full synthesized suite runs on the generated store below admission and passes in full. Repository missing is a host fact (ess/README.md), declared later by story:admission-conformance-target.
 - `guard_mutants_are_killed`: `ess verify conform mutate --emit` / `--collect`, run through the xtask runner, reports guard-class mutants and no survivor.
 - `supervisor_grants_are_least_privilege`: the Supervisor's `may` list equals the set of commands the runtime executes as Supervisor at the time of the change.
 - `recorded_history_replays` stays green, or each change id is acknowledged.
+
+
+Narrowed again on 2026-10-08 after adversary pass 1 (F1): the full suite stays below admission and repository missing is a host fact.
 
 ## Open question
 
