@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: upstream-blocker:ess-declared-input-upcast
 kind: upstream-blocker
-status: open
+status: cleared
 title: ESS declared upcast of older command inputs on replay
 relations:
 - blocks: story:typed-satisfaction-receipt
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-08T03:51:39Z", actor: "human:timo", revision: 3}
 ---
 ## What is blocked
 
@@ -19,3 +21,7 @@ story:typed-satisfaction-receipt cannot type SatisfyGoal's receipt: stored Satis
 ## Clears when
 
 An ESS release declares an upcast from the text receipt to the typed one, and the recorded history fixture opens under the typed input with every view equal to its recorded views.
+
+## Cleared
+
+Cleared on 2026-10-08 without an ESS change: the story uses an optional revision input that ESS 0.56.0 already expresses (decision-blocker:typed-receipt-replay, revised decision). The ESS story stays theirs.

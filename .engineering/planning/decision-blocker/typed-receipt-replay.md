@@ -6,7 +6,7 @@ status: cleared
 title: 'Typed SatisfyGoal receipt: migrate stored receipts in host code, keep the host guard, or wait for ESS?'
 relations:
 - blocks: story:typed-satisfaction-receipt
-revision: 3
+revision: 4
 transitions:
 - {from: "open", to: "cleared", at: "2026-10-08T03:41:09Z", actor: "human:timo", revision: 3}
 ---
@@ -36,3 +36,7 @@ Recommendation: C. It keeps stored history read only through declared behaviour,
 ## Decided
 
 Option C, decided 2026-10-08 under the operator's delegated decision authority: the host guard in crates/control-plane-core/src/guards.rs keeps enforcing SatisfyGoal's revision precondition. story:typed-satisfaction-receipt leaves wave 7 unimplemented and waits for an ESS release with a declared way to read older command inputs. A host-side migration of stored receipts was rejected: it would reinterpret stored inputs under every existing store outside declared behaviour. The trial (typed receipt without conversion, 181 scenarios, 0 refusals, and the replay refusal) is kept in the unit tree's archive.
+
+## Revised
+
+Revised later on 2026-10-08: the change is expressible in ESS 0.56.0 without a typed receipt. SatisfyGoal keeps `satisfaction_receipt: String` and gains `receipt_revision: Optional<Integer>`; the `stale-revision` refusal is guarded by `when: defined(receipt_revision)`, so an old recorded invocation without the field replays unchanged (checked under 0.56.0: 4/4 scenarios, 13/13 capabilities, 0 obligations). No host migration in Store::open. The story returns to wave 7, after story:spec-owned-admission merges.
