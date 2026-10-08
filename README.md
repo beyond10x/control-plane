@@ -56,7 +56,8 @@ The HTTP API shares the browser and CLI state:
 | `GET /events` | SSE stream of compact committed operations across workspaces |
 | `GET /workspaces/{id}/events` | SSE stream scoped to one workspace |
 | `GET /workspaces/{id}/live` | Vue operations console for one workspace |
-| `GET /goals/{id}/evidence` | Inspect a goal's stored planning and execution evidence |
+| `GET /goals/{id}/evidence` | Vue evidence view for one goal: state, acceptance, checks, reviews, merges and activity |
+| `GET /api/goals/{id}/evidence` | A goal's stored planning and execution evidence as JSON |
 
 Mutation clients obtain `csrf_token` from `GET /api/session` and send it in `x-csrf-token`. The bundled CLI handles this automatically.
 

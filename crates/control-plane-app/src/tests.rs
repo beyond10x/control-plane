@@ -101,7 +101,7 @@ async fn live_activity_is_durable_scoped_and_does_not_inline_model_receipts() {
     assert!(!html.contains("MODEL-RAW-SECRET"));
     assert!(html.len() < 30000);
     let evidence = body(
-        app.oneshot(request(format!("/goals/{}/evidence", identities[0].1)))
+        app.oneshot(request(format!("/api/goals/{}/evidence", identities[0].1)))
             .await
             .unwrap(),
     )
@@ -274,7 +274,7 @@ async fn dashboard_and_evidence_read_activity_history_from_the_store() {
             router(state.clone())
                 .oneshot(
                     Request::builder()
-                        .uri(format!("/goals/{id}/evidence"))
+                        .uri(format!("/api/goals/{id}/evidence"))
                         .header("host", "127.0.0.1:8787")
                         .body(Body::empty())
                         .unwrap(),
@@ -323,7 +323,7 @@ fn adversary_step(index: usize) -> Value {
 
 #[tokio::test]
 async fn adversary_evidence_shows_one_state_of_the_goal() {
-    // GET /goals/{id}/evidence takes the goal (and its attached activity_history) from
+    // GET /api/goals/{id}/evidence takes the goal (and its attached activity_history) from
     // AppState::snapshot under one store lock, then takes the lock again for "history"
     // (dashboard.rs:31). A progress decision committed between the two is in "history" and
     // in neither the goal's recorded receipt nor its attached history.
@@ -340,7 +340,7 @@ async fn adversary_evidence_shows_one_state_of_the_goal() {
     let request = tokio::spawn(
         router(state.clone()).oneshot(
             Request::builder()
-                .uri(format!("/goals/{id}/evidence"))
+                .uri(format!("/api/goals/{id}/evidence"))
                 .header("host", "127.0.0.1:8787")
                 .body(Body::empty())
                 .unwrap(),
@@ -390,6 +390,86 @@ async fn adversary_evidence_shows_one_state_of_the_goal() {
         attached.unwrap_or_default()["detail"],
         recorded["last_activity"]["detail"]
     );
+}
+
+#[tokio::test]
+async fn evidence_path_serves_the_console() {
+    let (temp, state) = fixture().await;
+    let id = adversary_running_goal(&state, temp.path()).await;
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .uri(format!("/goals/{id}/evidence"))
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html"),
+        "the evidence path answers with the console, not JSON"
+    );
+    let html = body(response).await;
+    // The console shell, unchanged: Vue renders the view from the API path.
+    assert_eq!(html, include_str!("../../../frontend/dist/index.html"));
+    assert!(html.contains("src=\"/app.js\""));
+    assert!(serde_json::from_str::<Value>(&html).is_err());
+}
+
+#[tokio::test]
+async fn evidence_json_moves_to_api_path() {
+    let (temp, state) = fixture().await;
+    let id = adversary_running_goal(&state, temp.path()).await;
+    for index in 0..3 {
+        state
+            .store
+            .lock()
+            .await
+            .record_activity(&id, adversary_step(index))
+            .await
+            .unwrap();
+    }
+    // What `GET /goals/{id}/evidence` returned before it served the console: the goal row with
+    // its attached history, that history, and the goal's assignments and their publications.
+    let view = state.snapshot().await.unwrap();
+    let goal = view["goals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|goal| goal["goal_id"] == id.as_str())
+        .unwrap()
+        .clone();
+    let expected = json!({
+        "goal": goal,
+        "history": goal["activity_history"],
+        "assignments": [],
+        "publications": [],
+    });
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/goals/{id}/evidence"))
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("application/json")
+    );
+    let evidence: Value = serde_json::from_str(&body(response).await).unwrap();
+    assert_eq!(evidence, expected);
+    assert_eq!(evidence["history"]["activity"].as_array().unwrap().len(), 3);
 }
 
 #[tokio::test]
