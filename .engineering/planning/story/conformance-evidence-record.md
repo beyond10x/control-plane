@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:conformance-evidence-record
 kind: story
-status: active
+status: implemented
 title: The gate's conformance report becomes AEP evidence with its real run instant
 relations:
 - serves: vision:autonomous-engineering
@@ -16,10 +16,11 @@ scope:
   path: README.md
 - confidence: cited
   path: crates/control-plane-xtask/src/target.rs
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "active", to: "implemented", at: "2026-10-08T14:47:10Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":5}}}
 ---
 ## Outcome
 

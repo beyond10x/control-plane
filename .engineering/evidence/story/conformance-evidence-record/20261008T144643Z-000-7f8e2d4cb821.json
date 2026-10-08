@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T14:46:43Z",
+  "actor": "human:timo",
+  "artifact": "story:conformance-evidence-record",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates: clippy and cargo test -p control-plane-app and -p control-plane-xtask (206 passed, 28 binaries), fmt, spec-history-check, aep and ess validate, generated-check, acceptance-check, all exit 0; frontend-check 61 vitest passed",
+    "reference": "control-plane/wave-8@d3a43d7"
+  }
+}
