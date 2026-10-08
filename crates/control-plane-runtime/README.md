@@ -62,7 +62,7 @@ registrations, root/symlink escapes, permissions and other operational failures 
 fatal. Every path in a read batch is syntax-checked before any file in that batch is read.
 
 The planner's `ess_schema` action reads bounded JSON-pointer fragments from the exact
-ESS-owned authoring schema recorded in `resources/ess-0.53.0/README.md`. An empty pointer
+ESS-owned authoring schema recorded in `resources/ess-0.56.0/README.md`. An empty pointer
 returns the definition/property index. The resource must match `ess specify toolchain
 which` in the specification directory; mismatches are explicit feedback. This adapter
 neither invents syntax nor replaces ESS semantic validation.
