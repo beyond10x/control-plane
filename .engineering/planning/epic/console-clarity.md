@@ -2,13 +2,16 @@
 format: aep.planning-md/3
 id: epic:console-clarity
 kind: epic
-status: draft
+status: active
 title: The console says what is happening, what needs the operator and what to do
 summary: Turn the live console from committed rows into an operating view, from the 2026-10-06 UI/UX reviews.
 relations:
 - serves: vision:autonomous-engineering
 - informed_by: review-result:console-ux-review-2026-10-06
-revision: 2
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T13:13:07Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-08T13:13:07Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

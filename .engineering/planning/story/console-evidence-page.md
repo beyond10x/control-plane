@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-evidence-page
 kind: story
-status: draft
+status: active
 title: Evidence opens as a readable view with the raw JSON as a download
 relations:
 - decomposes: epic:console-clarity
@@ -21,7 +21,10 @@ scope:
   path: frontend/dist
 - confidence: inferred
   path: frontend/src
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 
