@@ -8,7 +8,7 @@ The [product vision](docs/vision.md) defines the live operator experience and it
 
 ## Run from source
 
-Install Rust, ESS 0.56.0, AEP 0.68.0 and Worktree 0.8.2. `rust-toolchain.toml` selects the Rust version. The repository gate also needs Task 3.52.0.
+Install Rust, ESS 0.56.0, AEP 0.69.1 and Worktree 0.8.2. `rust-toolchain.toml` selects the Rust version. The repository gate also needs Task 3.52.0.
 
 ```console
 cargo run --locked -p control-plane-app -- serve
