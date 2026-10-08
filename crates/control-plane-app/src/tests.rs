@@ -101,7 +101,7 @@ async fn live_activity_is_durable_scoped_and_does_not_inline_model_receipts() {
     assert!(!html.contains("MODEL-RAW-SECRET"));
     assert!(html.len() < 30000);
     let evidence = body(
-        app.oneshot(request(format!("/goals/{}/evidence", identities[0].1)))
+        app.oneshot(request(format!("/api/goals/{}/evidence", identities[0].1)))
             .await
             .unwrap(),
     )
@@ -274,7 +274,7 @@ async fn dashboard_and_evidence_read_activity_history_from_the_store() {
             router(state.clone())
                 .oneshot(
                     Request::builder()
-                        .uri(format!("/goals/{id}/evidence"))
+                        .uri(format!("/api/goals/{id}/evidence"))
                         .header("host", "127.0.0.1:8787")
                         .body(Body::empty())
                         .unwrap(),
@@ -323,7 +323,7 @@ fn adversary_step(index: usize) -> Value {
 
 #[tokio::test]
 async fn adversary_evidence_shows_one_state_of_the_goal() {
-    // GET /goals/{id}/evidence takes the goal (and its attached activity_history) from
+    // GET /api/goals/{id}/evidence takes the goal (and its attached activity_history) from
     // AppState::snapshot under one store lock, then takes the lock again for "history"
     // (dashboard.rs:31). A progress decision committed between the two is in "history" and
     // in neither the goal's recorded receipt nor its attached history.
@@ -340,7 +340,7 @@ async fn adversary_evidence_shows_one_state_of_the_goal() {
     let request = tokio::spawn(
         router(state.clone()).oneshot(
             Request::builder()
-                .uri(format!("/goals/{id}/evidence"))
+                .uri(format!("/api/goals/{id}/evidence"))
                 .header("host", "127.0.0.1:8787")
                 .body(Body::empty())
                 .unwrap(),
@@ -390,6 +390,175 @@ async fn adversary_evidence_shows_one_state_of_the_goal() {
         attached.unwrap_or_default()["detail"],
         recorded["last_activity"]["detail"]
     );
+}
+
+#[tokio::test]
+async fn evidence_path_serves_the_console() {
+    let (temp, state) = fixture().await;
+    let id = adversary_running_goal(&state, temp.path()).await;
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .uri(format!("/goals/{id}/evidence"))
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html"),
+        "the evidence path answers with the console, not JSON"
+    );
+    let html = body(response).await;
+    // The console shell, unchanged: Vue renders the view from the API path.
+    assert_eq!(html, include_str!("../../../frontend/dist/index.html"));
+    assert!(html.contains("src=\"/app.js\""));
+    assert!(serde_json::from_str::<Value>(&html).is_err());
+}
+
+#[tokio::test]
+async fn evidence_json_moves_to_api_path() {
+    let (temp, state) = fixture().await;
+    let supervise = |command: &'static str, input: Value| {
+        let state = state.clone();
+        async move {
+            let result = state
+                .store
+                .lock()
+                .await
+                .execute(command, input, Actor::Supervisor)
+                .await
+                .unwrap();
+            assert!(
+                matches!(result["outcome"].as_str(), Some("applied" | "created")),
+                "{command}: {result}"
+            );
+            result["published"][0]["payload"].clone()
+        }
+    };
+    // Two goals, each with one assignment and one publication: the response for the first must
+    // hold the first goal's rows and none of the second's.
+    let mut goals = Vec::new();
+    for name in ["shown", "other"] {
+        let directory = temp.path().join(name);
+        std::fs::create_dir(&directory).unwrap();
+        let workspace = state
+            .add_workspace(WorkspaceInput {
+                path: directory.to_string_lossy().into_owned(),
+                name: name.into(),
+            })
+            .await
+            .unwrap()["published"][0]["payload"]["workspace_id"]
+            .clone();
+        let repository_path = directory.join("repository");
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "--initial-branch=main"])
+                .arg(&repository_path)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+        let repository = state.command("RegisterRepository", json!({"workspace_id":workspace,"name":"repository","path":repository_path,"common_dir":"","base_branch":"main","test_command":"task check","publish_command":"true"})).await.unwrap()["published"][0]["payload"]["repository_id"].clone();
+        let goal = state.command("CreateGoal",json!({"workspace_id":workspace,"objective":name,"acceptance":"verified","max_workers":1,"max_attempts":1,"max_minutes":10,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":true})).await.unwrap()["published"][0]["payload"]["goal_id"].as_str().unwrap().to_owned();
+        state
+            .command("StartGoal", json!({"goal_id":goal}))
+            .await
+            .unwrap();
+        let assignment = supervise("QueueAssignment", json!({"goal_id":goal,"repository_id":repository,"story_id":format!("story:{name}"),"case_id":format!("story:{name}/case"),"worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1})).await["assignment_id"].clone();
+        for (command, input) in [
+            (
+                "ClaimAssignment",
+                json!({"worktree_id":"tree","implementor_run":"implementor","base_revision":"base"}),
+            ),
+            (
+                "ReviewAssignment",
+                json!({"candidate":name,"test_revision":name}),
+            ),
+            (
+                "ReadyAssignment",
+                json!({"reviewer_run":"reviewer","review_revision":name}),
+            ),
+            (
+                "PreparePublication",
+                json!({"candidate":name,"target":"main","expected_base":"base"}),
+            ),
+        ] {
+            let mut input = input;
+            input["assignment_id"] = assignment.clone();
+            supervise(command, input).await;
+        }
+        state
+            .store
+            .lock()
+            .await
+            .record_activity(&goal, json!({"id":name,"assignment_id":assignment,"goal_revision":1,"at":"2026-10-06T09:00:00Z","action":"checks.run","role":"host","status":"running","detail":{"candidate":name,"command":"task check"}}))
+            .await
+            .unwrap();
+        goals.push((goal, assignment));
+    }
+    let (id, assignment) = &goals[0];
+    // What `GET /goals/{id}/evidence` returned before it served the console, filtered here by
+    // hand from the shared state: the goal row with its attached history, that history, the
+    // goal's assignments and the publications of those assignments.
+    let view = state.snapshot().await.unwrap();
+    let goal = view["goals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|goal| goal["goal_id"] == id.as_str())
+        .unwrap()
+        .clone();
+    let assignments: Vec<_> = view["assignments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["assignment_id"] == *assignment)
+        .cloned()
+        .collect();
+    let publications: Vec<_> = view["publications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["assignment_id"] == *assignment)
+        .cloned()
+        .collect();
+    assert_eq!((assignments.len(), publications.len()), (1, 1));
+    assert_eq!(view["assignments"].as_array().unwrap().len(), 2);
+    assert_eq!(view["publications"].as_array().unwrap().len(), 2);
+    let expected = json!({
+        "goal": goal,
+        "history": goal["activity_history"],
+        "assignments": assignments,
+        "publications": publications,
+    });
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/goals/{id}/evidence"))
+                .header("host", "127.0.0.1:8787")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("application/json")
+    );
+    let evidence: Value = serde_json::from_str(&body(response).await).unwrap();
+    assert_eq!(evidence, expected);
+    assert_eq!(evidence["history"]["activity"].as_array().unwrap().len(), 1);
+    assert!(!evidence.to_string().contains(goals[1].0.as_str()));
 }
 
 #[tokio::test]

@@ -1,0 +1,35 @@
+{
+  "goal": {
+    "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c2",
+    "workspace_id": "6f1d2c3b-0000-4000-8000-0000000000e1",
+    "objective": "Document the status endpoint",
+    "acceptance": "The README names the endpoint",
+    "state": "Cancelled",
+    "revision": 2,
+    "merge_authority": false,
+    "planner_model": "planner-model",
+    "implementor_model": "implementor-model",
+    "reviewer_model": "reviewer-model",
+    "satisfaction_receipt": "",
+    "planning_phase": "Idle",
+    "planning_reason": "",
+    "planning_receipt": "{}",
+    "planning_worktree_path": "",
+    "activity_history": {
+      "activity": [
+        {"id": "p1", "at": "2026-10-06T10:00:00Z", "action": "planning.Planning", "role": "planner", "status": "running", "worktree": "", "detail": "Planning the documentation change"},
+        {"id": "p2", "at": "2026-10-06T10:03:00Z", "action": "planning.Blocked", "role": "planner", "status": "failed", "worktree": "", "detail": "Cancelled by the operator"}
+      ],
+      "fleet": {}
+    }
+  },
+  "history": {
+    "activity": [
+      {"id": "p1", "at": "2026-10-06T10:00:00Z", "action": "planning.Planning", "role": "planner", "status": "running", "worktree": "", "detail": "Planning the documentation change"},
+      {"id": "p2", "at": "2026-10-06T10:03:00Z", "action": "planning.Blocked", "role": "planner", "status": "failed", "worktree": "", "detail": "Cancelled by the operator"}
+    ],
+    "fleet": {}
+  },
+  "assignments": [],
+  "publications": []
+}
