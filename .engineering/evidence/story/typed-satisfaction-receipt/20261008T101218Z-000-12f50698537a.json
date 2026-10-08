@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-08T10:12:18Z",
+  "actor": "human:timo",
+  "artifact": "story:typed-satisfaction-receipt",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "coordinator",
+    "reference": "ec23b2a",
+    "review": "review-result:adversary-typed-satisfaction-receipt-pass-1",
+    "outcome": "no-op"
+  }
+}
