@@ -90,6 +90,8 @@ cargo run -p control-plane-xtask -- eval verify --case go-auth-web --repo /path/
 
 The cases are `go-cli`, `go-json-http` and `go-auth-web`; each seed contains its fixed `TASK.md`. Configure the repository's test command to run the built verifier outside the candidate tree. Use one worker, one attempt and a bounded time budget, and retain failures before retrying. The verifier requires Go tests and checks real CLI or HTTP behavior, including login, session rejection, logout revocation, frontend and README requirements. Blank seeds fail. Explicit `--local-eval-root` permits Go and local commits only when both the repository's Git common directory and its absolute local origin are beneath that root. Other repositories retain their normal policy.
 
+`cargo run -p control-plane-xtask -- eval report --state <state.sqlite> --goal <goal-id> --repo <repo>` reads a stopped run's state store without a model and prints the goal's final state, the satisfaction receipt revision, each merged commit and whether it is on the target branch of the repository's origin, the time from StartGoal to SatisfyGoal and the number of Operator commands recorded after StartGoal. It exits non-zero, naming each reason, when that number is above zero, when the goal is not Satisfied or when a merged commit is not on its target. It reads a copy of the store and refuses while a service holds it.
+
 `control-plane goal delete <id>` removes a cancelled goal with no assignment history while retaining its workspace. Cancel it first with `control-plane goal cancel <id>`.
 
 ```console

@@ -7,6 +7,9 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+eventlog-core.workspace = true
+eventlog-sqlite.workspace = true
+fs2.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
@@ -14,3 +17,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json"] }
 control-plane-core = { path = "../control-plane-core" }
 ess-conformance = { git = "https://github.com/beyond10x/ess", rev = "84ee8d38eb69e3a4507de801fdcb248232ed6e6e" }
 ess-primitives = { git = "https://github.com/beyond10x/ess", rev = "84ee8d38eb69e3a4507de801fdcb248232ed6e6e" }
+
+[dev-dependencies]
+control-plane-runtime = { path = "../control-plane-runtime" }
