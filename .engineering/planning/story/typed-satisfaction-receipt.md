@@ -21,7 +21,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 5}
@@ -78,4 +78,4 @@ Inferred: ess/domains/host.yaml, generated/, ess/spec-acknowledgements.json, cra
 
 ## Planning
 
-Planned for wave 6. It needs no ESS pin change: the trial validates under the pinned 0.53.0.
+Wave 7 (2026-10-08) left it unimplemented: decision-blocker:typed-receipt-replay (option C). It resumes when ESS can declare how an older SatisfyGoal input with a text receipt is read; the generating form to resume from is the trial in the archive of tree cp-wave7-typed-satisfaction-receipt (no conversion; Goal and SatisfyGoalApplied store the receipt's evidence; stale-revision guarded by state == Running and revision != input.satisfaction_receipt.goal_revision). SatisfyGoal senders to change then: crates/control-plane-runtime/src/fleet.rs, crates/control-plane-app/src/live.rs, crates/control-plane-xtask/src/history.rs.
