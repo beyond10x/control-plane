@@ -1426,7 +1426,7 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
                 let n = self.calls.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(request.items.iter().filter(|item| matches!(item,llm_core::Item::UserText{text} if text.contains("Goal: "))).count(), 1, "each native role gets its brief once");
                 if n == 2 {
-                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("a81a8729dc252830d4e0557176522b59be6ff253") && text.contains("#/definitions/Field"))), "authoritative ESS reference must return through Commission and native Loom session");
+                    assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::UserText{text} if text.contains("84ee8d38eb69e3a4507de801fdcb248232ed6e6e") && text.contains("#/definitions/Field"))), "authoritative ESS reference must return through Commission and native Loom session");
                 }
                 if n == 3 {
                     assert!(request.items.iter().any(|item|matches!(item,llm_core::Item::Opaque {payload,..} if payload==&json!({"retained":"provider-state"}))));

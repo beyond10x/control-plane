@@ -2,8 +2,8 @@
 format: aep.planning-md/3
 id: story:ess-055-upgrade
 kind: story
-status: draft
-title: Move control-plane to ESS 0.55.0
+status: implemented
+title: Move control-plane to ESS 0.56.0
 relations:
 - decomposes: epic:bootstrap
 - serves: vision:autonomous-engineering
@@ -20,11 +20,15 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 4
+revision: 11
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T00:11:58Z", actor: "human:timo", revision: 9}
+- {from: "proposed", to: "active", at: "2026-10-08T00:11:58Z", actor: "human:timo", revision: 10}
+- {from: "active", to: "implemented", at: "2026-10-08T02:03:05Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":1,"verification":1}}}
 ---
 ## Outcome
 
-control-plane runs on the newest ESS release, 0.55.0: the specification manifest, the CI install, the authoring reference the runtime hands to the planner, and the generated contracts all name 0.55.0, and `task check` passes with it.
+control-plane runs on the newest ESS release, 0.56.0 (published 2026-10-07T23:16:28Z, `gh release list -R beyond10x/ess`): the specification manifest, the CI install, the authoring reference the runtime hands to the planner, and the generated contracts all name 0.56.0, and `task check` passes with it. The story id keeps its 0.55.0 name; 0.56.0 superseded 0.55.0 before the story ran.
 
 ## Evidence
 
@@ -39,10 +43,20 @@ control-plane runs on the newest ESS release, 0.55.0: the specification manifest
 
 ## Acceptance
 
-- `ess specify validate --path ess --strict-requires` passes with `requires: ess 0.55.0`, and CI installs 0.55.0 with its published checksum.
-- The runtime's authoring reference names 0.55.0 and embeds that release's schema; the planner test above passes with 0.55.0 first on PATH.
-- `cargo run --locked -p control-plane-xtask -- generated-check`, `cargo run --locked -p control-plane-xtask -- conformance` and `cargo run --locked -p control-plane-xtask -- spec-history-check` pass with 0.55.0; every change `ess verify diff` reports between the two compiled models is acknowledged or shown to be none.
+- `ess specify validate --path ess --strict-requires` passes with `requires: ess 0.56.0`, and CI installs 0.56.0 with the checksum from the release's `SHA256SUMS`.
+- The runtime's authoring reference names 0.56.0 and embeds that release's schema; the planner test above passes with 0.56.0 first on PATH.
+- `cargo run --locked -p control-plane-xtask -- generated-check`, `cargo run --locked -p control-plane-xtask -- conformance` and `cargo run --locked -p control-plane-xtask -- spec-history-check` pass with 0.56.0; every change `ess verify diff` reports between the two compiled models is acknowledged or shown to be none.
 
 ## Scope
 
 Inferred: ess/ess-inputs.yaml, .github/workflows/check.yml, crates/control-plane-runtime/src/ess_reference.rs, crates/control-plane-runtime/resources/, generated/, ess/spec-acknowledgements.json.
+
+## Release changes to expect
+
+Changes between 0.53.0 and 0.56.0 that can reach this repository, from the release notes of 0.54.0, 0.55.0 and 0.56.0:
+
+- 0.55.0: a `{generated: true}` payload value of type `Optional<T>` is read from a new context port method `generate_optional_<t>`; a context that implements the port must add it.
+- 0.56.0: `ESS-COMMAND-004` refuses an accepting or `external:` branch declared before a held-state branch when one request can satisfy both guards; the fix is to reorder.
+- 0.56.0: generated Rust type libraries declare a default-on `exact-numbers` feature instead of forcing `serde_json/arbitrary_precision`; generated `Cargo.toml` changes.
+- 0.56.0: `.ess-output/state.json` becomes `ess-output-state/3`; a CI pin older than 0.56.0 refuses it, so the CI pin moves in the same commit as the regeneration.
+- 0.56.0: concurrent `ess generate` runs under one shared `$TMPDIR` no longer refuse each other as `output ownership busy`.

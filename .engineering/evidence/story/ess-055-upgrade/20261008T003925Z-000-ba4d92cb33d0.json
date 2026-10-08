@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T00:39:25Z",
+  "actor": "human:timo",
+  "artifact": "story:ess-055-upgrade",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "ess specify validate --path ess --strict-requires (ess 0.56.0 first on PATH)",
+    "reference": "ae6053e: exit 1, requires ess 0.53.0 refused; a7d7c5a: exit 0, controlplane v1 3 file(s) valid"
+  }
+}

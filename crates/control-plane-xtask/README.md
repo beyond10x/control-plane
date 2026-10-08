@@ -13,7 +13,7 @@ cargo test --locked -p control-plane-xtask
 `generate` installs fresh Rust, OpenAPI and conformance emitter bytes. Both generation commands
 use new scratch ownership roots and compare every generated file, including file-set changes;
 only `.ess-output` machine ownership ledgers are excluded. Generation requires every capability
-in the compiler plan to be generated. ESS 0.53.0 is the matching released compiler; the Rust
+in the compiler plan to be generated. ESS 0.56.0 is the matching released compiler; the Rust
 runner and primitives are pinned to its release commit.
 
 The conformance target invokes `control_plane_core::contract::ContractStore`, the production
