@@ -7,6 +7,7 @@ title: The mutation audit admits no exemption once ESS witnesses the negated sta
 relations:
 - depends_on: story:typed-satisfaction-receipt
 - decomposes: epic:unattended-operation
+- serves: vision:autonomous-engineering
 revision: 2
 ---
 ## Outcome

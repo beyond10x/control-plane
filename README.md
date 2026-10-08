@@ -8,7 +8,7 @@ The [product vision](docs/vision.md) defines the live operator experience and it
 
 ## Run from source
 
-Install Rust, ESS 0.56.0, AEP 0.68.0 and Worktree 0.8.2. `rust-toolchain.toml` selects the Rust version. The repository gate also needs Task 3.52.0.
+Install Rust, ESS 0.56.0, AEP 0.69.1 and Worktree 0.8.2. `rust-toolchain.toml` selects the Rust version. The repository gate also needs Task 3.52.0.
 
 ```console
 cargo run --locked -p control-plane-app -- serve
@@ -56,7 +56,8 @@ The HTTP API shares the browser and CLI state:
 | `GET /events` | SSE stream of compact committed operations across workspaces |
 | `GET /workspaces/{id}/events` | SSE stream scoped to one workspace |
 | `GET /workspaces/{id}/live` | Vue operations console for one workspace |
-| `GET /goals/{id}/evidence` | Inspect a goal's stored planning and execution evidence |
+| `GET /goals/{id}/evidence` | Vue evidence view for one goal: state, acceptance, checks, reviews, merges and activity |
+| `GET /api/goals/{id}/evidence` | A goal's stored planning and execution evidence as JSON |
 
 Mutation clients obtain `csrf_token` from `GET /api/session` and send it in `x-csrf-token`. The bundled CLI handles this automatically.
 
@@ -89,6 +90,8 @@ cargo run -p control-plane-xtask -- eval verify --case go-auth-web --repo /path/
 ```
 
 The cases are `go-cli`, `go-json-http` and `go-auth-web`; each seed contains its fixed `TASK.md`. Configure the repository's test command to run the built verifier outside the candidate tree. Use one worker, one attempt and a bounded time budget, and retain failures before retrying. The verifier requires Go tests and checks real CLI or HTTP behavior, including login, session rejection, logout revocation, frontend and README requirements. Blank seeds fail. Explicit `--local-eval-root` permits Go and local commits only when both the repository's Git common directory and its absolute local origin are beneath that root. Other repositories retain their normal policy.
+
+`cargo run -p control-plane-xtask -- eval report --state <state.sqlite> --goal <goal-id> --repo <repo>` reads a stopped run's state store without a model and prints the goal's final state, the satisfaction receipt revision, each merged commit and whether it is on the target branch of the repository's origin, the time from StartGoal to SatisfyGoal and the number of Operator commands recorded after StartGoal. It exits non-zero, naming each reason, when that number is above zero, when the goal is not Satisfied or when a merged commit is not on its target. It reads a copy of the store and refuses while a service holds it.
 
 `control-plane goal delete <id>` removes a cancelled goal with no assignment history while retaining its workspace. Cancel it first with `control-plane goal cancel <id>`.
 

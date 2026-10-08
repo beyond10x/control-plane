@@ -37,6 +37,12 @@ fn console_page(body: String) -> Response {
     .into_response()
 }
 
+/// The console shell for a goal's evidence: Vue renders the view from
+/// `GET /api/goals/{id}/evidence`; nothing about the goal is rendered here.
+pub async fn evidence(Path(_id): Path<String>) -> Response {
+    Html(include_str!("../../../frontend/dist/index.html")).into_response()
+}
+
 pub async fn javascript() -> impl IntoResponse {
     (
         [("content-type", "text/javascript; charset=utf-8")],

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: epic:unattended-operation
 kind: epic
-status: draft
+status: active
 title: 'Unattended operation: credential isolation, recoverable refusals, bounded state, spec-owned admission'
 summary: Make goals safe to run without an operator watching, from the 2026-10-06 review and hardening findings.
 relations:
@@ -11,7 +11,10 @@ relations:
 - informed_by: review-result:ess-design-review-2026-10-06
 - informed_by: review-result:plan-audit-2026-10-06
 - informed_by: verification-report:ess-hardening-2026-10-06
-revision: 3
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T13:13:06Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-08T13:13:06Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

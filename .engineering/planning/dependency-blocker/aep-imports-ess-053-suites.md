@@ -2,13 +2,15 @@
 format: aep.planning-md/3
 id: dependency-blocker:aep-imports-ess-053-suites
 kind: dependency-blocker
-status: open
+status: cleared
 title: AEP 0.68.0 refuses ESS 0.53 conformance suites (scenario_initial_state)
 relations:
 - blocks: executable-system-specification:control-plane
 - blocks: story:conformance-evidence-record
 withholds: ess_conformance_v2
-revision: 1
+revision: 2
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-08T14:17:27Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## What is blocked
 

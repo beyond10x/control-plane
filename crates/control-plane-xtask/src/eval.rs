@@ -8,6 +8,9 @@ use std::{
     time::Duration,
 };
 
+#[path = "eval_report.rs"]
+mod report;
+
 #[derive(Subcommand)]
 pub enum Action {
     /// Seed three empty Go tasks and activate their independent managed-worktree profile.
@@ -20,6 +23,18 @@ pub enum Action {
         #[arg(long, value_enum)]
         case: Case,
         #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
+    /// Report whether one recorded goal ran unattended, from a stopped run's state store.
+    Report {
+        /// The state store the run recorded; read from a copy, never written.
+        #[arg(long)]
+        state: PathBuf,
+        /// The goal to report.
+        #[arg(long)]
+        goal: String,
+        /// The repository the goal merged into; its origin holds the target branch.
+        #[arg(long)]
         repo: PathBuf,
     },
 }
@@ -74,6 +89,7 @@ pub fn run(action: Action) -> Result<()> {
             println!("PASS {}", case.name());
             Ok(())
         }
+        Action::Report { state, goal, repo } => report::run(&state, &goal, &repo),
     }
 }
 fn init(root: &Path) -> Result<()> {

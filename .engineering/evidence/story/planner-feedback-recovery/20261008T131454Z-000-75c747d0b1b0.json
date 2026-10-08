@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-08T13:14:54Z",
+  "actor": "human:timo",
+  "artifact": "story:planner-feedback-recovery",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:plan-audit-2026-10-08",
+    "review": "review-result:plan-audit-2026-10-08",
+    "outcome": "escalated"
+  }
+}

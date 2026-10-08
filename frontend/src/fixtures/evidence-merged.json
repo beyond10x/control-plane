@@ -1,0 +1,72 @@
+{
+  "goal": {
+    "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c1",
+    "workspace_id": "6f1d2c3b-0000-4000-8000-0000000000e1",
+    "objective": "Serve the status endpoint",
+    "acceptance": "The endpoint answers with the build status",
+    "state": "Satisfied",
+    "revision": 1,
+    "merge_authority": true,
+    "planner_model": "planner-model",
+    "implementor_model": "implementor-model",
+    "reviewer_model": "reviewer-model",
+    "satisfaction_receipt": "{\"kind\":\"goal_acceptance\",\"head\":\"9c4e1aa\"}",
+    "planning_phase": "Queued",
+    "planning_reason": "",
+    "planning_receipt": "{}",
+    "planning_worktree_path": "",
+    "activity_history": {
+      "activity": [
+        {"id": "e1", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:00:00Z", "action": "worktree.prepare", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"path": "tree-alpha"}},
+        {"id": "e2", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:05:00Z", "action": "checks.run", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"candidate": "1111111aaaaaaa", "command": "cargo test --old"}},
+        {"id": "e3", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:07:00Z", "action": "checks.run", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"candidate": "2222222bbbbbbb", "command": "task check"}},
+        {"id": "e4", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:09:00Z", "action": "review.request", "role": "reviewer", "status": "running", "worktree": "tree-alpha", "detail": "Reviewing the candidate"},
+        {"id": "e5", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:12:00Z", "action": "merge.completed", "role": "host", "status": "completed", "worktree": "tree-alpha", "detail": {"candidate": "2222222bbbbbbb"}}
+      ],
+      "fleet": {}
+    }
+  },
+  "history": {
+    "activity": [
+      {"id": "e1", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:00:00Z", "action": "worktree.prepare", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"path": "tree-alpha"}},
+      {"id": "e2", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:05:00Z", "action": "checks.run", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"candidate": "1111111aaaaaaa", "command": "cargo test --old"}},
+      {"id": "e3", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:07:00Z", "action": "checks.run", "role": "host", "status": "running", "worktree": "tree-alpha", "detail": {"candidate": "2222222bbbbbbb", "command": "task check"}},
+      {"id": "e4", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:09:00Z", "action": "review.request", "role": "reviewer", "status": "running", "worktree": "tree-alpha", "detail": "Reviewing the candidate"},
+      {"id": "e5", "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1", "goal_revision": 1, "at": "2026-10-06T09:12:00Z", "action": "merge.completed", "role": "host", "status": "completed", "worktree": "tree-alpha", "detail": {"candidate": "2222222bbbbbbb"}}
+    ],
+    "fleet": {}
+  },
+  "assignments": [
+    {
+      "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1",
+      "goal_id": "6f1d2c3b-0000-4000-8000-0000000000c1",
+      "repository_id": "6f1d2c3b-0000-4000-8000-0000000000a1",
+      "story_id": "story:status-endpoint",
+      "case_id": "story:status-endpoint/case",
+      "worktree_id": "tree-alpha",
+      "candidate": "2222222bbbbbbb",
+      "attempt": 1,
+      "reason": "",
+      "implementor_run": "implementor-run-alpha",
+      "reviewer_run": "reviewer-run-alpha",
+      "goal_revision": 1,
+      "base_revision": "base-alpha",
+      "test_revision": "2222222bbbbbbb",
+      "review_revision": "2222222bbbbbbb",
+      "merge_receipt": "{\"kind\":\"git_merge_observation\",\"operation_id\":\"6f1d2c3b-0000-4000-8000-0000000000f9\",\"candidate\":\"2222222bbbbbbb\",\"expected_base\":\"base-alpha\",\"target\":\"main\",\"observed_head\":\"3333333ccccccc\",\"origin\":\"origin\",\"observed_at\":\"2026-10-06T09:12:00Z\"}",
+      "state": "Merged"
+    }
+  ],
+  "publications": [
+    {
+      "publication_id": "6f1d2c3b-0000-4000-8000-0000000000f9",
+      "assignment_id": "6f1d2c3b-0000-4000-8000-0000000000d1",
+      "candidate": "2222222bbbbbbb",
+      "target": "main",
+      "expected_base": "base-alpha",
+      "receipt": "{\"kind\":\"git_merge_observation\",\"observed_head\":\"3333333ccccccc\"}",
+      "reason": null,
+      "state": "Confirmed"
+    }
+  ]
+}

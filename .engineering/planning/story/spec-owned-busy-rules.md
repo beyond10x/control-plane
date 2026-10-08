@@ -8,6 +8,7 @@ relations:
 - decomposes: epic:unattended-operation
 - serves: vision:autonomous-engineering
 - informed_by: decision-blocker:admission-selectors-not-synthesized
+- depends_on: story:admission-conformance-target
 revision: 1
 ---
 ## Outcome
