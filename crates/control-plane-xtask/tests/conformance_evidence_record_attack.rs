@@ -68,7 +68,9 @@ fn mask_diagnostics(mut diagnostics: serde_json::Value) -> serde_json::Value {
 /// wall clock moved time, and nothing else.
 #[test]
 fn two_runs_agree_on_the_count_report_apart_from_completed_at() {
-    let _guard = RUN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = RUN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (first, _) = conformance();
     let (second, _) = conformance();
     assert_eq!(mask_report(first), mask_report(second));
@@ -78,7 +80,9 @@ fn two_runs_agree_on_the_count_report_apart_from_completed_at() {
 /// `completed_at` and every `duration_ms` are masked.
 #[test]
 fn two_runs_agree_on_the_diagnostics_apart_from_time() {
-    let _guard = RUN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = RUN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_, first) = conformance();
     let (_, second) = conformance();
     let (first, second) = (mask_diagnostics(first), mask_diagnostics(second));
@@ -111,7 +115,9 @@ fn two_runs_agree_on_the_diagnostics_apart_from_time() {
 /// scenario durations fit inside the interval (the rule ESS applies to a detailed count run).
 #[test]
 fn the_stated_run_interval_is_coherent_and_inside_the_run() {
-    let _guard = RUN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = RUN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let before = wall_ms();
     let (report, diagnostics) = conformance();
     let after = wall_ms();

@@ -16,7 +16,7 @@ scope:
   path: README.md
 - confidence: cited
   path: crates/control-plane-xtask/src/target.rs
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-10-08T13:14:19Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":4}}}
@@ -34,8 +34,8 @@ The conformance report `task check` writes is recorded with `aep plan artifact e
 ## Acceptance
 
 - `conformance_report_carries_run_instant`: the report's `completed_at` falls between the wall-clock start and end of the `task check` conformance step.
-- `aep_pin_is_current`: .github/workflows/check.yml (both jobs) and README.md name aep 0.69.1 with the release checksum, and `task check` passes with it.
-- `conformance_report_imports_as_evidence`: with aep 0.69.1, `aep plan artifact evidence executable-system-specification:control-plane --from .scratch/conformance/report.json --suite generated/conformance.json` records the evidence, and `aep plan artifact move executable-system-specification:control-plane --to conforming` succeeds.
+- Checked by reading the files, not by a test: .github/workflows/check.yml (both jobs) and README.md name aep 0.69.1 with the release checksum, and the pull request CI passes with it.
+- Checked by the store, not by a test: with aep 0.69.1, `aep plan artifact evidence executable-system-specification:control-plane --from .scratch/conformance/report.json --suite generated/conformance.json` records the evidence, and `aep plan artifact move executable-system-specification:control-plane --to conforming` succeeds (the coordinator does this on the integration branch; the record is on executable-system-specification:control-plane).
 
 ## Scope
 
