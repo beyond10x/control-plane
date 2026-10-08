@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:typed-satisfaction-receipt
 kind: story
-status: active
+status: implemented
 title: SatisfyGoal's revision precondition is declared through a typed receipt
 relations:
 - decomposes: epic:unattended-operation
@@ -21,10 +21,11 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-08T12:52:33Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":2}}}
 ---
 ## Outcome
 
