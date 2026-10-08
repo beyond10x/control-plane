@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-goal-cards
 kind: story
-status: draft
+status: active
 title: Goal cards carry state, step and controls
 relations:
 - decomposes: epic:console-clarity
@@ -14,7 +14,10 @@ scope:
   path: frontend/dist
 - confidence: inferred
   path: frontend/src
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T00:11:59Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":5}}}
+- {from: "proposed", to: "active", at: "2026-10-08T00:12:00Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":5}}}
 ---
 ## Outcome
 
