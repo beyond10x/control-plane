@@ -25,7 +25,7 @@ fn receipt(goal_revision: Value) -> String {
 
 /// Equality, not "at least": a receipt naming a revision the goal has not reached is refused,
 /// as is one whose revision is not an integer. A Cancelled goal and an unknown goal answer
-/// their declared refusals whatever the receipt holds, and none of it records a decision.
+/// their declared refusals whatever the receipt holds. Only the declared refusals are recorded.
 #[tokio::test]
 async fn only_the_exact_revision_is_admitted_and_other_goals_keep_declared_refusals() {
     let temp = tempfile::tempdir().unwrap();
@@ -59,24 +59,23 @@ async fn only_the_exact_revision_is_admitted_and_other_goals_keep_declared_refus
         .unwrap();
     let before = store.query("GoalList").unwrap();
     let version = *store.subscribe().borrow();
+    // story:typed-satisfaction-receipt: a revision that is not an integer, named in
+    // `receipt_revision` or left out of it, is refused by the host and records nothing.
     for (named, message) in [
         (
-            json!(2),
-            "goal satisfaction receipt names goal revision 2 but the goal is at revision 1",
-        ),
-        (
             json!(1.0),
-            "goal satisfaction receipt names goal revision 1.0 but the goal is at revision 1",
+            "goal satisfaction names no integer receipt_revision; the goal is at revision 1",
         ),
         (
             json!(null),
-            "goal satisfaction receipt names goal revision null but the goal is at revision 1",
+            "goal satisfaction names no integer receipt_revision; the goal is at revision 1",
         ),
     ] {
         let error = store
             .execute(
                 "SatisfyGoal",
-                json!({"goal_id":running,"satisfaction_receipt":receipt(named.clone())}),
+                json!({"goal_id":running,"satisfaction_receipt":receipt(named.clone()),
+                    "receipt_revision":named.clone()}),
                 Actor::Supervisor,
             )
             .await
@@ -84,6 +83,20 @@ async fn only_the_exact_revision_is_admitted_and_other_goals_keep_declared_refus
         assert_eq!(format!("{error:#}"), message);
     }
     assert_eq!(*store.subscribe().borrow(), version);
+    assert_eq!(store.query("GoalList").unwrap(), before);
+    // A revision the goal has not reached gets the declared `stale-revision` refusal, recorded
+    // as one decision; the goal is unchanged.
+    let answer = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":running,"satisfaction_receipt":receipt(json!(2)),"receipt_revision":2}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer["outcome"], "stale-revision", "{answer}");
+    assert_eq!(answer["error"], "controlplane.host.GoalStateConflict");
+    assert_eq!(*store.subscribe().borrow(), version + 1);
     assert_eq!(store.query("GoalList").unwrap(), before);
 
     let cancelled = identity(

@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
-// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -3356,6 +3356,10 @@ pub fn encode_command_controlplane_host_satisfy_goal(value: &crate::host::Satisf
     json::push_text(out, &value.goal_id.0);
     json::member(out, "satisfaction_receipt");
     json::push_text(out, &value.satisfaction_receipt);
+    if let Some(held0) = &value.receipt_revision {
+        json::member(out, "receipt_revision");
+        json::push_integer(out, *held0);
+    }
     out.push('}');
 }
 
@@ -3376,6 +3380,13 @@ pub fn decode_command_controlplane_host_satisfy_goal(value: &json::Value, at: &s
             let member1 = json::member_at(value, at, "satisfaction_receipt")?;
             json::text_at(member1, &at1, "a string")?.to_owned()
         },
+        receipt_revision: match value.member("receipt_revision") {
+            None | Some(json::Value::Null) => None,
+            Some(member2) => {
+                let at2 = json::nested(at, "receipt_revision");
+                Some(json::integer_at(member2, &at2, "an integer")?)
+            }
+        },
     })
 }
 
@@ -3384,6 +3395,20 @@ pub fn decode_command_controlplane_host_satisfy_goal(value: &json::Value, at: &s
 pub fn encode_outcome_controlplane_host_satisfy_goal(value: &crate::host::SatisfyGoalOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::SatisfyGoalOutcome::StaleRevision { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "stale-revision");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
         crate::host::SatisfyGoalOutcome::Applied { satisfy_goal_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");

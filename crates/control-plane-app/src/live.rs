@@ -1136,7 +1136,7 @@ mod tests {
         supervise(
             &state,
             "SatisfyGoal",
-            json!({"goal_id":goal,"satisfaction_receipt":receipt.to_string()}),
+            json!({"goal_id":goal,"satisfaction_receipt":receipt.to_string(),"receipt_revision":revision}),
         )
         .await;
         let update = frame(&mut body).await;
@@ -1146,6 +1146,40 @@ mod tests {
         let satisfied = row(&view, "goals", "goal_id", &goal);
         assert_eq!(satisfied["state"], "Satisfied");
         assert_eq!(satisfied["acceptance_recorded"], true);
+    }
+
+    /// story:typed-satisfaction-receipt through the console. The operator's edit moves the goal
+    /// to the next revision; a SatisfyGoal that names the revision acceptance checked gets the
+    /// generated `stale-revision` refusal from the shared store, and the browser keeps seeing the
+    /// goal Running at the edited revision with no acceptance recorded.
+    #[tokio::test]
+    async fn stale_satisfaction_is_refused_and_the_browser_sees_the_edit() {
+        let (temp, state) = fixture().await;
+        let ws = workspace(&state, temp.path(), "stale").await;
+        let (goal, revision) = running_goal(&state, &ws).await;
+        state.command("UpdateGoal", json!({"goal_id":goal,"objective":"projection goal","acceptance":"edited","max_workers":2,"max_attempts":2,"max_minutes":10,"planner_model":"planner-model","implementor_model":"implementor-model","reviewer_model":"reviewer-model","merge_authority":true})).await.unwrap();
+        let edited = row(&console_view(&state).await, "goals", "goal_id", &goal).clone();
+        assert_ne!(edited["revision"], revision, "{edited}");
+        let receipt = json!({"kind":"goal_acceptance","goal_revision":revision});
+        let refused = state
+            .store
+            .lock()
+            .await
+            .execute(
+                "SatisfyGoal",
+                json!({"goal_id":goal,"satisfaction_receipt":receipt.to_string(),"receipt_revision":revision}),
+                Actor::Supervisor,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            refused,
+            json!({"outcome":"stale-revision","error":"controlplane.host.GoalStateConflict","payload":{"state":"Running"},"published":[]})
+        );
+        let shown = row(&console_view(&state).await, "goals", "goal_id", &goal).clone();
+        assert_eq!(shown["state"], "Running");
+        assert_eq!(shown["revision"], edited["revision"]);
+        assert_eq!(shown["acceptance_recorded"], false);
     }
 
     #[tokio::test]

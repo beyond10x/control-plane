@@ -8,8 +8,8 @@
     "x-ess-provenance": {
       "system": "controlplane",
       "specification_version": "v1",
-      "source_digest": "c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548",
-      "contract_digest": "slice-sha256/2:e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10"
+      "source_digest": "067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad",
+      "contract_digest": "slice-sha256/2:e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4"
     },
     "x-ess-reached-by": "network"
   },
@@ -3131,11 +3131,25 @@
             }
           },
           "409": {
-            "description": "Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
+            "description": "Outcomes `stale-revision` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response"
+                  "discriminator": {
+                    "mapping": {
+                      "stale-revision": "#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response",
+                      "wrong-state": "#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response"
+                    },
+                    "propertyName": "outcome"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response"
+                    },
+                    {
+                      "$ref": "#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response"
+                    }
+                  ]
                 }
               }
             }
@@ -8086,6 +8100,9 @@
           },
           "satisfaction_receipt": {
             "type": "string"
+          },
+          "receipt_revision": {
+            "type": "integer"
           }
         },
         "required": [
@@ -8158,6 +8175,36 @@
           "outcome",
           "published",
           "error"
+        ],
+        "type": "object"
+      },
+      "controlplane.host.SatisfyGoal.stale-revision.Response": {
+        "additionalProperties": false,
+        "description": "Taken when the existing subject's stored fields satisfy `(state == Running and revision != input.receipt_revision)` and `defined(receipt_revision)` holds of the input.",
+        "properties": {
+          "error": {
+            "const": "controlplane.host.GoalStateConflict",
+            "description": "The command cannot act in the current state.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "stale-revision",
+            "description": "Which declared outcome the command took."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/controlplane.host.GoalStateConflict.Error"
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error",
+          "payload"
         ],
         "type": "object"
       },

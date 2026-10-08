@@ -592,6 +592,41 @@
       },
       "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.StartGoal",
       "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "stale-revision"
+        },
+        "subject": "controlplane.host.SatisfyGoal"
+      },
+      "command_outcomes": [
+        "stale-revision",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.SatisfyGoal/outcome-added/stale-revision",
+      "outcome": {
+        "condition": {
+          "input": "defined(receipt_revision)",
+          "kind": "subject_predicate",
+          "predicate": {
+            "all": [
+              "state == Running",
+              "revision != input.receipt_revision"
+            ]
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict",
+        "name": "stale-revision",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Story typed-satisfaction-receipt: SatisfyGoal gains the optional input receipt_revision, and the stale-revision outcome answers only when that input is present, the goal is Running and its revision differs. Replay re-answers each recorded call with its recorded body: every stored SatisfyGoal decision was recorded before the input existed and carries no receipt_revision (the committed history holds four, at event versions 12, 90, 91 and 102, each with only goal_id and satisfaction_receipt), so the guard is not taken and each keeps its recorded answer (not-found, applied, wrong-state, applied). crates/control-plane-core/tests/recorded_history.rs recorded_satisfactions_still_replay opens that history and compares every view."
     }
   ]
 }

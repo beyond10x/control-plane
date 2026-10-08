@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
-// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -1011,6 +1011,15 @@ where
 {
     fn satisfy_goal(&mut self, input: crate::host::SatisfyGoal) -> Result<crate::host::SatisfyGoalOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+            return Ok(crate::host::SatisfyGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+        };
+        let _ = &held;
+        // `stale-revision`: selected by the addressed row.
+        if decided(all(&[all(&[equal(Some(&held.state).map(|value| match value { crate::host::GoalState::Cancelled => "Cancelled", crate::host::GoalState::Paused => "Paused", crate::host::GoalState::Running => "Running", crate::host::GoalState::Satisfied => "Satisfied" }.to_owned()), Some("Running".to_owned())), compare_numbers(Some(&held.data.revision).map(|value| value.to_string()), Some(&input.receipt_revision).and_then(|value| value.as_ref()).map(|value| value.to_string()), core::cmp::Ordering::is_ne)]), Some(Some(&input.receipt_revision).and_then(|value| value.as_ref()).is_some())]), "controlplane.host.SatisfyGoal")? {
+            return Ok(crate::host::SatisfyGoalOutcome::StaleRevision { error: crate::host::GoalStateConflict { state: held.state } });
+        }
         // `applied`: the default.
         let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
             return Ok(crate::host::SatisfyGoalOutcome::NotFound { error: crate::host::GoalNotFound });

@@ -238,33 +238,42 @@ impl Store {
                 "goal has unfinished assignments"
             );
             // Acceptance checks a goal, then releases the store before it records satisfaction,
-            // so the receipt must name the revision it checked and that revision must still be
-            // current. Only a Running goal can be satisfied; any other keeps its declared refusal.
+            // so it names the revision it checked in `receipt_revision`, and the generated
+            // `stale-revision` refusal compares that with the goal's current revision. The input
+            // is optional only so that decisions recorded before it existed replay; a new
+            // satisfaction of a Running goal must name it, and the receipt must name the same
+            // revision. Any other goal keeps its declared refusal.
             if let Some(goal) = body["goal_id"]
                 .as_str()
                 .and_then(|id| self.memory.goals.get(id))
                 && goal.state == G::Running
             {
                 let current = goal.data.revision;
+                let checked = body["receipt_revision"].as_i64().with_context(|| {
+                    format!(
+                        "goal satisfaction names no integer receipt_revision; the goal is at \
+                         revision {current}"
+                    )
+                })?;
                 let receipt = serde_json::from_str::<Value>(text(body, "satisfaction_receipt")?)
                     .ok()
                     .filter(Value::is_object)
                     .with_context(|| {
                         format!(
                             "goal satisfaction receipt is not a JSON object naming its \
-                             goal_revision; the goal is at revision {current}"
+                             goal_revision; receipt_revision is {checked}"
                         )
                     })?;
                 let named = receipt.get("goal_revision").with_context(|| {
                     format!(
-                        "goal satisfaction receipt names no goal_revision; the goal is at \
-                         revision {current}"
+                        "goal satisfaction receipt names no goal_revision; receipt_revision is \
+                         {checked}"
                     )
                 })?;
                 ensure!(
-                    named.as_i64() == Some(current),
-                    "goal satisfaction receipt names goal revision {named} but the goal is at \
-                     revision {current}"
+                    named.as_i64() == Some(checked),
+                    "goal satisfaction receipt names goal revision {named} but receipt_revision \
+                     is {checked}"
                 );
             }
         }

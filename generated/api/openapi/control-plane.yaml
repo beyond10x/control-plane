@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
-# contract digest slice-sha256/2:e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
+# model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+# contract digest slice-sha256/2:e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
-    contract_digest: slice-sha256/2:e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
+    source_digest: 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+    contract_digest: slice-sha256/2:e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
   x-ess-reached-by: network
 tags:
 - name: host
@@ -2027,11 +2027,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.SatisfyGoal.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `stale-revision` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    stale-revision: '#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response'
+                - $ref: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -5696,6 +5703,8 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         satisfaction_receipt:
           type: string
+        receipt_revision:
+          type: integer
       required:
       - goal_id
       - satisfaction_receipt
@@ -5748,6 +5757,29 @@ components:
       - outcome
       - published
       - error
+      type: object
+    controlplane.host.SatisfyGoal.stale-revision.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `(state == Running and revision != input.receipt_revision)` and `defined(receipt_revision)` holds of the input.
+      properties:
+        error:
+          const: controlplane.host.GoalStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: stale-revision
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.GoalStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
       type: object
     controlplane.host.SatisfyGoal.wrong-state.Response:
       additionalProperties: false

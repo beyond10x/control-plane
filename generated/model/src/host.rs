@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
-// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -2629,6 +2629,8 @@ pub struct SatisfyGoal {
     pub goal_id: crate::primitives::Uuid,
     /// `satisfaction_receipt` — `String`.
     pub satisfaction_receipt: String,
+    /// `receipt_revision` — `Optional<Integer>`.
+    pub receipt_revision: Option<i64>,
 }
 
 /// Everything `controlplane.host.SatisfyGoal` can result in — one variant per declared outcome.
@@ -2638,6 +2640,11 @@ pub struct SatisfyGoal {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SatisfyGoalOutcome {
+    /// `stale-revision` — when the existing subject's stored fields satisfy `(state == Running and revision != input.receipt_revision)` and `defined(receipt_revision)`.
+    StaleRevision {
+        /// Why it was refused: `controlplane.host.GoalStateConflict`.
+        error: GoalStateConflict,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.SatisfyGoalApplied` this outcome publishes.

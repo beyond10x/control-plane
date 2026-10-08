@@ -45,7 +45,10 @@ const ROWS: [(u32, &[&str]); 15] = [
             "controlplane.host.ReconcileAssignment/outcome/receipt-missing",
         ],
     ),
-    (11, &[]),
+    (
+        11,
+        &["controlplane.host.SatisfyGoal/outcome/stale-revision"],
+    ),
     (14, &[]),
     (15, &[]),
     (16, &[]),
