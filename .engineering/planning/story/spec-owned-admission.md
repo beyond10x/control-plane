@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spec-owned-admission
 kind: story
-status: draft
+status: active
 title: Admission rules are declared in ESS and exercised by conformance
 relations:
 - decomposes: epic:unattended-operation
@@ -27,7 +27,10 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 5
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 
@@ -50,7 +53,13 @@ The admission rules the product relies on are declared in the specification wher
 
 ## Open question
 
-UNMAPPED: "one active change per common Git directory" compares RepositoryRegistration.common_dir across the Assignment → RepositoryRegistration reference. Whether ESS can express it, or whether Assignment should carry the common directory at claim, is a modelling decision for the ESS change.
+Resolved by a coordinator trial on 2026-10-08 against ESS 0.56.0 (`ess/22`), in a scratch copy of `ess/`:
+
+- A selector over Assignment rows is accepted: `when_related: {entity: controlplane.host.Assignment, where: {all: [assignment_id != subject.assignment_id, {state: {in: [Implementing, Reviewing, ReadyToMerge, Merging, Blocked]}}, common_dir == subject.common_dir]}, exists: true}` on ClaimAssignment.
+- It does not validate while `common_dir` lives only on RepositoryRegistration: `[unobservable_fact] ... common_dir reads common_dir, which is not a declared observable root` and `subject.common_dir: the subject has no field common_dir`.
+- It validates (`controlplane v1 — 3 file(s), valid`, `--strict-requires`) once Assignment declares `common_dir: String` and QueueAssignment's `created` outcome sets it with `common_dir: {related: {via: input.repository_id, field: common_dir}}`.
+
+Decision: Assignment carries the common directory, stamped when it is queued; the selector above is the declared refusal. Not yet checked: recorded Assignment rows that predate the field (`recorded_history_replays`) and whether conformance synthesis covers the selector branch.
 
 ## Scope
 
