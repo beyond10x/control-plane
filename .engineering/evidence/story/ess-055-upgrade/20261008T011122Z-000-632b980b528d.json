@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T01:11:22Z",
+  "actor": "human:timo",
+  "artifact": "story:ess-055-upgrade",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": ".scratch/gate.sh on control-plane/wave-6 61b549c: 15 package-scoped task-check steps",
+    "reference": "15 of 15 steps exit 0; runtime lib 40, planner 36, app 51, xtask 114 passed; conformance 180 of 180"
+  }
+}
