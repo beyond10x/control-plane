@@ -1,17 +1,16 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { activitySentence, openDetail } from './activity.js'
-import { activity, assignments, commandNotRetained, evidencePath, goalCheck, goalSummary, latestCheck, testedCandidates } from './evidence.js'
+import { activity, assignments, commandNotRetained, evidencePath, goalChecks, goalSummary, latestCheck, testedCandidates } from './evidence.js'
 // A goal's evidence, summarised from `GET /api/goals/{id}/evidence`; the same JSON is the
 // download at the foot of the page.
 const props = defineProps({ goalId: String })
 const evidence = ref(null), error = ref('')
 const path = computed(() => evidencePath(props.goalId))
 const goal = computed(() => goalSummary(evidence.value))
-const tested = computed(() => testedCandidates(evidence.value)), acceptanceCheck = computed(() => goalCheck(evidence.value))
-// A retained check of an assignment not yet tested (running or failed) is shown only when no
-// durable tested candidate or goal check exists.
-const check = computed(() => tested.value.length || acceptanceCheck.value ? null : latestCheck(evidence.value))
+const tested = computed(() => testedCandidates(evidence.value)), acceptanceChecks = computed(() => goalChecks(evidence.value))
+// The latest retained check is always shown: it may be a later story's failed check.
+const check = computed(() => latestCheck(evidence.value))
 const work = computed(() => assignments(evidence.value))
 const merged = computed(() => work.value.filter(item => item.merge))
 const timeline = computed(() => [...activity(evidence.value)].reverse())
@@ -35,9 +34,9 @@ onMounted(async () => {
 <section class="panel" data-test="summary"><h2>Goal</h2><p><span class="badge" :class="badge(goal.state)">{{ goal.state }}</span> {{ goal.acceptanceRecorded ? 'Acceptance recorded' : 'No acceptance recorded' }}</p></section>
 <section class="panel" data-test="latest-check"><h2>Latest check</h2>
 <p v-for="item in tested" :key="item.id" data-test="tested">{{ item.story }} · tests passed on candidate <code>{{ item.candidate }}</code> · <code v-if="item.command">{{ item.command }}</code><span v-else class="muted">{{ commandNotRetained }}</span><template v-if="item.at"> · <time :datetime="item.at">{{ item.at }}</time></template></p>
-<p v-if="acceptanceCheck">Goal acceptance check <code>{{ acceptanceCheck.command }}</code> on <code>{{ acceptanceCheck.candidate || 'head not recorded' }}</code><template v-if="acceptanceCheck.at"> · <time :datetime="acceptanceCheck.at">{{ acceptanceCheck.at }}</time></template></p>
-<template v-if="check"><p><code>{{ check.command }}</code></p><p class="path">Candidate {{ check.candidate || 'not recorded' }}<template v-if="check.at"> · <time :datetime="check.at">{{ check.at }}</time></template></p></template>
-<p v-if="!tested.length && !acceptanceCheck && !check" class="muted">No check recorded.</p></section>
+<p v-for="(item, index) in acceptanceChecks" :key="index">Goal acceptance check <code>{{ item.command }}</code> on <code>{{ item.candidate || 'head not recorded' }}</code><template v-if="item.at"> · <time :datetime="item.at">{{ item.at }}</time></template></p>
+<template v-if="check"><p>Latest recorded check <code>{{ check.command }}</code></p><p class="path">Candidate {{ check.candidate || 'not recorded' }}<template v-if="check.at"> · <time :datetime="check.at">{{ check.at }}</time></template></p></template>
+<p v-if="!tested.length && !acceptanceChecks.length && !check" class="muted">No check recorded.</p></section>
 <section class="panel" data-test="merges"><h2>Assignments</h2>
 <p v-if="!merged.length" class="muted">Nothing was merged.</p>
 <p v-if="!work.length" class="muted">No assignments recorded.</p>

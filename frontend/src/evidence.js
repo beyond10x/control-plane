@@ -50,10 +50,20 @@ export function testedCandidates(evidence) {
   })
 }
 
-/** The latest retained goal acceptance check (`goal.checks`), or null. */
-export function goalCheck(evidence) {
-  const event = activity(evidence).filter(event => event?.action === 'goal.checks' && typeof event?.detail?.command === 'string').at(-1)
-  return event ? { command: event.detail.command, candidate: event.detail.observed_head || '', at: event.at || '' } : null
+/**
+ * The retained goal acceptance checks (`goal.checks`) of the latest acceptance pass, oldest first.
+ * A pass records one per repository (fleet.rs `for repo in &repos`) and then `goal.review`, or
+ * `blocked` when it stops; walking back from the newest, the pass ends at such an event.
+ */
+const passEnds = new Set(['goal.review', 'goal.acceptance.completed', 'blocked'])
+export function goalChecks(evidence) {
+  const events = activity(evidence), pass = []
+  let index = events.findLastIndex(event => event?.action === 'goal.checks')
+  for (; index >= 0 && !passEnds.has(events[index]?.action); index--) {
+    const event = events[index]
+    if (event?.action === 'goal.checks' && typeof event?.detail?.command === 'string') pass.unshift({ command: event.detail.command, candidate: event.detail.observed_head || '', at: event.at || '' })
+  }
+  return pass
 }
 
 /** Each assignment with the reviewer run that approved it and the commit its merge receipt published. */

@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import Evidence from './Evidence.vue'
+import { goalChecks } from './evidence.js'
 // The `GET /api/goals/{id}/evidence` shape (dashboard.rs `evidence`): the goal row with its
 // attached history, that history, the goal's assignment rows and their publication rows.
 import merged from './fixtures/evidence-merged.json'
@@ -75,4 +76,11 @@ test('evidence_view_shows_the_tested_candidate_after_the_history_drops_its_check
   expect(check).not.toContain('No check recorded')
   expect(check).toContain('2222222bbbbbbb')
   expect(check).toContain('command outside the retained activity (last 64 entries)')
+})
+
+test('evidence_view_shows_only_the_latest_acceptance_pass', () => {
+  const check = (id, at, head) => ({ id, assignment_id: 'A', at, action: 'goal.checks', role: 'host', status: 'running', detail: { observed_head: head, command: 'task check' } })
+  const review = (id, at) => ({ id, assignment_id: 'A', at, action: 'goal.review', role: 'goal_reviewer', status: 'running', detail: {} })
+  const history = { activity: [check('1', '2026-10-06T09:00:00Z', 'old-one'), check('2', '2026-10-06T09:00:10Z', 'old-two'), review('3', '2026-10-06T09:01:00Z'), check('4', '2026-10-06T10:00:00Z', 'new-one'), check('5', '2026-10-06T10:00:10Z', 'new-two')] }
+  expect(goalChecks({ history }).map(item => item.candidate)).toEqual(['new-one', 'new-two'])
 })
