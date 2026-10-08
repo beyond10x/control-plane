@@ -1,221 +1,632 @@
 {
   "format": "control-plane-spec-acknowledgements/2",
-  "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
+  "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
   "acknowledged": [
     {
-      "id": "entity/controlplane.host.Assignment/transition-route-changed/block",
-      "change": {
-        "category": "entity",
-        "subject": "controlplane.host.Assignment",
-        "changed": {
-          "after": "Blocked, Implementing, Merging, Queued, ReadyToMerge, Reviewing -> Blocked",
-          "before": "Implementing, Merging, Queued, ReadyToMerge, Reviewing -> Blocked",
-          "kind": "transition-route-changed",
-          "transition": "block"
-        }
-      },
-      "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
-      "reason": "The block route gains Blocked as a source, so BlockAssignment on a Blocked assignment now applies and replaces its reason where it answered wrong-state; every other answer of BlockAssignment is unchanged (applied from Queued, Implementing, Reviewing, ReadyToMerge and Merging, wrong-state from Merged and Cancelled, not-found). Replay re-answers each recorded call, so only a recorded BlockAssignment answered wrong-state on a Blocked assignment could now differ, and no stored history holds one: in every commit each sender reads the assignment first and sends BlockAssignment only to one that is not Blocked (the fleet's block helper and its repair path in control-plane-runtime fleet.rs), the supervisor's retirement of a superseded queue blocks only Queued assignments and cancels them under the same store lock, and the Operator is not granted the command, so its call is refused before anything is appended. The committed recorded history, whose BlockAssignment refusal is on a Merged assignment, replays to its committed views with this change."
-    },
-    {
-      "baseline": "6341398b7bae099defc64dccb8e16f6ed9b8d187",
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
       "change": {
         "category": "command",
         "changed": {
           "kind": "outcome-added",
-          "outcome": "rebased"
+          "outcome": "evidence-missing"
+        },
+        "subject": "controlplane.host.ClaimAssignment"
+      },
+      "command_outcomes": [
+        "evidence-missing",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.ClaimAssignment/outcome-added/evidence-missing",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": {
+            "any": [
+              "input.implementor_run == \"\"",
+              "input.worktree_id == \"\"",
+              "input.base_revision == \"\""
+            ]
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceMissing",
+        "name": "evidence-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded ClaimAssignment; the refusal is an empty implementor run, worktree or base revision. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "receipt-missing"
+        },
+        "subject": "controlplane.host.CompleteAssignment"
+      },
+      "command_outcomes": [
+        "receipt-missing",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.CompleteAssignment/outcome-added/receipt-missing",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": "input.merge_receipt == \"\""
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceMissing",
+        "name": "receipt-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded CompleteAssignment; the refusal is an empty merge receipt. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "attempts-invalid"
+        },
+        "subject": "controlplane.host.CreateGoal"
+      },
+      "command_outcomes": [
+        "workers-invalid",
+        "attempts-invalid",
+        "minutes-invalid",
+        "created"
+      ],
+      "id": "command/controlplane.host.CreateGoal/outcome-added/attempts-invalid",
+      "outcome": {
+        "condition": {
+          "kind": "when",
+          "predicate": "max_attempts <= 0"
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalLimitInvalid",
+        "name": "attempts-invalid",
+        "test_strategy": "construct_input"
+      },
+      "reason": "Replay re-answers each recorded CreateGoal. The host refused a non-positive worker, attempt or minute limit at admission before anything was appended, so every stored CreateGoal carries positive limits and still answers created. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "minutes-invalid"
+        },
+        "subject": "controlplane.host.CreateGoal"
+      },
+      "command_outcomes": [
+        "workers-invalid",
+        "attempts-invalid",
+        "minutes-invalid",
+        "created"
+      ],
+      "id": "command/controlplane.host.CreateGoal/outcome-added/minutes-invalid",
+      "outcome": {
+        "condition": {
+          "kind": "when",
+          "predicate": "max_minutes <= 0"
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalLimitInvalid",
+        "name": "minutes-invalid",
+        "test_strategy": "construct_input"
+      },
+      "reason": "Replay re-answers each recorded CreateGoal. The host refused a non-positive worker, attempt or minute limit at admission before anything was appended, so every stored CreateGoal carries positive limits and still answers created. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "workers-invalid"
+        },
+        "subject": "controlplane.host.CreateGoal"
+      },
+      "command_outcomes": [
+        "workers-invalid",
+        "attempts-invalid",
+        "minutes-invalid",
+        "created"
+      ],
+      "id": "command/controlplane.host.CreateGoal/outcome-added/workers-invalid",
+      "outcome": {
+        "condition": {
+          "kind": "when",
+          "predicate": "max_workers <= 0"
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalLimitInvalid",
+        "name": "workers-invalid",
+        "test_strategy": "construct_input"
+      },
+      "reason": "Replay re-answers each recorded CreateGoal. The host refused a non-positive worker, attempt or minute limit at admission before anything was appended, so every stored CreateGoal carries positive limits and still answers created. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "goal-not-current"
+        },
+        "subject": "controlplane.host.QueueAssignment"
+      },
+      "command_outcomes": [
+        "goal-not-found",
+        "goal-not-current",
+        "created"
+      ],
+      "id": "command/controlplane.host.QueueAssignment/outcome-added/goal-not-current",
+      "outcome": {
+        "condition": {
+          "entity": "controlplane.host.Goal",
+          "kind": "related",
+          "test": {
+            "holds": {
+              "predicate": {
+                "any": [
+                  "state != Running",
+                  "revision != input.goal_revision"
+                ]
+              }
+            }
+          },
+          "via": {
+            "field": "goal_id",
+            "from": "input",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "uuid"
+            }
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalNotCurrent",
+        "name": "goal-not-current",
+        "test_strategy": "arrange_related_row"
+      },
+      "reason": "Replay re-answers each recorded QueueAssignment. The host refused a queue for a goal that was not Running or at another revision at admission (guards.rs, removed by this change), so every stored QueueAssignment names a Running goal at its revision and still answers created. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "goal-not-found"
+        },
+        "subject": "controlplane.host.QueueAssignment"
+      },
+      "command_outcomes": [
+        "goal-not-found",
+        "goal-not-current",
+        "created"
+      ],
+      "id": "command/controlplane.host.QueueAssignment/outcome-added/goal-not-found",
+      "outcome": {
+        "condition": {
+          "entity": "controlplane.host.Goal",
+          "kind": "related",
+          "test": "absent",
+          "via": {
+            "field": "goal_id",
+            "from": "input",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "uuid"
+            }
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalNotFound",
+        "name": "goal-not-found",
+        "test_strategy": "arrange_related_row"
+      },
+      "reason": "Replay re-answers each recorded QueueAssignment. The host refused a queue for an unknown goal at admission (guards.rs, `goal not found`) before anything was appended, so every stored QueueAssignment names a goal that existed and still answers created. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "evidence-not-current"
+        },
+        "subject": "controlplane.host.ReadyAssignment"
+      },
+      "command_outcomes": [
+        "reviewer-missing",
+        "review-not-independent",
+        "evidence-not-current",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.ReadyAssignment/outcome-added/evidence-not-current",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": {
+            "all": [
+              "state == Reviewing",
+              {
+                "any": [
+                  "candidate == \"\"",
+                  {
+                    "test_revision": {
+                      "ne": {
+                        "fact": "candidate"
+                      }
+                    }
+                  },
+                  "candidate != input.review_revision"
+                ]
+              }
+            ]
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceNotCurrent",
+        "name": "evidence-not-current",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded ReadyAssignment. The host refused readiness for an assignment whose candidate, test revision or review revision disagreed at admission, before anything was appended, so every stored applied readiness had current evidence. The guard holds only in Reviewing, so the recorded wrong-state answers (ReadyToMerge) and not-found answers are unchanged. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "review-not-independent"
+        },
+        "subject": "controlplane.host.ReadyAssignment"
+      },
+      "command_outcomes": [
+        "reviewer-missing",
+        "review-not-independent",
+        "evidence-not-current",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.ReadyAssignment/outcome-added/review-not-independent",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": "implementor_run == input.reviewer_run"
+        },
+        "emits": [],
+        "error": "controlplane.host.ReviewNotIndependent",
+        "name": "review-not-independent",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded ReadyAssignment. The host refused a reviewer run equal to the implementor run at admission, before anything was appended, so no stored readiness names the implementor as reviewer; a recorded wrong-state readiness names a reviewer other than the assignment's implementor, and not-found has no row to compare. The committed history replays. It predates this refusal, which `declared_admission_refusals_are_recorded_and_replay` (crates/control-plane-core/src/tests.rs) records through Store::execute and replays."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "reviewer-missing"
+        },
+        "subject": "controlplane.host.ReadyAssignment"
+      },
+      "command_outcomes": [
+        "reviewer-missing",
+        "review-not-independent",
+        "evidence-not-current",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.ReadyAssignment/outcome-added/reviewer-missing",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": "input.reviewer_run == \"\""
+        },
+        "emits": [],
+        "error": "controlplane.host.ReviewNotIndependent",
+        "name": "reviewer-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded ReadyAssignment; the refusal is an empty reviewer run. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "receipt-missing"
+        },
+        "subject": "controlplane.host.ReconcileAssignment"
+      },
+      "command_outcomes": [
+        "receipt-missing",
+        "applied",
+        "not-found",
+        "wrong-state"
+      ],
+      "id": "command/controlplane.host.ReconcileAssignment/outcome-added/receipt-missing",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": "input.merge_receipt == \"\""
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceMissing",
+        "name": "receipt-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded ReconcileAssignment; the refusal is an empty merge receipt. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "base-missing"
         },
         "subject": "controlplane.host.RepairAssignment"
       },
       "command_outcomes": [
+        "evidence-missing",
+        "base-missing",
         "rebased",
         "applied",
         "wrong-state",
         "not-found"
       ],
-      "id": "command/controlplane.host.RepairAssignment/outcome-added/rebased",
+      "id": "command/controlplane.host.RepairAssignment/outcome-added/base-missing",
       "outcome": {
         "condition": {
-          "kind": "when",
-          "predicate": "defined(base_revision)"
-        },
-        "emits": [
-          "controlplane.host.RepairAssignmentApplied"
-        ],
-        "name": "rebased",
-        "payload": [
-          {
-            "event": "controlplane.host.RepairAssignmentApplied",
-            "fields": [
-              {
-                "target": "assignment_id",
-                "target_type": {
-                  "kind": "primitive",
-                  "name": "uuid"
-                },
-                "value": {
-                  "field": "assignment_id",
-                  "kind": "input_field",
-                  "type_ref": {
-                    "kind": "primitive",
-                    "name": "uuid"
-                  }
-                }
-              },
-              {
-                "target": "reason",
-                "target_type": {
-                  "kind": "primitive",
-                  "name": "string"
-                },
-                "value": {
-                  "field": "reason",
-                  "kind": "input_field",
-                  "type_ref": {
-                    "kind": "primitive",
-                    "name": "string"
-                  }
-                }
-              },
-              {
-                "target": "implementor_run",
-                "target_type": {
-                  "kind": "primitive",
-                  "name": "string"
-                },
-                "value": {
-                  "field": "implementor_run",
-                  "kind": "input_field",
-                  "type_ref": {
-                    "kind": "primitive",
-                    "name": "string"
-                  }
-                }
-              }
+          "kind": "subject_predicate",
+          "predicate": {
+            "all": [
+              "defined(input.base_revision)",
+              "input.base_revision == \"\""
             ]
           }
-        ],
-        "sets": [
-          {
-            "target": "attempt",
-            "target_type": {
-              "kind": "primitive",
-              "name": "integer"
-            },
-            "value": {
-              "by": "1",
-              "kind": "increment"
-            }
-          },
-          {
-            "target": "reason",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "field": "reason",
-              "kind": "input_field",
-              "type_ref": {
-                "kind": "primitive",
-                "name": "string"
-              }
-            }
-          },
-          {
-            "target": "implementor_run",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "field": "implementor_run",
-              "kind": "input_field",
-              "type_ref": {
-                "kind": "primitive",
-                "name": "string"
-              }
-            }
-          },
-          {
-            "target": "reviewer_run",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "kind": "literal",
-              "value": ""
-            }
-          },
-          {
-            "target": "base_revision",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "field": "base_revision",
-              "kind": "input_or_generated",
-              "otherwise": "",
-              "type_ref": {
-                "kind": "optional",
-                "of": {
-                  "kind": "primitive",
-                  "name": "string"
-                }
-              }
-            }
-          },
-          {
-            "target": "test_revision",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "kind": "literal",
-              "value": ""
-            }
-          },
-          {
-            "target": "review_revision",
-            "target_type": {
-              "kind": "primitive",
-              "name": "string"
-            },
-            "value": {
-              "kind": "literal",
-              "value": ""
-            }
-          }
-        ],
-        "subject": {
-          "effect": "moves",
-          "entity": "controlplane.host.Assignment",
-          "instance": {
-            "field": {
-              "name": "assignment_id",
-              "naming": {},
-              "type_ref": {
-                "kind": "primitive",
-                "name": "uuid"
-              }
-            },
-            "from": "supplied"
-          },
-          "transition": {
-            "from": [
-              "Blocked",
-              "Reviewing"
-            ],
-            "name": "repair",
-            "to": "Implementing"
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceMissing",
+        "name": "base-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded RepairAssignment; the refusal is a named but empty base revision (a JSON null names none). The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "evidence-missing"
+        },
+        "subject": "controlplane.host.RepairAssignment"
+      },
+      "command_outcomes": [
+        "evidence-missing",
+        "base-missing",
+        "rebased",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.RepairAssignment/outcome-added/evidence-missing",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": "input.implementor_run == \"\""
+        },
+        "emits": [],
+        "error": "controlplane.host.EvidenceMissing",
+        "name": "evidence-missing",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Replay re-answers each recorded RepairAssignment; the refusal is an empty implementor run. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "tests-not-current"
+        },
+        "subject": "controlplane.host.ReviewAssignment"
+      },
+      "command_outcomes": [
+        "tests-not-current",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.ReviewAssignment/outcome-added/tests-not-current",
+      "outcome": {
+        "condition": {
+          "kind": "subject_predicate",
+          "predicate": {
+            "any": [
+              "input.candidate == \"\"",
+              "input.candidate != input.test_revision"
+            ]
           }
         },
-        "test_strategy": "construct_input"
+        "emits": [],
+        "error": "controlplane.host.EvidenceNotCurrent",
+        "name": "tests-not-current",
+        "test_strategy": "observe_subject_fact"
       },
-      "reason": "The added outcome answers only a RepairAssignment whose input names base_revision, an Optional input added by the same change. No stored decision carries it: before this change every sender (the fleet's repair in control-plane-runtime fleet.rs and the record-history script) sent assignment_id, reason and implementor_run only, and the Operator is not granted the command, so its call is refused before anything is appended. The generated decoder reads an absent base_revision as none, so `defined(base_revision)` holds for no recorded call and each one is still answered by `applied`, whose condition, field updates and payload are unchanged; RepairAssignment's wrong-state and not-found answers are unchanged too. The committed recorded history replays to its committed views with this change."
+      "reason": "Replay re-answers each recorded ReviewAssignment; the refusal is an empty candidate or a test revision other than the candidate. The guard is a subject predicate: it answers only for an assignment the store holds, after not-found, so a recorded not-found call keeps its answer whatever evidence it carried; for a held assignment it answers before wrong-state, and the host refused empty evidence for every held assignment at admission before anything was appended, so no recorded applied or wrong-state call carries it. The committed history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.ArchiveWorkspace",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.ArchiveWorkspace",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.CancelGoal",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.CancelGoal",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.CreateGoal",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.CreateGoal",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.DisableRepositoryRegistration",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.DisableRepositoryRegistration",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.EnableRepositoryRegistration",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.EnableRepositoryRegistration",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.PauseGoal",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.PauseGoal",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.RegisterRepository",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.RegisterRepository",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.RegisterWorkspace",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.RegisterWorkspace",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "actor",
+        "changed": {
+          "command": "controlplane.host.StartGoal",
+          "kind": "grant-removed"
+        },
+        "subject": "controlplane.host.Supervisor"
+      },
+      "id": "actor/controlplane.host.Supervisor/grant-removed/controlplane.host.StartGoal",
+      "reason": "Story spec-owned-admission (design review row 18): the runtime never sends this command as the Supervisor (crates/control-plane-xtask/tests/admission_rules.rs `supervisor_grants_are_least_privilege` reads both lists), so the grant is removed. Replay re-answers each recorded call with its recorded actor: the committed history records this command only as the Operator, whose grant is unchanged, so every recorded answer is unchanged and the history replays to its committed views."
+    },
+    {
+      "baseline": "1b147acac6d5b2e9903c533fc1e59f174d4e8ede",
+      "change": {
+        "category": "command",
+        "changed": {
+          "kind": "outcome-added",
+          "outcome": "stale-revision"
+        },
+        "subject": "controlplane.host.SatisfyGoal"
+      },
+      "command_outcomes": [
+        "stale-revision",
+        "applied",
+        "wrong-state",
+        "not-found"
+      ],
+      "id": "command/controlplane.host.SatisfyGoal/outcome-added/stale-revision",
+      "outcome": {
+        "condition": {
+          "input": "defined(receipt_revision)",
+          "kind": "subject_predicate",
+          "predicate": {
+            "all": [
+              "state == Running",
+              "revision != input.receipt_revision"
+            ]
+          }
+        },
+        "emits": [],
+        "error": "controlplane.host.GoalStateConflict",
+        "name": "stale-revision",
+        "test_strategy": "observe_subject_fact"
+      },
+      "reason": "Story typed-satisfaction-receipt: SatisfyGoal gains the optional input receipt_revision, and the stale-revision outcome answers only when that input is present, the goal is Running and its revision differs. Replay re-answers each recorded call with its recorded body: every stored SatisfyGoal decision was recorded before the input existed and carries no receipt_revision (the committed history holds four, at event versions 12, 90, 91 and 102, each with only goal_id and satisfaction_receipt), so the guard is not taken and each keeps its recorded answer (not-found, applied, wrong-state, applied). crates/control-plane-core/tests/recorded_history.rs recorded_satisfactions_still_replay opens that history and compares every view."
     }
   ]
 }

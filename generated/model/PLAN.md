@@ -1,14 +1,14 @@
 <!--
   generated from controlplane v1
-  model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-  contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+  model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+  contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — controlplane v1
 
 Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regenerate with `ess synthesize --layout crate`.
 
-131 capabilities: **131 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
+136 capabilities: **136 generated**, **0 obligations**, **0 refused**. An obligation is yours to implement against its contract; a refusal is a fact about this synthesis scope, not about the specification.
 
 ## Generated
 
@@ -119,12 +119,17 @@ Scope: `component-skeletons`, laid out as `crate`, planned by `ess-synth`. Regen
 | event type | `controlplane.host.WorkspaceDirectoryRemoved` |
 | error type | `controlplane.host.AssignmentNotFound` |
 | error type | `controlplane.host.AssignmentStateConflict` |
+| error type | `controlplane.host.EvidenceMissing` |
+| error type | `controlplane.host.EvidenceNotCurrent` |
+| error type | `controlplane.host.GoalLimitInvalid` |
+| error type | `controlplane.host.GoalNotCurrent` |
 | error type | `controlplane.host.GoalNotFound` |
 | error type | `controlplane.host.GoalStateConflict` |
 | error type | `controlplane.host.PublicationIntentNotFound` |
 | error type | `controlplane.host.PublicationIntentStateConflict` |
 | error type | `controlplane.host.RepositoryRegistrationNotFound` |
 | error type | `controlplane.host.RepositoryRegistrationStateConflict` |
+| error type | `controlplane.host.ReviewNotIndependent` |
 | error type | `controlplane.host.WorkspaceDirectoryNotFound` |
 | error type | `controlplane.host.WorkspaceDirectoryStateConflict` |
 | error type | `controlplane.host.WorkspaceNotFound` |

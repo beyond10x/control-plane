@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T12:52:00Z",
+  "actor": "human:timo",
+  "artifact": "story:typed-satisfaction-receipt",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates on control-plane/wave-7 777b02f: clippy -D warnings and cargo test for controlplane, control-plane-core, -runtime, -app, -xtask; generated-check; acceptance-check; aep validate (13 of 14 steps exit 0, 408 tests passed in 48 binaries; runtime goal_acceptance_authority_pass2_attack editing_another_goal_during_acceptance_does_not_fail_the_fleet_tick failed once under load at 81 s and passed 5 of 5 reruns)",
+    "reference": "777b02f"
+  }
+}

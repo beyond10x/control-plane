@@ -343,16 +343,7 @@ actors:
   - controlplane.host.ConfigureRepository
 - name: controlplane.host.Supervisor
   may:
-  - controlplane.host.RegisterWorkspace
-  - controlplane.host.ArchiveWorkspace
-  - controlplane.host.RegisterRepository
-  - controlplane.host.DisableRepositoryRegistration
-  - controlplane.host.EnableRepositoryRegistration
-  - controlplane.host.CreateGoal
-  - controlplane.host.StartGoal
-  - controlplane.host.PauseGoal
   - controlplane.host.SatisfyGoal
-  - controlplane.host.CancelGoal
   - controlplane.host.QueueAssignment
   - controlplane.host.ClaimAssignment
   - controlplane.host.ReviewAssignment
@@ -413,6 +404,21 @@ errors:
   fields:
   - name: state
     type: controlplane.host.PublicationIntent.State
+- name: controlplane.host.GoalNotCurrent
+  summary: The goal is not running, or changed since the assignment was planned.
+  fields: []
+- name: controlplane.host.GoalLimitInvalid
+  summary: Worker, attempt and minute limits are positive counts.
+  fields: []
+- name: controlplane.host.EvidenceMissing
+  summary: A required run, worktree, revision or receipt is empty.
+  fields: []
+- name: controlplane.host.EvidenceNotCurrent
+  summary: Tests or review do not cover the assignment's current candidate.
+  fields: []
+- name: controlplane.host.ReviewNotIndependent
+  summary: Review must use an execution context other than the implementor's.
+  fields: []
 commands:
 - name: controlplane.host.AddWorkspaceDirectory
   input:
@@ -604,6 +610,15 @@ commands:
   - name: merge_authority
     type: Boolean
   outcomes:
+  - name: workers-invalid
+    when: max_workers <= 0
+    error: controlplane.host.GoalLimitInvalid
+  - name: attempts-invalid
+    when: max_attempts <= 0
+    error: controlplane.host.GoalLimitInvalid
+  - name: minutes-invalid
+    when: max_minutes <= 0
+    error: controlplane.host.GoalLimitInvalid
   - name: created
     creates: controlplane.host.Goal
     instance: goal_id
@@ -696,7 +711,17 @@ commands:
     type: Uuid
   - name: satisfaction_receipt
     type: String
+  - name: receipt_revision
+    type: Optional<Integer>
   outcomes:
+  - name: stale-revision
+    when: defined(receipt_revision)
+    when_subject:
+      predicate:
+        all:
+        - state == Running
+        - revision != input.receipt_revision
+    error: controlplane.host.GoalStateConflict
   - name: applied
     moves: controlplane.host.Goal.satisfy
     instance: goal_id
@@ -784,6 +809,19 @@ commands:
   - name: goal_revision
     type: Integer
   outcomes:
+  - name: goal-not-found
+    when_related:
+      via: input.goal_id
+      exists: false
+    error: controlplane.host.GoalNotFound
+  - name: goal-not-current
+    when_related:
+      via: input.goal_id
+      predicate:
+        any:
+        - state != Running
+        - revision != input.goal_revision
+    error: controlplane.host.GoalNotCurrent
   - name: created
     creates: controlplane.host.Assignment
     instance: assignment_id
@@ -831,6 +869,14 @@ commands:
   - name: base_revision
     type: String
   outcomes:
+  - name: evidence-missing
+    when_subject:
+      predicate:
+        any:
+        - input.implementor_run == ""
+        - input.worktree_id == ""
+        - input.base_revision == ""
+    error: controlplane.host.EvidenceMissing
   - name: applied
     moves: controlplane.host.Assignment.claim
     instance: assignment_id
@@ -863,6 +909,13 @@ commands:
   - name: test_revision
     type: String
   outcomes:
+  - name: tests-not-current
+    when_subject:
+      predicate:
+        any:
+        - input.candidate == ""
+        - input.candidate != input.test_revision
+    error: controlplane.host.EvidenceNotCurrent
   - name: applied
     moves: controlplane.host.Assignment.review
     instance: assignment_id
@@ -893,6 +946,17 @@ commands:
   - name: base_revision
     type: Optional<String>
   outcomes:
+  - name: evidence-missing
+    when_subject:
+      predicate: input.implementor_run == ""
+    error: controlplane.host.EvidenceMissing
+  - name: base-missing
+    when_subject:
+      predicate:
+        all:
+        - defined(input.base_revision)
+        - input.base_revision == ""
+    error: controlplane.host.EvidenceMissing
   - name: rebased
     when: defined(base_revision)
     moves: controlplane.host.Assignment.repair
@@ -948,6 +1012,24 @@ commands:
   - name: review_revision
     type: String
   outcomes:
+  - name: reviewer-missing
+    when_subject:
+      predicate: input.reviewer_run == ""
+    error: controlplane.host.ReviewNotIndependent
+  - name: review-not-independent
+    when_subject:
+      predicate: implementor_run == input.reviewer_run
+    error: controlplane.host.ReviewNotIndependent
+  - name: evidence-not-current
+    when_subject:
+      predicate:
+        all:
+        - state == Reviewing
+        - any:
+          - candidate == ""
+          - test_revision != candidate
+          - candidate != input.review_revision
+    error: controlplane.host.EvidenceNotCurrent
   - name: applied
     moves: controlplane.host.Assignment.ready
     instance: assignment_id
@@ -993,6 +1075,10 @@ commands:
   - name: merge_receipt
     type: String
   outcomes:
+  - name: receipt-missing
+    when_subject:
+      predicate: input.merge_receipt == ""
+    error: controlplane.host.EvidenceMissing
   - name: applied
     moves: controlplane.host.Assignment.complete
     instance: assignment_id
@@ -1155,6 +1241,10 @@ commands:
   - name: merge_receipt
     type: String
   outcomes:
+  - name: receipt-missing
+    when_subject:
+      predicate: input.merge_receipt == ""
+    error: controlplane.host.EvidenceMissing
   - name: applied
     moves: controlplane.host.Assignment.reconcile
     instance: assignment_id

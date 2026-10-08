@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -615,6 +615,30 @@ pub fn encode_error_controlplane_host_assignment_state_conflict(value: &crate::h
     out.push('}');
 }
 
+/// Writes the declared error `controlplane.host.EvidenceMissing` as JSON.
+pub fn encode_error_controlplane_host_evidence_missing(_value: &crate::host::EvidenceMissing, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.EvidenceNotCurrent` as JSON.
+pub fn encode_error_controlplane_host_evidence_not_current(_value: &crate::host::EvidenceNotCurrent, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.GoalLimitInvalid` as JSON.
+pub fn encode_error_controlplane_host_goal_limit_invalid(_value: &crate::host::GoalLimitInvalid, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.GoalNotCurrent` as JSON.
+pub fn encode_error_controlplane_host_goal_not_current(_value: &crate::host::GoalNotCurrent, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
 /// Writes the declared error `controlplane.host.GoalNotFound` as JSON.
 pub fn encode_error_controlplane_host_goal_not_found(_value: &crate::host::GoalNotFound, out: &mut String) {
     out.push('{');
@@ -654,6 +678,12 @@ pub fn encode_error_controlplane_host_repository_registration_state_conflict(val
     out.push('{');
     json::member(out, "state");
     encode_controlplane_host_repository_registration_state(&value.state, out);
+    out.push('}');
+}
+
+/// Writes the declared error `controlplane.host.ReviewNotIndependent` as JSON.
+pub fn encode_error_controlplane_host_review_not_independent(_value: &crate::host::ReviewNotIndependent, out: &mut String) {
+    out.push('{');
     out.push('}');
 }
 
@@ -1311,6 +1341,20 @@ pub fn decode_command_controlplane_host_claim_assignment(value: &json::Value, at
 pub fn encode_outcome_controlplane_host_claim_assignment(value: &crate::host::ClaimAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::ClaimAssignmentOutcome::EvidenceMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "evidence-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceMissing");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_missing(error, out);
+            out.push('}');
+        }
         crate::host::ClaimAssignmentOutcome::Applied { claim_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");
@@ -1471,6 +1515,20 @@ pub fn decode_command_controlplane_host_complete_assignment(value: &json::Value,
 pub fn encode_outcome_controlplane_host_complete_assignment(value: &crate::host::CompleteAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::CompleteAssignmentOutcome::ReceiptMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "receipt-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceMissing");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_missing(error, out);
+            out.push('}');
+        }
         crate::host::CompleteAssignmentOutcome::Applied { complete_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");
@@ -1767,6 +1825,48 @@ pub fn decode_command_controlplane_host_create_goal(value: &json::Value, at: &st
 pub fn encode_outcome_controlplane_host_create_goal(value: &crate::host::CreateGoalOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::CreateGoalOutcome::WorkersInvalid { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "workers-invalid");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalLimitInvalid");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_limit_invalid(error, out);
+            out.push('}');
+        }
+        crate::host::CreateGoalOutcome::AttemptsInvalid { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "attempts-invalid");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalLimitInvalid");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_limit_invalid(error, out);
+            out.push('}');
+        }
+        crate::host::CreateGoalOutcome::MinutesInvalid { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "minutes-invalid");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalLimitInvalid");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_limit_invalid(error, out);
+            out.push('}');
+        }
         crate::host::CreateGoalOutcome::Created { goal_created } => {
             json::member(out, "outcome");
             json::push_text(out, "created");
@@ -2414,6 +2514,34 @@ pub fn decode_command_controlplane_host_queue_assignment(value: &json::Value, at
 pub fn encode_outcome_controlplane_host_queue_assignment(value: &crate::host::QueueAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::QueueAssignmentOutcome::GoalNotFound { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "goal-not-found");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalNotFound");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_not_found(error, out);
+            out.push('}');
+        }
+        crate::host::QueueAssignmentOutcome::GoalNotCurrent { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "goal-not-current");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalNotCurrent");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_not_current(error, out);
+            out.push('}');
+        }
         crate::host::QueueAssignmentOutcome::Created { assignment_created } => {
             json::member(out, "outcome");
             json::push_text(out, "created");
@@ -2473,6 +2601,48 @@ pub fn decode_command_controlplane_host_ready_assignment(value: &json::Value, at
 pub fn encode_outcome_controlplane_host_ready_assignment(value: &crate::host::ReadyAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::ReadyAssignmentOutcome::ReviewerMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "reviewer-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.ReviewNotIndependent");
+            json::member(out, "payload");
+            encode_error_controlplane_host_review_not_independent(error, out);
+            out.push('}');
+        }
+        crate::host::ReadyAssignmentOutcome::ReviewNotIndependent { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "review-not-independent");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.ReviewNotIndependent");
+            json::member(out, "payload");
+            encode_error_controlplane_host_review_not_independent(error, out);
+            out.push('}');
+        }
+        crate::host::ReadyAssignmentOutcome::EvidenceNotCurrent { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "evidence-not-current");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceNotCurrent");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_not_current(error, out);
+            out.push('}');
+        }
         crate::host::ReadyAssignmentOutcome::Applied { ready_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");
@@ -2553,6 +2723,20 @@ pub fn decode_command_controlplane_host_reconcile_assignment(value: &json::Value
 pub fn encode_outcome_controlplane_host_reconcile_assignment(value: &crate::host::ReconcileAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::ReconcileAssignmentOutcome::ReceiptMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "receipt-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceMissing");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_missing(error, out);
+            out.push('}');
+        }
         crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");
@@ -2978,6 +3162,34 @@ pub fn decode_command_controlplane_host_repair_assignment(value: &json::Value, a
 pub fn encode_outcome_controlplane_host_repair_assignment(value: &crate::host::RepairAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::RepairAssignmentOutcome::EvidenceMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "evidence-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceMissing");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_missing(error, out);
+            out.push('}');
+        }
+        crate::host::RepairAssignmentOutcome::BaseMissing { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "base-missing");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceMissing");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_missing(error, out);
+            out.push('}');
+        }
         crate::host::RepairAssignmentOutcome::Rebased { repair_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "rebased");
@@ -3078,6 +3290,20 @@ pub fn decode_command_controlplane_host_review_assignment(value: &json::Value, a
 pub fn encode_outcome_controlplane_host_review_assignment(value: &crate::host::ReviewAssignmentOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::ReviewAssignmentOutcome::TestsNotCurrent { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "tests-not-current");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.EvidenceNotCurrent");
+            json::member(out, "payload");
+            encode_error_controlplane_host_evidence_not_current(error, out);
+            out.push('}');
+        }
         crate::host::ReviewAssignmentOutcome::Applied { review_assignment_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");
@@ -3130,6 +3356,10 @@ pub fn encode_command_controlplane_host_satisfy_goal(value: &crate::host::Satisf
     json::push_text(out, &value.goal_id.0);
     json::member(out, "satisfaction_receipt");
     json::push_text(out, &value.satisfaction_receipt);
+    if let Some(held0) = &value.receipt_revision {
+        json::member(out, "receipt_revision");
+        json::push_integer(out, *held0);
+    }
     out.push('}');
 }
 
@@ -3150,6 +3380,13 @@ pub fn decode_command_controlplane_host_satisfy_goal(value: &json::Value, at: &s
             let member1 = json::member_at(value, at, "satisfaction_receipt")?;
             json::text_at(member1, &at1, "a string")?.to_owned()
         },
+        receipt_revision: match value.member("receipt_revision") {
+            None | Some(json::Value::Null) => None,
+            Some(member2) => {
+                let at2 = json::nested(at, "receipt_revision");
+                Some(json::integer_at(member2, &at2, "an integer")?)
+            }
+        },
     })
 }
 
@@ -3158,6 +3395,20 @@ pub fn decode_command_controlplane_host_satisfy_goal(value: &json::Value, at: &s
 pub fn encode_outcome_controlplane_host_satisfy_goal(value: &crate::host::SatisfyGoalOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::host::SatisfyGoalOutcome::StaleRevision { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "stale-revision");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "controlplane.host.GoalStateConflict");
+            json::member(out, "payload");
+            encode_error_controlplane_host_goal_state_conflict(error, out);
+            out.push('}');
+        }
         crate::host::SatisfyGoalOutcome::Applied { satisfy_goal_applied } => {
             json::member(out, "outcome");
             json::push_text(out, "applied");

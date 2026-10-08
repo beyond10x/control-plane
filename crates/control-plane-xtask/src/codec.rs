@@ -85,7 +85,7 @@ mod tests {
                 "workspace_id": workspace["published"][0]["payload"]["workspace_id"],
                 "objective":"objective", "acceptance":"acceptance", "planner_model":"p",
                 "implementor_model":"i", "reviewer_model":"r", "merge_authority":false,
-                "max_workers":i64::MAX, "max_attempts":i64::MIN, "max_minutes":9_007_199_254_740_993_i64
+                "max_workers":i64::MAX, "max_attempts":i64::MAX - 1, "max_minutes":9_007_199_254_740_993_i64
             });
             let answer = store.execute("CreateGoal", to_json(&from_json(&input)?)?, Actor::Operator).await?;
             let event = fields(&answer["published"][0]["payload"])?;

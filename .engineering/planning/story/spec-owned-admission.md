@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spec-owned-admission
 kind: story
-status: draft
+status: implemented
 title: Admission rules are declared in ESS and exercised by conformance
 relations:
 - decomposes: epic:unattended-operation
@@ -27,7 +27,11 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 5
+revision: 12
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "active", to: "implemented", at: "2026-10-08T12:52:33Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":3,"verification":1}}}
 ---
 ## Outcome
 
@@ -42,15 +46,28 @@ The admission rules the product relies on are declared in the specification wher
 
 ## Acceptance
 
-- `admission_rules_are_declared`: each missing row of the design review is either a declared guard with synthesized scenarios, or listed in a host-facts section of the specification's README with the reason (for example canonical path discovery).
-- `second_running_goal_is_refused_in_conformance`: the synthesized scenario that sends StartGoal for a workspace that already has a Running goal passes against the conformance target and observes the declared refusal; run against today's `ContractStore` target the same scenario fails.
+Re-scoped on 2026-10-08 (decision-blocker:admission-selectors-not-synthesized, option A).
+
+- `admission_rules_are_declared`: each missing row of the design review (its table marks 15: rows 1–11 and 14–17) is either a declared guard with synthesized scenarios, or listed in a host-facts section of the specification's README with the reason; rows 1–4 (second running goal per workspace, one active change per Git common directory, worker limit, repository disabled) are host facts quoting the ESS 0.56.0 refusal each met.
+- `queue_guards_are_refused_in_conformance`: the synthesized scenarios for QueueAssignment's declared refusals (goal missing, goal not Running or at a stale revision) pass through the console/runtime admission path; the full synthesized suite runs on the generated store below admission and passes in full. Repository missing is a host fact (ess/README.md), declared later by story:admission-conformance-target.
 - `guard_mutants_are_killed`: `ess verify conform mutate --emit` / `--collect`, run through the xtask runner, reports guard-class mutants and no survivor.
 - `supervisor_grants_are_least_privilege`: the Supervisor's `may` list equals the set of commands the runtime executes as Supervisor at the time of the change.
 - `recorded_history_replays` stays green, or each change id is acknowledged.
 
+
+Narrowed again on 2026-10-08 after adversary pass 1 (F1): the full suite stays below admission and repository missing is a host fact.
+
 ## Open question
 
-UNMAPPED: "one active change per common Git directory" compares RepositoryRegistration.common_dir across the Assignment → RepositoryRegistration reference. Whether ESS can express it, or whether Assignment should carry the common directory at claim, is a modelling decision for the ESS change.
+Resolved by a coordinator trial on 2026-10-08 against ESS 0.56.0 (`ess/22`), in a scratch copy of `ess/`:
+
+- A selector over Assignment rows is accepted: `when_related: {entity: controlplane.host.Assignment, where: {all: [assignment_id != subject.assignment_id, {state: {in: [Implementing, Reviewing, ReadyToMerge, Merging, Blocked]}}, common_dir == subject.common_dir]}, exists: true}` on ClaimAssignment.
+- It does not validate while `common_dir` lives only on RepositoryRegistration: `[unobservable_fact] ... common_dir reads common_dir, which is not a declared observable root` and `subject.common_dir: the subject has no field common_dir`.
+- It validates (`controlplane v1 — 3 file(s), valid`, `--strict-requires`) once Assignment declares `common_dir: String` and QueueAssignment's `created` outcome sets it with `common_dir: {related: {via: input.repository_id, field: common_dir}}`.
+
+Decision: Assignment carries the common directory, stamped when it is queued; the selector above is the declared refusal. Not yet checked: recorded Assignment rows that predate the field (`recorded_history_replays`) and whether conformance synthesis covers the selector branch.
+
+Superseded on 2026-10-08: the selector validates but ESS 0.56.0 conformance synthesis refuses it ("reads a subject field the steps leave undetermined"; 180 scenarios fell to 141). The rule stays a host fact; see decision-blocker:admission-selectors-not-synthesized.
 
 ## Scope
 

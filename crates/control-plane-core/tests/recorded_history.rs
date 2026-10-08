@@ -28,6 +28,31 @@ const VIEWS: &str = concat!(
     "/tests/fixtures/recorded-history.views.json"
 );
 const DISAGREES: &str = "generated behavior disagrees with durable history";
+const ACKNOWLEDGEMENTS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../ess/spec-acknowledgements.json"
+);
+
+/// The `(command, outcome)` of each `outcome-added` change acknowledged against the gate's
+/// baseline in `ess/spec-acknowledgements.json`.
+fn acknowledged_added_outcomes() -> Result<BTreeSet<(String, String)>> {
+    let file: Value = serde_json::from_slice(&fs::read(ACKNOWLEDGEMENTS)?)?;
+    Ok(file["acknowledged"]
+        .as_array()
+        .context("acknowledged is an array")?
+        .iter()
+        .filter(|entry| entry["change"]["changed"]["kind"] == "outcome-added")
+        .filter_map(|entry| {
+            Some((
+                entry["change"]["subject"]
+                    .as_str()?
+                    .trim_start_matches("controlplane.host.")
+                    .to_owned(),
+                entry["change"]["changed"]["outcome"].as_str()?.to_owned(),
+            ))
+        })
+        .collect())
+}
 
 fn declared(method: &str, prefix: &str) -> BTreeSet<&'static str> {
     ROUTES
@@ -156,9 +181,13 @@ async fn recorded_history_replays() -> Result<()> {
                 .map(move |outcome| (command, status.clone(), outcome))
         })
         .collect();
+    // A refusal the committed fixture predates is acknowledged as `outcome-added` and recorded by
+    // `declared_admission_refusals_are_recorded_and_replay` (src/tests.rs) instead.
+    let added = acknowledged_added_outcomes()?;
     let unrecorded: Vec<_> = refusals
         .iter()
         .filter(|(command, _, outcome)| !answered.contains(&(*command, outcome.as_str())))
+        .filter(|(command, _, outcome)| !added.contains(&(command.to_string(), outcome.clone())))
         .map(|(command, status, outcome)| format!("{command} {status} {outcome}"))
         .collect();
     ensure!(
@@ -186,6 +215,54 @@ async fn recorded_history_replays() -> Result<()> {
         "recorded views must name every declared view"
     );
     for view in views {
+        assert_eq!(store.query(view)?, expected[view], "{view} after replay");
+    }
+    Ok(())
+}
+
+/// story:typed-satisfaction-receipt. SatisfyGoal's `receipt_revision` input is optional, so the
+/// four SatisfyGoal decisions recorded before it existed (event versions 12, 90, 91 and 102),
+/// which carry no `receipt_revision`, replay through current generated behaviour with their
+/// recorded answers and no host migration, and every view equals its recorded view.
+#[tokio::test]
+async fn recorded_satisfactions_still_replay() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let copy = copy_history(dir.path())?;
+    let recorded = decisions(&copy).await?;
+    let satisfactions: Vec<(usize, &Value)> = recorded
+        .iter()
+        .enumerate()
+        .filter(|(_, decision)| decision["command"] == "SatisfyGoal")
+        .map(|(index, decision)| (index + 1, decision))
+        .collect();
+    assert_eq!(
+        satisfactions
+            .iter()
+            .map(|(version, decision)| (*version, decision["outcome"]["outcome"].as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (12, Some("not-found")),
+            (90, Some("applied")),
+            (91, Some("wrong-state")),
+            (102, Some("applied")),
+        ]
+    );
+    for (version, decision) in &satisfactions {
+        let body = decision["body"].as_object().context("decision body")?;
+        assert!(
+            body.keys().eq(["goal_id", "satisfaction_receipt"]),
+            "decision {version} names {:?}",
+            body.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            body["satisfaction_receipt"].is_string(),
+            "decision {version}"
+        );
+    }
+
+    let store = Store::open(&copy).await?;
+    let expected: Value = serde_json::from_slice(&fs::read(VIEWS)?)?;
+    for view in declared("GET", "/host/views/") {
         assert_eq!(store.query(view)?, expected[view], "{view} after replay");
     }
     Ok(())

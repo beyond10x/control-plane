@@ -1,6 +1,6 @@
 # generated from controlplane v1
-# model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-# contract digest slice-sha256/2:b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+# model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+# contract digest slice-sha256/2:e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -18,8 +18,8 @@ info:
   x-ess-provenance:
     system: controlplane
     specification_version: v1
-    source_digest: 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-    contract_digest: slice-sha256/2:b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+    source_digest: 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+    contract_digest: slice-sha256/2:e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
   x-ess-reached-by: network
 tags:
 - name: host
@@ -93,7 +93,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.ArchiveWorkspace` declares.
         required: true
@@ -310,7 +309,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.CancelGoal` declares.
         required: true
@@ -425,11 +423,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ClaimAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `evidence-missing` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.ClaimAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    evidence-missing: '#/components/schemas/controlplane.host.ClaimAssignment.evidence-missing.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.ClaimAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.ClaimAssignment.evidence-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.ClaimAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -569,11 +574,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.CompleteAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `receipt-missing` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.CompleteAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    receipt-missing: '#/components/schemas/controlplane.host.CompleteAssignment.receipt-missing.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.CompleteAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.CompleteAssignment.receipt-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.CompleteAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -737,7 +749,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.CreateGoal` declares.
         required: true
@@ -773,6 +784,21 @@ paths:
                 - refused
                 - actor
                 type: object
+        '422':
+          description: 'Outcomes `workers-invalid`, `attempts-invalid` and `minutes-invalid`: the request was understood and refused on domain grounds. The body names the declared error and carries whatever that error declares.'
+          content:
+            application/json:
+              schema:
+                discriminator:
+                  mapping:
+                    attempts-invalid: '#/components/schemas/controlplane.host.CreateGoal.attempts-invalid.Response'
+                    minutes-invalid: '#/components/schemas/controlplane.host.CreateGoal.minutes-invalid.Response'
+                    workers-invalid: '#/components/schemas/controlplane.host.CreateGoal.workers-invalid.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.CreateGoal.workers-invalid.Response'
+                - $ref: '#/components/schemas/controlplane.host.CreateGoal.attempts-invalid.Response'
+                - $ref: '#/components/schemas/controlplane.host.CreateGoal.minutes-invalid.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -879,7 +905,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.DisableRepositoryRegistration` declares.
         required: true
@@ -952,7 +977,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.EnableRepositoryRegistration` declares.
         required: true
@@ -1169,7 +1193,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.PauseGoal` declares.
         required: true
@@ -1337,6 +1360,19 @@ paths:
                 - refused
                 - actor
                 type: object
+        '409':
+          description: 'Outcomes `goal-not-found` and `goal-not-current`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          content:
+            application/json:
+              schema:
+                discriminator:
+                  mapping:
+                    goal-not-current: '#/components/schemas/controlplane.host.QueueAssignment.goal-not-current.Response'
+                    goal-not-found: '#/components/schemas/controlplane.host.QueueAssignment.goal-not-found.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.QueueAssignment.goal-not-found.Response'
+                - $ref: '#/components/schemas/controlplane.host.QueueAssignment.goal-not-current.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1404,11 +1440,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ReadyAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `reviewer-missing`, `review-not-independent`, `evidence-not-current` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.ReadyAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    evidence-not-current: '#/components/schemas/controlplane.host.ReadyAssignment.evidence-not-current.Response'
+                    review-not-independent: '#/components/schemas/controlplane.host.ReadyAssignment.review-not-independent.Response'
+                    reviewer-missing: '#/components/schemas/controlplane.host.ReadyAssignment.reviewer-missing.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.ReadyAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.ReadyAssignment.reviewer-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.ReadyAssignment.review-not-independent.Response'
+                - $ref: '#/components/schemas/controlplane.host.ReadyAssignment.evidence-not-current.Response'
+                - $ref: '#/components/schemas/controlplane.host.ReadyAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1476,11 +1523,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `receipt-missing` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    receipt-missing: '#/components/schemas/controlplane.host.ReconcileAssignment.receipt-missing.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.ReconcileAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.receipt-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.ReconcileAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1572,7 +1626,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.RegisterRepository` declares.
         required: true
@@ -1633,7 +1686,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.RegisterWorkspace` declares.
         required: true
@@ -1815,11 +1867,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.RepairAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `evidence-missing`, `base-missing` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.RepairAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    base-missing: '#/components/schemas/controlplane.host.RepairAssignment.base-missing.Response'
+                    evidence-missing: '#/components/schemas/controlplane.host.RepairAssignment.evidence-missing.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.RepairAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.RepairAssignment.evidence-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.RepairAssignment.base-missing.Response'
+                - $ref: '#/components/schemas/controlplane.host.RepairAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1887,11 +1948,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.ReviewAssignment.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `tests-not-current` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.ReviewAssignment.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    tests-not-current: '#/components/schemas/controlplane.host.ReviewAssignment.tests-not-current.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.ReviewAssignment.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.ReviewAssignment.tests-not-current.Response'
+                - $ref: '#/components/schemas/controlplane.host.ReviewAssignment.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1959,11 +2027,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/controlplane.host.SatisfyGoal.not-found.Response'
         '409':
-          description: 'Outcome `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `stale-revision` and `wrong-state`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
+                discriminator:
+                  mapping:
+                    stale-revision: '#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response'
+                    wrong-state: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
+                  propertyName: outcome
+                oneOf:
+                - $ref: '#/components/schemas/controlplane.host.SatisfyGoal.stale-revision.Response'
+                - $ref: '#/components/schemas/controlplane.host.SatisfyGoal.wrong-state.Response'
         '501':
           description: 'No declared outcome: the realization is unfinished. Either a port this command runs reported an unmet obligation, and nothing was written: `committed` is `false`. Or the command''s effect was committed and delivering what this command published to a binding failed: `committed` is `true`, the effect and its events stand, and each binding whose delivery failed keeps its event and is attempted again on a later delivery, while no other binding receives it twice. Do not retry: after a failed delivery a retry performs the command a second time.'
           content:
@@ -1989,7 +2064,6 @@ paths:
       - host
       x-ess-may-invoke:
       - controlplane.host.Operator
-      - controlplane.host.Supervisor
       requestBody:
         description: The input `controlplane.host.StartGoal` declares.
         required: true
@@ -2876,6 +2950,26 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.ClaimAssignment.evidence-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `(input.implementor_run == "" or input.worktree_id == "" or input.base_revision == "")`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceMissing
+          description: A required run, worktree, revision or receipt is empty.
+          type: string
+        outcome:
+          const: evidence-missing
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.ClaimAssignment.not-found.Response:
       additionalProperties: false
       description: Taken when the request names an identity no record carries.
@@ -3098,6 +3192,26 @@ components:
           type: string
         outcome:
           const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.CompleteAssignment.receipt-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `input.merge_receipt == ""`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceMissing
+          description: A required run, worktree, revision or receipt is empty.
+          type: string
+        outcome:
+          const: receipt-missing
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -3382,6 +3496,26 @@ components:
       - reviewer_model
       - merge_authority
       additionalProperties: false
+    controlplane.host.CreateGoal.attempts-invalid.Response:
+      additionalProperties: false
+      description: Taken when `max_attempts <= 0` holds of the input.
+      properties:
+        error:
+          const: controlplane.host.GoalLimitInvalid
+          description: Worker, attempt and minute limits are positive counts.
+          type: string
+        outcome:
+          const: attempts-invalid
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.CreateGoal.created.Response:
       additionalProperties: false
       description: Taken when no other outcome's condition matched. A `controlplane.host.Goal` now exists, in `Paused`. Its identity is published as `goal_id` on `controlplane.host.GoalCreated`. Emits `GoalCreated`, published to consumers and listed under `published`.
@@ -3410,6 +3544,46 @@ components:
       required:
       - outcome
       - published
+      type: object
+    controlplane.host.CreateGoal.minutes-invalid.Response:
+      additionalProperties: false
+      description: Taken when `max_minutes <= 0` holds of the input.
+      properties:
+        error:
+          const: controlplane.host.GoalLimitInvalid
+          description: Worker, attempt and minute limits are positive counts.
+          type: string
+        outcome:
+          const: minutes-invalid
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.CreateGoal.workers-invalid.Response:
+      additionalProperties: false
+      description: Taken when `max_workers <= 0` holds of the input.
+      properties:
+        error:
+          const: controlplane.host.GoalLimitInvalid
+          description: Worker, attempt and minute limits are positive counts.
+          type: string
+        outcome:
+          const: workers-invalid
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
       type: object
     controlplane.host.DeleteGoal.Input:
       title: DeleteGoal input
@@ -4493,6 +4667,46 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.QueueAssignment.goal-not-current.Response:
+      additionalProperties: false
+      description: Taken when the `controlplane.host.Goal` that `input.goal_id` names exists and its stored fields satisfy `(state != Running or revision != input.goal_revision)`.
+      properties:
+        error:
+          const: controlplane.host.GoalNotCurrent
+          description: The goal is not running, or changed since the assignment was planned.
+          type: string
+        outcome:
+          const: goal-not-current
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.QueueAssignment.goal-not-found.Response:
+      additionalProperties: false
+      description: Taken when no `controlplane.host.Goal` carries the identity `input.goal_id` names.
+      properties:
+        error:
+          const: controlplane.host.GoalNotFound
+          description: The requested identity is not held.
+          type: string
+        outcome:
+          const: goal-not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.ReadyAssignment.Input:
       title: ReadyAssignment input
       x-ess-name: controlplane.host.ReadyAssignment
@@ -4541,6 +4755,26 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.ReadyAssignment.evidence-not-current.Response:
+      additionalProperties: false
+      description: 'Taken when the existing subject''s stored fields satisfy `(state == Reviewing and (candidate == "" or test_revision != {fact: candidate} or candidate != input.review_revision))`.'
+      properties:
+        error:
+          const: controlplane.host.EvidenceNotCurrent
+          description: Tests or review do not cover the assignment's current candidate.
+          type: string
+        outcome:
+          const: evidence-not-current
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.ReadyAssignment.not-found.Response:
       additionalProperties: false
       description: Taken when the request names an identity no record carries.
@@ -4551,6 +4785,46 @@ components:
           type: string
         outcome:
           const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ReadyAssignment.review-not-independent.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `implementor_run == input.reviewer_run`.
+      properties:
+        error:
+          const: controlplane.host.ReviewNotIndependent
+          description: Review must use an execution context other than the implementor's.
+          type: string
+        outcome:
+          const: review-not-independent
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ReadyAssignment.reviewer-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `input.reviewer_run == ""`.
+      properties:
+        error:
+          const: controlplane.host.ReviewNotIndependent
+          description: Review must use an execution context other than the implementor's.
+          type: string
+        outcome:
+          const: reviewer-missing
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -4658,6 +4932,26 @@ components:
           type: string
         outcome:
           const: not-found
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.ReconcileAssignment.receipt-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `input.merge_receipt == ""`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceMissing
+          description: A required run, worktree, revision or receipt is empty.
+          type: string
+        outcome:
+          const: receipt-missing
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -5029,6 +5323,46 @@ components:
       - outcome
       - published
       type: object
+    controlplane.host.RepairAssignment.base-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `(defined(input.base_revision) and input.base_revision == "")`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceMissing
+          description: A required run, worktree, revision or receipt is empty.
+          type: string
+        outcome:
+          const: base-missing
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    controlplane.host.RepairAssignment.evidence-missing.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `input.implementor_run == ""`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceMissing
+          description: A required run, worktree, revision or receipt is empty.
+          type: string
+        outcome:
+          const: evidence-missing
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.RepairAssignment.not-found.Response:
       additionalProperties: false
       description: Taken when the request names an identity no record carries.
@@ -5295,6 +5629,26 @@ components:
       - published
       - error
       type: object
+    controlplane.host.ReviewAssignment.tests-not-current.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `(input.candidate == "" or input.candidate != input.test_revision)`.
+      properties:
+        error:
+          const: controlplane.host.EvidenceNotCurrent
+          description: Tests or review do not cover the assignment's current candidate.
+          type: string
+        outcome:
+          const: tests-not-current
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     controlplane.host.ReviewAssignment.wrong-state.Response:
       additionalProperties: false
       description: Taken when the subject is in a state none of this command's declared moves start from. Which states those are is the lifecycle's answer, not this command's.
@@ -5349,6 +5703,8 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         satisfaction_receipt:
           type: string
+        receipt_revision:
+          type: integer
       required:
       - goal_id
       - satisfaction_receipt
@@ -5401,6 +5757,29 @@ components:
       - outcome
       - published
       - error
+      type: object
+    controlplane.host.SatisfyGoal.stale-revision.Response:
+      additionalProperties: false
+      description: Taken when the existing subject's stored fields satisfy `(state == Running and revision != input.receipt_revision)` and `defined(receipt_revision)` holds of the input.
+      properties:
+        error:
+          const: controlplane.host.GoalStateConflict
+          description: The command cannot act in the current state.
+          type: string
+        outcome:
+          const: stale-revision
+          description: Which declared outcome the command took.
+        payload:
+          $ref: '#/components/schemas/controlplane.host.GoalStateConflict.Error'
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      - payload
       type: object
     controlplane.host.SatisfyGoal.wrong-state.Response:
       additionalProperties: false

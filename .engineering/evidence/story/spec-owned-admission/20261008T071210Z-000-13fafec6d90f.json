@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T07:12:10Z",
+  "actor": "human:timo",
+  "artifact": "story:spec-owned-admission",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "grep QueueAssignment/outcome ids in generated/conformance.json at 61eed7f and at 483d12c",
+    "reference": "cp-wave7-spec-owned-admission/.scratch/verify/base.txt vs unit.txt: created only vs created, goal-not-current, goal-not-found"
+  }
+}

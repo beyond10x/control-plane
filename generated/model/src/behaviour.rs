@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -305,6 +305,15 @@ where
 {
     fn claim_assignment(&mut self, input: crate::host::ClaimAssignment) -> Result<crate::host::ClaimAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::ClaimAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `evidence-missing`: selected by the addressed row.
+        if decided(any(&[equal(Some(&input.implementor_run).map(|value| value.clone()), Some("".to_owned())), equal(Some(&input.worktree_id).map(|value| value.clone()), Some("".to_owned())), equal(Some(&input.base_revision).map(|value| value.clone()), Some("".to_owned()))]), "controlplane.host.ClaimAssignment")? {
+            return Ok(crate::host::ClaimAssignmentOutcome::EvidenceMissing { error: crate::host::EvidenceMissing });
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::ClaimAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
@@ -360,6 +369,15 @@ where
 {
     fn complete_assignment(&mut self, input: crate::host::CompleteAssignment) -> Result<crate::host::CompleteAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::CompleteAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `receipt-missing`: selected by the addressed row.
+        if decided(equal(Some(&input.merge_receipt).map(|value| value.clone()), Some("".to_owned())), "controlplane.host.CompleteAssignment")? {
+            return Ok(crate::host::CompleteAssignmentOutcome::ReceiptMissing { error: crate::host::EvidenceMissing });
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::CompleteAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
@@ -433,6 +451,18 @@ where
 {
     fn create_goal(&mut self, input: crate::host::CreateGoal) -> Result<crate::host::CreateGoalOutcome, UnmetObligation> {
         let _ = &input;
+        // `workers-invalid`: an input-guarded refusal, before the addressed subject is loaded.
+        if decided(compare_numbers(Some(&input.max_workers).map(|value| value.to_string()), Some("0".to_owned()), core::cmp::Ordering::is_le), "controlplane.host.CreateGoal")? {
+            return Ok(crate::host::CreateGoalOutcome::WorkersInvalid { error: crate::host::GoalLimitInvalid });
+        }
+        // `attempts-invalid`: an input-guarded refusal, before the addressed subject is loaded.
+        if decided(compare_numbers(Some(&input.max_attempts).map(|value| value.to_string()), Some("0".to_owned()), core::cmp::Ordering::is_le), "controlplane.host.CreateGoal")? {
+            return Ok(crate::host::CreateGoalOutcome::AttemptsInvalid { error: crate::host::GoalLimitInvalid });
+        }
+        // `minutes-invalid`: an input-guarded refusal, before the addressed subject is loaded.
+        if decided(compare_numbers(Some(&input.max_minutes).map(|value| value.to_string()), Some("0".to_owned()), core::cmp::Ordering::is_le), "controlplane.host.CreateGoal")? {
+            return Ok(crate::host::CreateGoalOutcome::MinutesInvalid { error: crate::host::GoalLimitInvalid });
+        }
         // `created`: the default.
         let identity: crate::primitives::Uuid = self.ports.try_generate_uuid()?;
         let data = crate::host::GoalData {
@@ -650,10 +680,25 @@ where
 /// `controlplane.host.QueueAssignment`, generated: every outcome is one the specification fully determines.
 impl<P> crate::host::obligations::QueueAssignmentBehavior for Generated<P>
 where
-    P: TryContext + AssignmentStorage,
+    P: TryContext + AssignmentStorage + GoalStorage,
 {
     fn queue_assignment(&mut self, input: crate::host::QueueAssignment) -> Result<crate::host::QueueAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // `when_related:` reads the `controlplane.host.Goal` row `input.goal_id` names, through its storage port; an absent
+        // reference reads no row and selects no related branch.
+        let reference = Some(&input.goal_id);
+        let related = reference.and_then(|identity| GoalStorage::get(&self.ports, identity));
+        // `goal-not-found`: the reference names an identity no row carries.
+        if reference.is_some() && related.is_none() {
+            return Ok(crate::host::QueueAssignmentOutcome::GoalNotFound { error: crate::host::GoalNotFound });
+        }
+        let _ = &related;
+        // `goal-not-current`: selected by the present related row, in declaration order.
+        if let Some(related) = &related {
+        if decided(any(&[equal(Some(&related.state).map(|value| match value { crate::host::GoalState::Cancelled => "Cancelled", crate::host::GoalState::Paused => "Paused", crate::host::GoalState::Running => "Running", crate::host::GoalState::Satisfied => "Satisfied" }.to_owned()), Some("Running".to_owned())).map(|value| !value), compare_numbers(Some(&related.data.revision).map(|value| value.to_string()), Some(&input.goal_revision).map(|value| value.to_string()), core::cmp::Ordering::is_ne)]), "controlplane.host.QueueAssignment")? {
+            return Ok(crate::host::QueueAssignmentOutcome::GoalNotCurrent { error: crate::host::GoalNotCurrent });
+        }
+        }
         // `created`: the default.
         let identity: crate::primitives::Uuid = self.ports.try_generate_uuid()?;
         let data = crate::host::AssignmentData {
@@ -687,6 +732,23 @@ where
 {
     fn ready_assignment(&mut self, input: crate::host::ReadyAssignment) -> Result<crate::host::ReadyAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::ReadyAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `reviewer-missing`: selected by the addressed row.
+        if decided(equal(Some(&input.reviewer_run).map(|value| value.clone()), Some("".to_owned())), "controlplane.host.ReadyAssignment")? {
+            return Ok(crate::host::ReadyAssignmentOutcome::ReviewerMissing { error: crate::host::ReviewNotIndependent });
+        }
+        // `review-not-independent`: selected by the addressed row.
+        if decided(equal(Some(&held.data.implementor_run).map(|value| value.clone()), Some(&input.reviewer_run).map(|value| value.clone())), "controlplane.host.ReadyAssignment")? {
+            return Ok(crate::host::ReadyAssignmentOutcome::ReviewNotIndependent { error: crate::host::ReviewNotIndependent });
+        }
+        // `evidence-not-current`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.state).map(|value| match value { crate::host::AssignmentState::Blocked => "Blocked", crate::host::AssignmentState::Cancelled => "Cancelled", crate::host::AssignmentState::Implementing => "Implementing", crate::host::AssignmentState::Merged => "Merged", crate::host::AssignmentState::Merging => "Merging", crate::host::AssignmentState::Queued => "Queued", crate::host::AssignmentState::ReadyToMerge => "ReadyToMerge", crate::host::AssignmentState::Reviewing => "Reviewing" }.to_owned()), Some("Reviewing".to_owned())), any(&[equal(Some(&held.data.candidate).map(|value| value.clone()), Some("".to_owned())), equal(Some(&held.data.test_revision).map(|value| value.clone()), Some(&held.data.candidate).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.candidate).map(|value| value.clone()), Some(&input.review_revision).map(|value| value.clone())).map(|value| !value)])]), "controlplane.host.ReadyAssignment")? {
+            return Ok(crate::host::ReadyAssignmentOutcome::EvidenceNotCurrent { error: crate::host::EvidenceNotCurrent });
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::ReadyAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
@@ -713,6 +775,15 @@ where
 {
     fn reconcile_assignment(&mut self, input: crate::host::ReconcileAssignment) -> Result<crate::host::ReconcileAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::ReconcileAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `receipt-missing`: selected by the addressed row.
+        if decided(equal(Some(&input.merge_receipt).map(|value| value.clone()), Some("".to_owned())), "controlplane.host.ReconcileAssignment")? {
+            return Ok(crate::host::ReconcileAssignmentOutcome::ReceiptMissing { error: crate::host::EvidenceMissing });
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::ReconcileAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
@@ -835,6 +906,19 @@ where
 {
     fn repair_assignment(&mut self, input: crate::host::RepairAssignment) -> Result<crate::host::RepairAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::RepairAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `evidence-missing`: selected by the addressed row.
+        if decided(equal(Some(&input.implementor_run).map(|value| value.clone()), Some("".to_owned())), "controlplane.host.RepairAssignment")? {
+            return Ok(crate::host::RepairAssignmentOutcome::EvidenceMissing { error: crate::host::EvidenceMissing });
+        }
+        // `base-missing`: selected by the addressed row.
+        if decided(all(&[Some(Some(&input.base_revision).and_then(|value| value.as_ref()).is_some()), equal(Some(&input.base_revision).and_then(|value| value.as_ref()).map(|value| value.clone()), Some("".to_owned()))]), "controlplane.host.RepairAssignment")? {
+            return Ok(crate::host::RepairAssignmentOutcome::BaseMissing { error: crate::host::EvidenceMissing });
+        }
         // `rebased`: an accepting branch, in declaration order.
         if decided(Some(Some(&input.base_revision).and_then(|value| value.as_ref()).is_some()), "controlplane.host.RepairAssignment")? {
             let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
@@ -892,6 +976,15 @@ where
 {
     fn review_assignment(&mut self, input: crate::host::ReviewAssignment) -> Result<crate::host::ReviewAssignmentOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
+            return Ok(crate::host::ReviewAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
+        };
+        let _ = &held;
+        // `tests-not-current`: selected by the addressed row.
+        if decided(any(&[equal(Some(&input.candidate).map(|value| value.clone()), Some("".to_owned())), equal(Some(&input.candidate).map(|value| value.clone()), Some(&input.test_revision).map(|value| value.clone())).map(|value| !value)]), "controlplane.host.ReviewAssignment")? {
+            return Ok(crate::host::ReviewAssignmentOutcome::TestsNotCurrent { error: crate::host::EvidenceNotCurrent });
+        }
         // `applied`: the default.
         let Some(held) = AssignmentStorage::get(&self.ports, &input.assignment_id) else {
             return Ok(crate::host::ReviewAssignmentOutcome::NotFound { error: crate::host::AssignmentNotFound });
@@ -918,6 +1011,15 @@ where
 {
     fn satisfy_goal(&mut self, input: crate::host::SatisfyGoal) -> Result<crate::host::SatisfyGoalOutcome, UnmetObligation> {
         let _ = &input;
+        // The addressed row, read before the branches that select by it.
+        let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
+            return Ok(crate::host::SatisfyGoalOutcome::NotFound { error: crate::host::GoalNotFound });
+        };
+        let _ = &held;
+        // `stale-revision`: selected by the addressed row.
+        if decided(all(&[all(&[equal(Some(&held.state).map(|value| match value { crate::host::GoalState::Cancelled => "Cancelled", crate::host::GoalState::Paused => "Paused", crate::host::GoalState::Running => "Running", crate::host::GoalState::Satisfied => "Satisfied" }.to_owned()), Some("Running".to_owned())), compare_numbers(Some(&held.data.revision).map(|value| value.to_string()), Some(&input.receipt_revision).and_then(|value| value.as_ref()).map(|value| value.to_string()), core::cmp::Ordering::is_ne)]), Some(Some(&input.receipt_revision).and_then(|value| value.as_ref()).is_some())]), "controlplane.host.SatisfyGoal")? {
+            return Ok(crate::host::SatisfyGoalOutcome::StaleRevision { error: crate::host::GoalStateConflict { state: held.state } });
+        }
         // `applied`: the default.
         let Some(held) = GoalStorage::get(&self.ports, &input.goal_id) else {
             return Ok(crate::host::SatisfyGoalOutcome::NotFound { error: crate::host::GoalNotFound });
@@ -1174,4 +1276,73 @@ fn undeclared(source: &'static str) -> UnmetObligation {
 /// A guard's truth, where it has one: Unknown selects no branch, so the model declares no outcome.
 fn decided(truth: Option<bool>, command: &'static str) -> Result<bool, UnmetObligation> {
     truth.ok_or_else(|| undeclared(command))
+}
+
+/// Three-valued conjunction: false wins, then Unknown.
+fn all(truths: &[Option<bool>]) -> Option<bool> {
+    if truths.contains(&Some(false)) {
+        Some(false)
+    } else if truths.contains(&None) {
+        None
+    } else {
+        Some(true)
+    }
+}
+
+/// Three-valued disjunction: true wins, then Unknown.
+fn any(truths: &[Option<bool>]) -> Option<bool> {
+    if truths.contains(&Some(true)) {
+        Some(true)
+    } else if truths.contains(&None) {
+        None
+    } else {
+        Some(false)
+    }
+}
+
+/// Equality of two read values; an unread one is Unknown.
+fn equal<T: PartialEq>(left: Option<T>, right: Option<T>) -> Option<bool> {
+    Some(left? == right?)
+}
+
+/// A decimal rendering as its sign, its whole digits and its fraction digits, without the zeros
+/// that do not change its value; `None` where it is not a plain decimal.
+fn number_parts(text: &str) -> Option<(bool, String, String)> {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
+    };
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    if whole.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    if !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let whole = whole.trim_start_matches('0').to_owned();
+    let fraction = fraction.trim_end_matches('0').to_owned();
+    let zero = whole.is_empty() && fraction.is_empty();
+    Some((negative && !zero, whole, fraction))
+}
+
+/// Compares two decimal renderings exactly; an unread or unparsable one is Unknown.
+fn compare_numbers(
+    left: Option<String>,
+    right: Option<String>,
+    accepts: fn(core::cmp::Ordering) -> bool,
+) -> Option<bool> {
+    let (left, right) = (number_parts(&left?)?, number_parts(&right?)?);
+    let magnitude = left
+        .1
+        .len()
+        .cmp(&right.1.len())
+        .then_with(|| left.1.cmp(&right.1))
+        .then_with(|| left.2.cmp(&right.2));
+    let ordering = match (left.0, right.0) {
+        (false, false) => magnitude,
+        (true, true) => magnitude.reverse(),
+        (true, false) => core::cmp::Ordering::Less,
+        (false, true) => core::cmp::Ordering::Greater,
+    };
+    Some(accepts(ordering))
 }

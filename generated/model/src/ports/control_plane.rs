@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest 067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad
+// contract digest e1710083be9dac2cf442d1dc38108393f735542c913f94132cab9f770c55f8f4
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! control-plane — the `control-plane` component of `controlplane` v1.
@@ -203,6 +203,7 @@ where
     pub fn claim_assignment(&mut self, input: crate::host::ClaimAssignment) -> Result<crate::host::ClaimAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.claim_assignment(input)?;
         match &outcome {
+            crate::host::ClaimAssignmentOutcome::EvidenceMissing { .. } => {}
             crate::host::ClaimAssignmentOutcome::Applied { claim_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::ClaimAssignmentApplied(claim_assignment_applied.clone()));
             }
@@ -237,6 +238,7 @@ where
     pub fn complete_assignment(&mut self, input: crate::host::CompleteAssignment) -> Result<crate::host::CompleteAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.complete_assignment(input)?;
         match &outcome {
+            crate::host::CompleteAssignmentOutcome::ReceiptMissing { .. } => {}
             crate::host::CompleteAssignmentOutcome::Applied { complete_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::CompleteAssignmentApplied(complete_assignment_applied.clone()));
             }
@@ -287,6 +289,9 @@ where
     pub fn create_goal(&mut self, input: crate::host::CreateGoal) -> Result<crate::host::CreateGoalOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.create_goal(input)?;
         match &outcome {
+            crate::host::CreateGoalOutcome::WorkersInvalid { .. } => {}
+            crate::host::CreateGoalOutcome::AttemptsInvalid { .. } => {}
+            crate::host::CreateGoalOutcome::MinutesInvalid { .. } => {}
             crate::host::CreateGoalOutcome::Created { goal_created, .. } => {
                 self.outbox.push(PublishedEvent::GoalCreated(goal_created.clone()));
             }
@@ -421,6 +426,8 @@ where
     pub fn queue_assignment(&mut self, input: crate::host::QueueAssignment) -> Result<crate::host::QueueAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.queue_assignment(input)?;
         match &outcome {
+            crate::host::QueueAssignmentOutcome::GoalNotFound { .. } => {}
+            crate::host::QueueAssignmentOutcome::GoalNotCurrent { .. } => {}
             crate::host::QueueAssignmentOutcome::Created { assignment_created, .. } => {
                 self.outbox.push(PublishedEvent::AssignmentCreated(assignment_created.clone()));
             }
@@ -436,6 +443,9 @@ where
     pub fn ready_assignment(&mut self, input: crate::host::ReadyAssignment) -> Result<crate::host::ReadyAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.ready_assignment(input)?;
         match &outcome {
+            crate::host::ReadyAssignmentOutcome::ReviewerMissing { .. } => {}
+            crate::host::ReadyAssignmentOutcome::ReviewNotIndependent { .. } => {}
+            crate::host::ReadyAssignmentOutcome::EvidenceNotCurrent { .. } => {}
             crate::host::ReadyAssignmentOutcome::Applied { ready_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::ReadyAssignmentApplied(ready_assignment_applied.clone()));
             }
@@ -453,6 +463,7 @@ where
     pub fn reconcile_assignment(&mut self, input: crate::host::ReconcileAssignment) -> Result<crate::host::ReconcileAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.reconcile_assignment(input)?;
         match &outcome {
+            crate::host::ReconcileAssignmentOutcome::ReceiptMissing { .. } => {}
             crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::ReconcileAssignmentApplied(reconcile_assignment_applied.clone()));
             }
@@ -533,6 +544,8 @@ where
     pub fn repair_assignment(&mut self, input: crate::host::RepairAssignment) -> Result<crate::host::RepairAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.repair_assignment(input)?;
         match &outcome {
+            crate::host::RepairAssignmentOutcome::EvidenceMissing { .. } => {}
+            crate::host::RepairAssignmentOutcome::BaseMissing { .. } => {}
             crate::host::RepairAssignmentOutcome::Rebased { repair_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::RepairAssignmentApplied(repair_assignment_applied.clone()));
             }
@@ -553,6 +566,7 @@ where
     pub fn review_assignment(&mut self, input: crate::host::ReviewAssignment) -> Result<crate::host::ReviewAssignmentOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.review_assignment(input)?;
         match &outcome {
+            crate::host::ReviewAssignmentOutcome::TestsNotCurrent { .. } => {}
             crate::host::ReviewAssignmentOutcome::Applied { review_assignment_applied, .. } => {
                 self.outbox.push(PublishedEvent::ReviewAssignmentApplied(review_assignment_applied.clone()));
             }
@@ -570,6 +584,7 @@ where
     pub fn satisfy_goal(&mut self, input: crate::host::SatisfyGoal) -> Result<crate::host::SatisfyGoalOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.satisfy_goal(input)?;
         match &outcome {
+            crate::host::SatisfyGoalOutcome::StaleRevision { .. } => {}
             crate::host::SatisfyGoalOutcome::Applied { satisfy_goal_applied, .. } => {
                 self.outbox.push(PublishedEvent::SatisfyGoalApplied(satisfy_goal_applied.clone()));
             }
