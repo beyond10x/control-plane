@@ -137,20 +137,17 @@ impl Store {
                 .context("workspace not registered")?;
             ensure!(workspace.state == W::Registered, "workspace is archived");
         }
-        // A finished goal's edit takes the declared `satisfied` or `cancelled` refusal, whatever
-        // the edit carries, so the field checks guard only goals that can still be edited.
-        let finished = command == "UpdateGoal"
-            && body["goal_id"]
-                .as_str()
-                .and_then(|id| self.memory.goals.get(id))
-                .is_some_and(|goal| matches!(goal.state, G::Satisfied | G::Cancelled));
-        if matches!(command, "CreateGoal" | "UpdateGoal") && !finished {
+        // CreateGoal declares its limits; UpdateGoal's stay here, because an input guard in ESS
+        // would answer before a finished goal's declared `satisfied` or `cancelled` refusal.
+        if command == "UpdateGoal" {
             for field in ["max_workers", "max_attempts", "max_minutes"] {
                 ensure!(
                     body[field].as_i64().is_some_and(|n| n > 0),
                     "{field} must be positive"
                 );
             }
+        }
+        if matches!(command, "CreateGoal" | "UpdateGoal") {
             ensure!(
                 !text(body, "objective")?.trim().is_empty(),
                 "goal objective is empty"
@@ -187,14 +184,9 @@ impl Store {
                 .get(text(body, "repository_id")?)
                 .context("repository not found")?;
             self.require_active_workspace(&goal.data.workspace_id.0)?;
-            ensure!(goal.state == G::Running, "goal is not running");
             ensure!(
                 repo.state == R::Registered && repo.data.workspace_id == goal.data.workspace_id,
                 "repository is disabled or belongs to another workspace"
-            );
-            ensure!(
-                body["goal_revision"].as_i64() == Some(goal.data.revision),
-                "assignment goal revision is stale"
             );
             ensure!(
                 !self
@@ -340,10 +332,6 @@ impl Store {
                 "assignment attempt limit reached"
             );
             ensure!(
-                !text(body, "implementor_run")?.is_empty(),
-                "implementor context is empty"
-            );
-            ensure!(
                 !self.memory.assignments.values().any(|other| {
                     other.data.assignment_id != data.assignment_id
                         && active(other.state)
@@ -355,25 +343,6 @@ impl Store {
                 }),
                 "repository already has an active change"
             );
-            if command == "ClaimAssignment" {
-                ensure!(
-                    !text(body, "worktree_id")?.is_empty()
-                        && !text(body, "base_revision")?.is_empty(),
-                    "claim requires worktree and base revision"
-                );
-            }
-            // A repair that names a base (the declared `rebased` outcome) names a revision, as a
-            // claim does; one that names none keeps the assignment's base.
-            if command == "RepairAssignment"
-                && body
-                    .get("base_revision")
-                    .is_some_and(|base| !base.is_null())
-            {
-                ensure!(
-                    !text(body, "base_revision")?.is_empty(),
-                    "repair base revision is empty"
-                );
-            }
             if command == "ClaimAssignment"
                 || (command == "RepairAssignment" && assignment.state == A::Blocked)
             {
@@ -397,26 +366,6 @@ impl Store {
                     .values()
                     .any(|p| p.data.assignment_id == data.assignment_id && holds(p.state)),
                 "publication must be reconciled or closed before repair or cancellation"
-            );
-        }
-        if command == "ReviewAssignment" {
-            let candidate = text(body, "candidate")?;
-            ensure!(
-                !candidate.is_empty() && candidate == text(body, "test_revision")?,
-                "tests do not cover the candidate"
-            );
-        }
-        if command == "ReadyAssignment" {
-            let reviewer = text(body, "reviewer_run")?;
-            ensure!(
-                !reviewer.is_empty() && reviewer != data.implementor_run,
-                "review must use an independent execution context"
-            );
-            ensure!(
-                !data.candidate.is_empty()
-                    && data.test_revision == data.candidate
-                    && text(body, "review_revision")? == data.candidate,
-                "review or tests do not cover the candidate"
             );
         }
         if matches!(command, "MergeAssignment" | "PreparePublication") {

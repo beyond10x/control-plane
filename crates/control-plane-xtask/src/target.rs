@@ -18,9 +18,13 @@ pub struct DurableTarget {
     live: RefCell<Option<tempfile::TempDir>>,
     events: RefCell<Vec<ObservedEvent>>,
     committed: Cell<u64>,
+    /// Whether each command runs through the host's admission (`ContractStore::admit`) rather
+    /// than the generated store below it.
+    admitted: bool,
 }
 
 impl DurableTarget {
+    /// The generated store below the host's admission: the target the whole suite must pass.
     pub fn new(scratch: &Path) -> Result<Self> {
         std::fs::create_dir_all(scratch)?;
         Ok(Self {
@@ -31,6 +35,16 @@ impl DurableTarget {
             live: RefCell::new(None),
             events: RefCell::new(Vec::new()),
             committed: Cell::new(0),
+            admitted: false,
+        })
+    }
+    /// The same store with every command sent through the host's admission, as the console and
+    /// runtime send it. Scenarios that a host rule refuses end in error here.
+    #[cfg(test)]
+    pub fn admitted(scratch: &Path) -> Result<Self> {
+        Ok(Self {
+            admitted: true,
+            ..Self::new(scratch)?
         })
     }
     fn path(&self) -> Result<PathBuf, TargetError> {
@@ -62,7 +76,11 @@ fn command_error(error: anyhow::Error) -> TargetError {
 impl ConformanceTarget for DurableTarget {
     fn identity(&self) -> Result<ImplementationIdentity, TargetError> {
         Ok(ImplementationIdentity::new(
-            "control-plane-core::contract::ContractStore",
+            if self.admitted {
+                "control-plane-core::contract::ContractStore::admit"
+            } else {
+                "control-plane-core::contract::ContractStore"
+            },
             env!("CARGO_PKG_VERSION"),
         ))
     }
@@ -104,7 +122,11 @@ impl ConformanceTarget for DurableTarget {
             .runtime
             .block_on(async {
                 let mut store = ContractStore::open(&path).await?;
-                store.execute(&command, input, actor).await
+                if self.admitted {
+                    store.admit(&command, input, actor).await
+                } else {
+                    store.execute(&command, input, actor).await
+                }
             })
             .map_err(command_error)?;
         self.committed.set(self.committed.get() + 1);
@@ -291,6 +313,108 @@ mod tests {
         fn redeliver_event(&self, r: RedeliveryRequest) -> Result<(), TargetError> {
             self.0.redeliver_event(r)
         }
+    }
+
+    /// The refusals QueueAssignment declares, as synthesized scenarios. A missing repository stays
+    /// a host rule: beside the two goal guards, generated Rust keeps QueueAssignment an obligation
+    /// ("`when_related:` reading several related rows in one command"), and this product admits
+    /// only fully generated behaviour (`generation.rs`).
+    const QUEUE_REFUSALS: [&str; 2] = [
+        "controlplane.host.QueueAssignment/outcome/goal-not-found",
+        "controlplane.host.QueueAssignment/outcome/goal-not-current",
+    ];
+
+    /// QueueAssignment's declared refusal scenarios pass when every command runs through the
+    /// host's admission (`ContractStore::admit`, the path of the console and runtime), and that
+    /// path is the admission, not the store below it: a second assignment for one story (a rule
+    /// only the host enforces) is refused there and created below it.
+    #[test]
+    fn queue_guards_are_refused_in_conformance() -> Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let suite = std::fs::read_to_string(root.join("generated/conformance.json"))?;
+        let scratch = root.join(".scratch/conformance-queue-tests");
+        let target = DurableTarget::admitted(&scratch)?;
+        assert_eq!(
+            target.identity().unwrap().to_string(),
+            ImplementationIdentity::new(
+                "control-plane-core::contract::ContractStore::admit",
+                env!("CARGO_PKG_VERSION")
+            )
+            .to_string()
+        );
+        let (report, _) = run(&suite, &target)?;
+        let statuses = report.statuses();
+        for id in QUEUE_REFUSALS {
+            assert_eq!(statuses.get(id).copied(), Some("passed"), "{id}");
+        }
+
+        let dir = tempfile::tempdir_in(&scratch)?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async {
+            let mut store = ContractStore::open(dir.path().join("host.sqlite")).await?;
+            let id = |answer: &serde_json::Value, field: &str| {
+                answer["published"][0]["payload"][field]
+                    .as_str()
+                    .map(str::to_owned)
+                    .context("no identity")
+            };
+            let workspace = id(
+                &store
+                    .admit(
+                        "RegisterWorkspace",
+                        serde_json::json!({"path":"workspace","name":"workspace"}),
+                        Actor::Operator,
+                    )
+                    .await?,
+                "workspace_id",
+            )?;
+            let repository = id(
+                &store
+                    .admit(
+                        "RegisterRepository",
+                        serde_json::json!({"workspace_id":workspace,"name":"repo","path":"repo","common_dir":"repo/.git","base_branch":"main","test_command":"test","publish_command":"publish"}),
+                        Actor::Operator,
+                    )
+                    .await?,
+                "repository_id",
+            )?;
+            let goal = id(
+                &store
+                    .admit(
+                        "CreateGoal",
+                        serde_json::json!({"workspace_id":workspace,"objective":"objective","acceptance":"acceptance","max_workers":1,"max_attempts":2,"max_minutes":10,"planner_model":"p","implementor_model":"i","reviewer_model":"r","merge_authority":true}),
+                        Actor::Operator,
+                    )
+                    .await?,
+                "goal_id",
+            )?;
+            store
+                .admit("StartGoal", serde_json::json!({"goal_id":goal}), Actor::Operator)
+                .await?;
+            let queue = serde_json::json!({"goal_id":goal,"repository_id":repository,"story_id":"story:one","case_id":"case","worktree_id":"","candidate":"","attempt":0,"reason":"","implementor_run":"","reviewer_run":"","goal_revision":1});
+            let first = store
+                .admit("QueueAssignment", queue.clone(), Actor::Supervisor)
+                .await?;
+            assert_eq!(first["outcome"], "created", "{first}");
+            let second = store
+                .admit("QueueAssignment", queue.clone(), Actor::Supervisor)
+                .await;
+            assert!(
+                second.is_err(),
+                "admission accepted a second assignment for one story: {second:?}"
+            );
+            let below = store
+                .execute("QueueAssignment", queue, Actor::Supervisor)
+                .await?;
+            assert_eq!(below["outcome"], "created", "{below}");
+            anyhow::Ok(())
+        })
     }
 
     #[test]

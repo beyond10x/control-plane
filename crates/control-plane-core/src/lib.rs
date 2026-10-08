@@ -116,6 +116,9 @@ mod notification_tests {
 /// Durable generated contract, below filesystem and operational admission.
 ///
 /// This is the state-machine adapter used by `Store`, also exposed for ESS conformance.
+/// [`ContractStore::admit`] runs a command through the admission `Store::execute` uses instead
+/// (grant, host rules, generated decision), skipping only the filesystem facts: canonical path
+/// discovery and idempotent registration receipts, directory scanning and progress bounding.
 /// An HTTP server must expose `Store` instead; clients cannot select this boundary.
 pub mod contract {
     use super::*;
@@ -128,6 +131,18 @@ pub mod contract {
         pub async fn execute(&mut self, command: &str, body: Value, actor: Actor) -> Result<Value> {
             self.0
                 .apply(
+                    command
+                        .strip_prefix("controlplane.host.")
+                        .unwrap_or(command),
+                    body,
+                    actor,
+                )
+                .await
+        }
+        /// The command through the host's admission, as the console and runtime send it.
+        pub async fn admit(&mut self, command: &str, body: Value, actor: Actor) -> Result<Value> {
+            self.0
+                .admit(
                     command
                         .strip_prefix("controlplane.host.")
                         .unwrap_or(command),
@@ -293,8 +308,38 @@ impl Store {
         if let Some(existing) = self.prepare(command, &mut body)? {
             return Ok(existing);
         }
-        self.guard(command, &body)?;
-        self.apply(command, body, actor).await
+        self.admit(command, body, actor).await
+    }
+
+    /// Admission, shared by every caller and by ESS conformance: the grant, the host rules the
+    /// specification does not declare (`guards.rs`), and the generated decision.
+    ///
+    /// A host rule refuses with an error and nothing is appended, except where the specification
+    /// itself refuses the call for the state it finds (a declared refusal other than the
+    /// subject's own `not-found`): that refusal answers and is recorded, so a declared refusal is
+    /// never hidden behind a host rule about a command the specification would not apply.
+    async fn admit(&mut self, command: &str, body: Value, actor: Actor) -> Result<Value> {
+        if !(Caller { actor }).may(&format!("controlplane.host.{command}")) {
+            bail!(
+                "generated command refused (403): {}",
+                json!({"refused": "not granted", "actor": actor.name()})
+            );
+        }
+        let host = self.guard(command, &body);
+        let mut next = self.memory.clone();
+        let mut decisions = Vec::new();
+        let staged = stage(&mut next, &mut decisions, command, body, actor);
+        let outcome = match (host, staged) {
+            (Ok(()), staged) => staged?,
+            (Err(_), Ok(outcome))
+                if outcome.get("error").is_some() && outcome["outcome"] != "not-found" =>
+            {
+                outcome
+            }
+            (Err(host), _) => return Err(host),
+        };
+        self.commit(next, decisions, actor).await?;
+        Ok(outcome)
     }
 
     async fn apply(&mut self, command: &str, body: Value, actor: Actor) -> Result<Value> {

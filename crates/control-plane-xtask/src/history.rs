@@ -358,6 +358,7 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
             "case_id": format!("{story}/case"), "worktree_id": "", "candidate": "", "attempt": 0,
             "reason": "", "implementor_run": "", "reviewer_run": "", "goal_revision": 2})
     };
+    admission_refusals(&mut run, &goal, &alpha).await?;
     // Reviewed, repaired from Reviewing, reviewed again, published and completed.
     let first = identity(
         &run.expect(
@@ -379,6 +380,63 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
             "ReviewAssignment",
             json!({"candidate": "candidate-first-1", "test_revision": "candidate-first-1"}),
         ),
+    ] {
+        run.expect(command, with(&first, body), Supervisor, "applied")
+            .await?;
+    }
+    // Under review: readiness needs an independent reviewer and evidence of this candidate, and
+    // every command that carries evidence refuses an empty one for an existing assignment.
+    for (command, body, outcome) in [
+        (
+            "ReadyAssignment",
+            json!({"reviewer_run": "implementor-first-1", "review_revision": "candidate-first-1"}),
+            "review-not-independent",
+        ),
+        (
+            "ReadyAssignment",
+            json!({"reviewer_run": "reviewer-first", "review_revision": "candidate-stale"}),
+            "evidence-not-current",
+        ),
+        (
+            "ReadyAssignment",
+            json!({"reviewer_run": "", "review_revision": "candidate-first-1"}),
+            "reviewer-missing",
+        ),
+        (
+            "ClaimAssignment",
+            json!({"worktree_id": "tree", "implementor_run": "", "base_revision": "base"}),
+            "evidence-missing",
+        ),
+        (
+            "RepairAssignment",
+            json!({"reason": "retry", "implementor_run": ""}),
+            "evidence-missing",
+        ),
+        (
+            "RepairAssignment",
+            json!({"reason": "retry", "implementor_run": "retry", "base_revision": ""}),
+            "base-missing",
+        ),
+        (
+            "ReviewAssignment",
+            json!({"candidate": "candidate", "test_revision": "other"}),
+            "tests-not-current",
+        ),
+        (
+            "CompleteAssignment",
+            json!({"merge_receipt": ""}),
+            "receipt-missing",
+        ),
+        (
+            "ReconcileAssignment",
+            json!({"merge_receipt": ""}),
+            "receipt-missing",
+        ),
+    ] {
+        run.expect(command, with(&first, body), Supervisor, outcome)
+            .await?;
+    }
+    for (command, body) in [
         (
             "RepairAssignment",
             json!({"reason": "review requested changes", "implementor_run": "implementor-first-2"}),
@@ -752,6 +810,47 @@ async fn script(store: &mut Store, work: &Path) -> Result<usize> {
         .await?;
     }
     Ok(run.steps)
+}
+
+/// The admission refusals the specification declares on creation: a goal created with a
+/// non-positive limit and a queue for a missing or out-of-date goal. The evidence refusals on an
+/// existing assignment are recorded while the first assignment is under review.
+async fn admission_refusals(run: &mut Script<'_>, goal: &str, repository: &str) -> Result<()> {
+    use Actor::{Operator, Supervisor};
+    let unknown = "00000000-0000-4000-8000-000000000000";
+    let workspace = run.store.query("GoalList")?[0]["workspace_id"].clone();
+    let queue = |goal_id: &str, revision: i64| {
+        json!({"goal_id": goal_id, "repository_id": repository, "story_id": "story:refused",
+            "case_id": "story:refused/case", "worktree_id": "", "candidate": "", "attempt": 0,
+            "reason": "", "implementor_run": "", "reviewer_run": "", "goal_revision": revision})
+    };
+    let limits = |workers: i64, attempts: i64, minutes: i64| {
+        json!({"workspace_id": workspace, "objective": "Invalid limits", "acceptance": "None",
+            "max_workers": workers, "max_attempts": attempts, "max_minutes": minutes,
+            "planner_model": "scripted-planner", "implementor_model": "scripted-implementor",
+            "reviewer_model": "scripted-reviewer", "merge_authority": false})
+    };
+    let calls = [
+        ("CreateGoal", limits(0, 1, 1), Operator, "workers-invalid"),
+        ("CreateGoal", limits(1, 0, 1), Operator, "attempts-invalid"),
+        ("CreateGoal", limits(1, 1, 0), Operator, "minutes-invalid"),
+        (
+            "QueueAssignment",
+            queue(unknown, 2),
+            Supervisor,
+            "goal-not-found",
+        ),
+        (
+            "QueueAssignment",
+            queue(goal, 1),
+            Supervisor,
+            "goal-not-current",
+        ),
+    ];
+    for (command, body, actor, outcome) in calls {
+        run.expect(command, body, actor, outcome).await?;
+    }
+    Ok(())
 }
 
 /// Every command that can name an unknown instance answers `not-found`, and that answer is

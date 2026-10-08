@@ -5,6 +5,7 @@ mod foundation;
 mod frontend;
 mod generation;
 mod history;
+mod mutation;
 mod spec_history;
 mod target;
 
@@ -46,6 +47,15 @@ enum Action {
         #[arg(long)]
         work_dir: PathBuf,
     },
+    /// Run the ESS mutation audit against the durable generated store: emit, run, collect.
+    Mutate {
+        /// A mutation class to audit; repeat for several. Defaults to the guard classes.
+        #[arg(long = "class")]
+        classes: Vec<String>,
+        /// Keep the emitted suites, reports and the `--collect` report under `.scratch`.
+        #[arg(long)]
+        keep: bool,
+    },
     /// Refuse scenario names in active and implemented stories that name no test.
     AcceptanceCheck {
         /// The repository to check; defaults to this one.
@@ -69,6 +79,7 @@ fn main() -> Result<()> {
         Action::FrontendCheck => frontend::run(root, false),
         Action::SpecHistoryCheck => spec_history::run(root),
         Action::RecordHistory { work_dir } => history::run(root, &work_dir),
+        Action::Mutate { classes, keep } => mutation::run_verb(root, classes, keep),
         Action::AcceptanceCheck { root: checked } => {
             acceptance::run(checked.as_deref().unwrap_or(root))
         }

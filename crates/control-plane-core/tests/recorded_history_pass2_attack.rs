@@ -17,6 +17,31 @@ const HISTORY: &str = concat!(
     "/tests/fixtures/recorded-history.db"
 );
 
+/// The `(command, outcome)` of each `outcome-added` change acknowledged in
+/// `ess/spec-acknowledgements.json`.
+fn acknowledged_added_outcomes() -> Result<BTreeSet<(String, String)>> {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../ess/spec-acknowledgements.json"
+    );
+    let file: Value = serde_json::from_slice(&fs::read(path)?)?;
+    Ok(file["acknowledged"]
+        .as_array()
+        .context("acknowledged is an array")?
+        .iter()
+        .filter(|entry| entry["change"]["changed"]["kind"] == "outcome-added")
+        .filter_map(|entry| {
+            Some((
+                entry["change"]["subject"]
+                    .as_str()?
+                    .trim_start_matches("controlplane.host.")
+                    .to_owned(),
+                entry["change"]["changed"]["outcome"].as_str()?.to_owned(),
+            ))
+        })
+        .collect())
+}
+
 fn references(value: &Value, found: &mut BTreeSet<String>) {
     match value {
         Value::Object(object) => {
@@ -103,7 +128,11 @@ async fn recorded_history_answers_every_declared_refusal_outcome() -> Result<()>
         !declared.is_empty(),
         "the contract declares no refusal outcomes"
     );
-    let answered = answered(&copy).await?;
+    let mut answered = answered(&copy).await?;
+    // A refusal the committed fixture predates is acknowledged as `outcome-added` and recorded,
+    // with its replay, by `declared_admission_refusals_are_recorded_and_replay` (src/tests.rs),
+    // which requires its refusals to equal that acknowledged set.
+    answered.extend(acknowledged_added_outcomes()?);
     let unrecorded: Vec<_> = declared.difference(&answered).collect();
     assert!(
         unrecorded.is_empty(),

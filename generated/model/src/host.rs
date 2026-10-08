@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
+// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! host — `controlplane.host`.
@@ -1783,6 +1783,11 @@ pub struct ClaimAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClaimAssignmentOutcome {
+    /// `evidence-missing` — when the existing subject's stored fields satisfy `(input.implementor_run == "" or input.worktree_id == "" or input.base_revision == "")`.
+    EvidenceMissing {
+        /// Why it was refused: `controlplane.host.EvidenceMissing`.
+        error: EvidenceMissing,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.ClaimAssignmentApplied` this outcome publishes.
@@ -1853,6 +1858,11 @@ pub struct CompleteAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompleteAssignmentOutcome {
+    /// `receipt-missing` — when the existing subject's stored fields satisfy `input.merge_receipt == ""`.
+    ReceiptMissing {
+        /// Why it was refused: `controlplane.host.EvidenceMissing`.
+        error: EvidenceMissing,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.CompleteAssignmentApplied` this outcome publishes.
@@ -1973,6 +1983,21 @@ pub struct CreateGoal {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreateGoalOutcome {
+    /// `workers-invalid` — when `max_workers <= 0`.
+    WorkersInvalid {
+        /// Why it was refused: `controlplane.host.GoalLimitInvalid`.
+        error: GoalLimitInvalid,
+    },
+    /// `attempts-invalid` — when `max_attempts <= 0`.
+    AttemptsInvalid {
+        /// Why it was refused: `controlplane.host.GoalLimitInvalid`.
+        error: GoalLimitInvalid,
+    },
+    /// `minutes-invalid` — when `max_minutes <= 0`.
+    MinutesInvalid {
+        /// Why it was refused: `controlplane.host.GoalLimitInvalid`.
+        error: GoalLimitInvalid,
+    },
     /// `created` — otherwise.
     Created {
         /// The `controlplane.host.GoalCreated` this outcome publishes.
@@ -2253,6 +2278,16 @@ pub struct QueueAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueueAssignmentOutcome {
+    /// `goal-not-found` — when no `controlplane.host.Goal` carries the identity `input.goal_id` names.
+    GoalNotFound {
+        /// Why it was refused: `controlplane.host.GoalNotFound`.
+        error: GoalNotFound,
+    },
+    /// `goal-not-current` — when the `controlplane.host.Goal` that `input.goal_id` names satisfies `(state != Running or revision != input.goal_revision)`.
+    GoalNotCurrent {
+        /// Why it was refused: `controlplane.host.GoalNotCurrent`.
+        error: GoalNotCurrent,
+    },
     /// `created` — otherwise.
     Created {
         /// The `controlplane.host.AssignmentCreated` this outcome publishes.
@@ -2280,6 +2315,21 @@ pub struct ReadyAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadyAssignmentOutcome {
+    /// `reviewer-missing` — when the existing subject's stored fields satisfy `input.reviewer_run == ""`.
+    ReviewerMissing {
+        /// Why it was refused: `controlplane.host.ReviewNotIndependent`.
+        error: ReviewNotIndependent,
+    },
+    /// `review-not-independent` — when the existing subject's stored fields satisfy `implementor_run == input.reviewer_run`.
+    ReviewNotIndependent {
+        /// Why it was refused: `controlplane.host.ReviewNotIndependent`.
+        error: ReviewNotIndependent,
+    },
+    /// `evidence-not-current` — when the existing subject's stored fields satisfy `(state == Reviewing and (candidate == "" or test_revision != {fact: candidate} or candidate != input.review_revision))`.
+    EvidenceNotCurrent {
+        /// Why it was refused: `controlplane.host.EvidenceNotCurrent`.
+        error: EvidenceNotCurrent,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.ReadyAssignmentApplied` this outcome publishes.
@@ -2315,6 +2365,11 @@ pub struct ReconcileAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReconcileAssignmentOutcome {
+    /// `receipt-missing` — when the existing subject's stored fields satisfy `input.merge_receipt == ""`.
+    ReceiptMissing {
+        /// Why it was refused: `controlplane.host.EvidenceMissing`.
+        error: EvidenceMissing,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.ReconcileAssignmentApplied` this outcome publishes.
@@ -2491,6 +2546,16 @@ pub struct RepairAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepairAssignmentOutcome {
+    /// `evidence-missing` — when the existing subject's stored fields satisfy `input.implementor_run == ""`.
+    EvidenceMissing {
+        /// Why it was refused: `controlplane.host.EvidenceMissing`.
+        error: EvidenceMissing,
+    },
+    /// `base-missing` — when the existing subject's stored fields satisfy `(defined(input.base_revision) and input.base_revision == "")`.
+    BaseMissing {
+        /// Why it was refused: `controlplane.host.EvidenceMissing`.
+        error: EvidenceMissing,
+    },
     /// `rebased` — when `defined(base_revision)`.
     Rebased {
         /// The `controlplane.host.RepairAssignmentApplied` this outcome publishes.
@@ -2533,6 +2598,11 @@ pub struct ReviewAssignment {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewAssignmentOutcome {
+    /// `tests-not-current` — when the existing subject's stored fields satisfy `(input.candidate == "" or input.candidate != input.test_revision)`.
+    TestsNotCurrent {
+        /// Why it was refused: `controlplane.host.EvidenceNotCurrent`.
+        error: EvidenceNotCurrent,
+    },
     /// `applied` — otherwise.
     Applied {
         /// The `controlplane.host.ReviewAssignmentApplied` this outcome publishes.
@@ -3061,6 +3131,30 @@ pub struct AssignmentStateConflict {
     pub state: AssignmentState,
 }
 
+/// The declared error `controlplane.host.EvidenceMissing`.
+///
+/// A required run, worktree, revision or receipt is empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceMissing;
+
+/// The declared error `controlplane.host.EvidenceNotCurrent`.
+///
+/// Tests or review do not cover the assignment's current candidate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceNotCurrent;
+
+/// The declared error `controlplane.host.GoalLimitInvalid`.
+///
+/// Worker, attempt and minute limits are positive counts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalLimitInvalid;
+
+/// The declared error `controlplane.host.GoalNotCurrent`.
+///
+/// The goal is not running, or changed since the assignment was planned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalNotCurrent;
+
 /// The declared error `controlplane.host.GoalNotFound`.
 ///
 /// The requested identity is not held.
@@ -3101,6 +3195,12 @@ pub struct RepositoryRegistrationStateConflict {
     /// `state` — `controlplane.host.RepositoryRegistration.State`.
     pub state: RepositoryRegistrationState,
 }
+
+/// The declared error `controlplane.host.ReviewNotIndependent`.
+///
+/// Review must use an execution context other than the implementor's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewNotIndependent;
 
 /// The declared error `controlplane.host.WorkspaceDirectoryNotFound`.
 #[derive(Debug, Clone, PartialEq, Eq)]

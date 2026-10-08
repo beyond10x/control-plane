@@ -17,6 +17,11 @@ tasks:
       - cargo run --locked -p control-plane-xtask -- conformance
       - cargo run --locked -p control-plane-xtask -- foundation-check
 
+  mutation:
+    desc: Audit the declared guards with ESS mutants against the durable generated store
+    cmds:
+      - cargo run --locked -p control-plane-xtask -- mutate {{.CLI_ARGS}}
+
   generate:
     desc: Regenerate contracts from the ESS source
     cmds:

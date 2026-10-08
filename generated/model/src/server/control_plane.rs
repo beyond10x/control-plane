@@ -1,6 +1,6 @@
 // generated from controlplane v1
-// model digest 897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7
-// contract digest b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7
+// model digest c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548
+// contract digest e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `control-plane` component of `controlplane` v1, on the wire.
@@ -76,7 +76,7 @@ pub const ROUTES: &[(&str, &str)] = &[
 /// Everything outside `runtime` is the same in every language this plan is emitted into, and
 /// `cargo xtask synth --check` starts both and compares them.
 pub const STARTUP: &[&str] = &[
-    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"controlplane\",\"version\":\"v1\",\"model_digest\":\"897a3414c77f9f4e1cf2364f3618ac52b1f26e3c84b3ff542878e9e78509dbd7\",\"contract_digest\":\"b6fee6bf66c237bc1382d9b6b607570b4f096d13d3d91c101d1efb3fde6bb9b7\",\"components\":[\"control-plane\"],\"capabilities\":{\"generated\":131,\"obligations\":0,\"refused\":0}",
+    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"controlplane\",\"version\":\"v1\",\"model_digest\":\"c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548\",\"contract_digest\":\"e2cc170afad569e615d682e77d7a36681653dc02f5870ba785e69e9b36846f10\",\"components\":[\"control-plane\"],\"capabilities\":{\"generated\":136,\"obligations\":0,\"refused\":0}",
     "{\"log\":\"ess/1\",\"event\":\"surface.serving\",\"component\":\"control-plane\",\"reached_by\":\"network\",\"transport\":\"http/1.1\",\"routes\":38,\"paths\":[{\"method\":\"GET\",\"path\":\"/docs\",\"serves\":\"documentation\",\"name\":\"docs\"},{\"method\":\"POST\",\"path\":\"/host/commands/AddWorkspaceDirectory\",\"serves\":\"command\",\"name\":\"controlplane.host.AddWorkspaceDirectory\"},{\"method\":\"POST\",\"path\":\"/host/commands/ArchiveWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.ArchiveWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/BlockAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.BlockAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/CancelGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CancelGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/ClaimAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ClaimAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ClosePublication\",\"serves\":\"command\",\"name\":\"controlplane.host.ClosePublication\"},{\"method\":\"POST\",\"path\":\"/host/commands/CompleteAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.CompleteAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ConfigureRepository\",\"serves\":\"command\",\"name\":\"controlplane.host.ConfigureRepository\"},{\"method\":\"POST\",\"path\":\"/host/commands/ConfirmPublication\",\"serves\":\"command\",\"name\":\"controlplane.host.ConfirmPublication\"},{\"method\":\"POST\",\"path\":\"/host/commands/CreateGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.CreateGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/DeleteGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.DeleteGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/DisableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.DisableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/EnableRepositoryRegistration\",\"serves\":\"command\",\"name\":\"controlplane.host.EnableRepositoryRegistration\"},{\"method\":\"POST\",\"path\":\"/host/commands/MarkPublicationUncertain\",\"serves\":\"command\",\"name\":\"controlplane.host.MarkPublicationUncertain\"},{\"method\":\"POST\",\"path\":\"/host/commands/MergeAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.MergeAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/PauseGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.PauseGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/PreparePublication\",\"serves\":\"command\",\"name\":\"controlplane.host.PreparePublication\"},{\"method\":\"POST\",\"path\":\"/host/commands/QueueAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.QueueAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReadyAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReadyAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReconcileAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReconcileAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/RecordPlanningProgress\",\"serves\":\"command\",\"name\":\"controlplane.host.RecordPlanningProgress\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterRepository\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterRepository\"},{\"method\":\"POST\",\"path\":\"/host/commands/RegisterWorkspace\",\"serves\":\"command\",\"name\":\"controlplane.host.RegisterWorkspace\"},{\"method\":\"POST\",\"path\":\"/host/commands/RemoveWorkspaceDirectory\",\"serves\":\"command\",\"name\":\"controlplane.host.RemoveWorkspaceDirectory\"},{\"method\":\"POST\",\"path\":\"/host/commands/RepairAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.RepairAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/ReviewAssignment\",\"serves\":\"command\",\"name\":\"controlplane.host.ReviewAssignment\"},{\"method\":\"POST\",\"path\":\"/host/commands/SatisfyGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.SatisfyGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/StartGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.StartGoal\"},{\"method\":\"POST\",\"path\":\"/host/commands/UpdateGoal\",\"serves\":\"command\",\"name\":\"controlplane.host.UpdateGoal\"},{\"method\":\"GET\",\"path\":\"/host/views/AssignmentList\",\"serves\":\"view\",\"name\":\"controlplane.host.AssignmentList\"},{\"method\":\"GET\",\"path\":\"/host/views/GoalList\",\"serves\":\"view\",\"name\":\"controlplane.host.GoalList\"},{\"method\":\"GET\",\"path\":\"/host/views/PublicationIntentList\",\"serves\":\"view\",\"name\":\"controlplane.host.PublicationIntentList\"},{\"method\":\"GET\",\"path\":\"/host/views/RepositoryRegistrationList\",\"serves\":\"view\",\"name\":\"controlplane.host.RepositoryRegistrationList\"},{\"method\":\"GET\",\"path\":\"/host/views/WorkspaceDirectoryList\",\"serves\":\"view\",\"name\":\"controlplane.host.WorkspaceDirectoryList\"},{\"method\":\"GET\",\"path\":\"/host/views/WorkspaceList\",\"serves\":\"view\",\"name\":\"controlplane.host.WorkspaceList\"},{\"method\":\"GET\",\"path\":\"/openapi.json\",\"serves\":\"contract\",\"name\":\"openapi\"}]",
     "{\"log\":\"ess/1\",\"event\":\"system.ready\",\"system\":\"controlplane\",\"surfaces\":1",
 ];
@@ -1208,6 +1208,16 @@ where
 fn answer_controlplane_host_claim_assignment(outcome: &crate::host::ClaimAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::ClaimAssignmentOutcome::EvidenceMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "evidence-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceMissing");
+            409
+        }
         crate::host::ClaimAssignmentOutcome::Applied { claim_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "applied");
@@ -1402,6 +1412,16 @@ where
 fn answer_controlplane_host_complete_assignment(outcome: &crate::host::CompleteAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::CompleteAssignmentOutcome::ReceiptMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "receipt-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceMissing");
+            409
+        }
         crate::host::CompleteAssignmentOutcome::Applied { complete_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "applied");
@@ -1681,6 +1701,36 @@ where
 fn answer_controlplane_host_create_goal(outcome: &crate::host::CreateGoalOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::CreateGoalOutcome::WorkersInvalid { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "workers-invalid");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalLimitInvalid");
+            422
+        }
+        crate::host::CreateGoalOutcome::AttemptsInvalid { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "attempts-invalid");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalLimitInvalid");
+            422
+        }
+        crate::host::CreateGoalOutcome::MinutesInvalid { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "minutes-invalid");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalLimitInvalid");
+            422
+        }
         crate::host::CreateGoalOutcome::Created { goal_created, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "created");
@@ -2437,6 +2487,26 @@ where
 fn answer_controlplane_host_queue_assignment(outcome: &crate::host::QueueAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::QueueAssignmentOutcome::GoalNotFound { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "goal-not-found");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalNotFound");
+            409
+        }
+        crate::host::QueueAssignmentOutcome::GoalNotCurrent { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "goal-not-current");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.GoalNotCurrent");
+            409
+        }
         crate::host::QueueAssignmentOutcome::Created { assignment_created, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "created");
@@ -2512,6 +2582,36 @@ where
 fn answer_controlplane_host_ready_assignment(outcome: &crate::host::ReadyAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::ReadyAssignmentOutcome::ReviewerMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "reviewer-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.ReviewNotIndependent");
+            409
+        }
+        crate::host::ReadyAssignmentOutcome::ReviewNotIndependent { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "review-not-independent");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.ReviewNotIndependent");
+            409
+        }
+        crate::host::ReadyAssignmentOutcome::EvidenceNotCurrent { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "evidence-not-current");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceNotCurrent");
+            409
+        }
         crate::host::ReadyAssignmentOutcome::Applied { ready_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "applied");
@@ -2609,6 +2709,16 @@ where
 fn answer_controlplane_host_reconcile_assignment(outcome: &crate::host::ReconcileAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::ReconcileAssignmentOutcome::ReceiptMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "receipt-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceMissing");
+            409
+        }
         crate::host::ReconcileAssignmentOutcome::Applied { reconcile_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "applied");
@@ -3038,6 +3148,26 @@ where
 fn answer_controlplane_host_repair_assignment(outcome: &crate::host::RepairAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::RepairAssignmentOutcome::EvidenceMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "evidence-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceMissing");
+            409
+        }
+        crate::host::RepairAssignmentOutcome::BaseMissing { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "base-missing");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceMissing");
+            409
+        }
         crate::host::RepairAssignmentOutcome::Rebased { repair_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "rebased");
@@ -3149,6 +3279,16 @@ where
 fn answer_controlplane_host_review_assignment(outcome: &crate::host::ReviewAssignmentOutcome) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
+        crate::host::ReviewAssignmentOutcome::TestsNotCurrent { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "tests-not-current");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "controlplane.host.EvidenceNotCurrent");
+            409
+        }
         crate::host::ReviewAssignmentOutcome::Applied { review_assignment_applied, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "applied");
