@@ -21,6 +21,28 @@ pub const GUARD_CLASSES: [&str; 4] = [
     "precedence-swap",
 ];
 
+/// The one mutant the audit admits unwitnessed: its id, and the single synthesis refusal (code
+/// and scenario) its suite must have gained. Negating SatisfyGoal's `stale-revision` guard,
+/// `when: defined(receipt_revision)`, leaves that outcome reading an input the guard now requires
+/// absent, so ESS refuses to synthesize its scenario (ESS-SYNTH-003) and reports the mutant
+/// unwitnessed (ESS-MUTATE-004). Remove this exemption when the ESS release ships a witness for
+/// a negated `defined()` guard.
+pub const UNWITNESSED_EXEMPTION: (&str, &str, &str) = (
+    "guard-negate/controlplane.host.SatisfyGoal/stale-revision",
+    "ESS-SYNTH-003",
+    "controlplane.host.SatisfyGoal/outcome/stale-revision",
+);
+
+/// Whether `mutant` is exactly the exempted unwitnessed mutant with exactly its refusal.
+fn exempt(mutant: &serde_json::Value) -> bool {
+    let (id, code, scenario) = UNWITNESSED_EXEMPTION;
+    mutant["id"] == id
+        && mutant["verdict"] == "unwitnessed"
+        && mutant["added_refusals"].as_array().is_some_and(|refusals| {
+            matches!(refusals.as_slice(), [only] if only["code"] == code && only["scenario"] == scenario)
+        })
+}
+
 /// The committed `--collect` report of the last audit of the specification, checked by the fast
 /// test against the specification digest of `generated/conformance.json`. `task mutation --
 /// --keep` writes a fresh one into the kept directory; copy its `mutation-report.json` here.
@@ -33,16 +55,21 @@ pub struct Audit {
     pub summary: String,
     pub report: serde_json::Value,
     pub passed: bool,
+    /// Whether the baseline suite executed and passed every scenario against the target.
+    pub baseline_passed: bool,
     /// The emitted directory, when it was kept.
     pub kept: Option<PathBuf>,
 }
 
 /// The counts of an `ess-mutation-report/3` document. It is refused unless every listed mutant is
-/// killed by its own record, the counts agree with the list, and a guard-class mutant was killed.
+/// killed by its own record or is the [`UNWITNESSED_EXEMPTION`], the counts agree with the list,
+/// and a guard-class mutant was killed.
 #[derive(Debug, PartialEq)]
 pub struct Verdict {
     pub mutants: u64,
     pub killed: u64,
+    /// Mutants admitted unwitnessed by [`UNWITNESSED_EXEMPTION`]: 0 or 1.
+    pub exempt: u64,
     pub guard_mutants: usize,
 }
 
@@ -58,14 +85,32 @@ pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
             .as_u64()
             .with_context(|| format!("no {key} count"))
     };
-    for key in ["survived", "inconclusive", "unwitnessed"] {
+    let mutants = report["mutants"].as_array().context("no mutants array")?;
+    let exempted = mutants.iter().filter(|mutant| exempt(mutant)).count() as u64;
+    for key in ["survived", "inconclusive"] {
         ensure!(count(key)? == 0, "{} mutant(s) {key}", count(key)?);
     }
-    let mutants = report["mutants"].as_array().context("no mutants array")?;
+    ensure!(
+        exempted <= 1,
+        "the exempted mutant is listed {exempted} times"
+    );
+    // With the exemption, `run_verb` no longer relies on `--collect` passing, so this verdict
+    // also refuses the counts ESS would otherwise judge.
+    if exempted > 0 {
+        for key in ["stillborn", "equivalent"] {
+            let n = counts[key].as_u64().unwrap_or(0);
+            ensure!(n == 0, "{n} mutant(s) {key} beside the exempted mutant");
+        }
+    }
+    ensure!(
+        count("unwitnessed")? == exempted,
+        "{} mutant(s) unwitnessed, {exempted} of them exempted",
+        count("unwitnessed")?
+    );
     // Each mutant is judged by its own record; the counts must agree with the list.
     let unkilled: Vec<String> = mutants
         .iter()
-        .filter(|mutant| mutant["verdict"] != "killed")
+        .filter(|mutant| mutant["verdict"] != "killed" && !exempt(mutant))
         .map(|mutant| format!("{} ({})", mutant["id"], mutant["verdict"]))
         .collect();
     ensure!(
@@ -73,7 +118,7 @@ pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
         "mutant(s) not killed: {}",
         unkilled.join(", ")
     );
-    let killed = mutants.len() as u64;
+    let killed = mutants.len() as u64 - exempted;
     ensure!(
         count("mutants")? == mutants.len() as u64 && count("killed")? == killed,
         "the counts ({} mutants, {} killed) disagree with the {} mutant(s) listed ({killed} killed)",
@@ -94,6 +139,7 @@ pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
     Ok(Verdict {
         mutants: count("mutants")?,
         killed,
+        exempt: exempted,
         guard_mutants,
     })
 }
@@ -174,6 +220,11 @@ pub fn audit(root: &Path, classes: &[String], keep: bool) -> Result<Audit> {
             report.to_canonical_json()?,
         )?;
     }
+    let baseline: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.join("baseline/report.json"))?)?;
+    let baseline_passed = baseline["execution_status"] == "passed"
+        && baseline["counts"]["failed"] == 0
+        && baseline["counts"]["error"] == 0;
     let report = emitted.dir.join("mutation-report.json");
     let written = report.to_str().context("report path is not UTF-8")?;
     let (passed, summary) = ess(
@@ -196,6 +247,7 @@ pub fn audit(root: &Path, classes: &[String], keep: bool) -> Result<Audit> {
         summary,
         report,
         passed,
+        baseline_passed,
         kept: keep.then(|| emitted.dir.clone()),
     })
 }
@@ -211,11 +263,18 @@ pub fn run_verb(root: &Path, classes: Vec<String>, keep: bool) -> Result<()> {
     if let Some(dir) = &audit.kept {
         println!("kept: {}", dir.display());
     }
-    ensure!(audit.passed, "the mutation audit did not pass");
-    let verdict = verdict(&audit.report)?;
+    // `--collect` fails an audit with an unwitnessed mutant. It is admitted only when the
+    // verdict accepts the report with the exempted mutant in it and the baseline passed.
+    let verdict = verdict(&audit.report);
+    let exempted = matches!(&verdict, Ok(verdict) if verdict.exempt > 0);
+    ensure!(
+        audit.passed || (exempted && audit.baseline_passed),
+        "the mutation audit did not pass"
+    );
+    let verdict = verdict?;
     println!(
-        "{} mutant(s), {} killed, {} of the guard classes; no survivor",
-        verdict.mutants, verdict.killed, verdict.guard_mutants
+        "{} mutant(s), {} killed, {} exempted unwitnessed, {} of the guard classes; no survivor",
+        verdict.mutants, verdict.killed, verdict.exempt, verdict.guard_mutants
     );
     Ok(())
 }
@@ -246,7 +305,7 @@ mod tests {
              copy the kept mutation-report.json there"
         );
         let verdict = verdict(&report)?;
-        assert!(verdict.guard_mutants > 0 && verdict.killed == verdict.mutants);
+        assert!(verdict.guard_mutants > 0 && verdict.killed + verdict.exempt == verdict.mutants);
         Ok(())
     }
 
@@ -262,6 +321,120 @@ mod tests {
         assert!(verdict(&report(0, "guard-negate")).is_ok());
         assert!(verdict(&report(1, "guard-negate")).is_err());
         assert!(verdict(&report(0, "emit-drop")).is_err());
+    }
+
+    /// story:typed-satisfaction-receipt. The one unwitnessed mutant ESS 0.56.0 cannot witness,
+    /// the negated `defined(receipt_revision)` guard of SatisfyGoal's `stale-revision`, is
+    /// admitted only with its own ESS-SYNTH-003 refusal on that outcome's scenario. Another
+    /// unwitnessed id, this id with another refusal, an extra refusal or another verdict, and a
+    /// survivor beside it, are refused.
+    #[test]
+    fn only_the_declared_unwitnessed_mutant_is_admitted() {
+        let id = "guard-negate/controlplane.host.SatisfyGoal/stale-revision";
+        let scenario = "controlplane.host.SatisfyGoal/outcome/stale-revision";
+        let refusal = |code: &str, scenario: &str| {
+            serde_json::json!({"code": code, "scenario": scenario,
+                "subject": "outcome controlplane.host.SatisfyGoal/stale-revision"})
+        };
+        let report = |unwitnessed: serde_json::Value, survived: u64| {
+            let mut mutants = vec![
+                serde_json::json!({"id": "guard-negate/controlplane.host.CreateGoal/workers-invalid",
+                    "class": "guard-negate", "verdict": "killed"}),
+                unwitnessed,
+            ];
+            if survived == 1 {
+                mutants.push(
+                    serde_json::json!({"id": "guard-boundary/x", "class": "guard-boundary",
+                    "verdict": "survived"}),
+                );
+            }
+            serde_json::json!({"format": "ess-mutation-report/3",
+                "counts": {"mutants": mutants.len(), "killed": 1, "survived": survived,
+                    "inconclusive": 0, "unwitnessed": 1},
+                "mutants": mutants})
+        };
+        let mutant = |id: &str, verdict: &str, refusals: Vec<serde_json::Value>| {
+            serde_json::json!({"id": id, "class": "guard-negate", "verdict": verdict,
+                "added_refusals": refusals})
+        };
+        let admitted = verdict(&report(
+            mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-003", scenario)]),
+            0,
+        ));
+        assert_eq!(
+            admitted
+                .map(|verdict| (verdict.killed, verdict.exempt))
+                .ok(),
+            Some((1, 1))
+        );
+        for (refused, why) in [
+            (
+                report(
+                    mutant(
+                        "guard-negate/controlplane.host.RepairAssignment/rebased",
+                        "unwitnessed",
+                        vec![refusal("ESS-SYNTH-003", scenario)],
+                    ),
+                    0,
+                ),
+                "another unwitnessed id",
+            ),
+            (
+                report(
+                    mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-001", scenario)]),
+                    0,
+                ),
+                "another refusal code",
+            ),
+            (
+                report(
+                    mutant(
+                        id,
+                        "unwitnessed",
+                        vec![refusal(
+                            "ESS-SYNTH-003",
+                            "controlplane.host.SatisfyGoal/outcome/applied",
+                        )],
+                    ),
+                    0,
+                ),
+                "another refused scenario",
+            ),
+            (
+                report(
+                    mutant(
+                        id,
+                        "unwitnessed",
+                        vec![
+                            refusal("ESS-SYNTH-003", scenario),
+                            refusal(
+                                "ESS-SYNTH-003",
+                                "controlplane.host.SatisfyGoal/outcome/applied",
+                            ),
+                        ],
+                    ),
+                    0,
+                ),
+                "an extra refusal",
+            ),
+            (report(mutant(id, "unwitnessed", vec![]), 0), "no refusal"),
+            (
+                report(
+                    mutant(id, "inconclusive", vec![refusal("ESS-SYNTH-003", scenario)]),
+                    0,
+                ),
+                "another verdict",
+            ),
+            (
+                report(
+                    mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-003", scenario)]),
+                    1,
+                ),
+                "a survivor beside it",
+            ),
+        ] {
+            assert!(verdict(&refused).is_err(), "{why} was admitted: {refused}");
+        }
     }
 
     /// The emitted directory is removed when the audit ends, and kept on request.

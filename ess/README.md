@@ -19,6 +19,7 @@ specification declares, each with synthesized scenarios:
 | 6 | review uses an execution context other than the implementor's | ReadyAssignment `reviewer-missing`, `review-not-independent` |
 | 7 | tests and review cover the assignment's candidate | ReviewAssignment `tests-not-current`, ReadyAssignment `evidence-not-current` |
 | 10 | completion and reconciliation carry a merge receipt | CompleteAssignment and ReconcileAssignment `receipt-missing` |
+| 11 | goal satisfaction names the goal's current revision | SatisfyGoal `stale-revision`, when `receipt_revision` is given |
 | 17 | worker, attempt and minute limits are positive | CreateGoal `workers-invalid`, `attempts-invalid`, `minutes-invalid` |
 
 ## Host facts
@@ -40,7 +41,7 @@ quoted with the trial that printed it.
 | 8 | merging and preparing publication need the goal's merge authority | the goal is selected by `subject.goal_id` (row 5) |
 | 9 | merging needs a prepared publication intent for the candidate, base and target | a selector over PublicationIntent comparing with subject fields (rows 1 and 2) |
 | 10 | the merge receipt is the receipt of a confirmed publication of the candidate | a selector over PublicationIntent comparing with subject fields (rows 1 and 2); the empty receipt is declared |
-| 11 | goal satisfaction: receipt, no unfinished assignment, current goal revision | owned by story:typed-satisfaction-receipt, which replaces the SatisfyGoal guard |
+| 11 | goal satisfaction: a receipt, no unfinished assignment; a new satisfaction of a Running goal names `receipt_revision`, and its receipt names the same `goal_revision` | `receipt_revision` is optional so that SatisfyGoal decisions recorded before it existed replay with their recorded answers, so the specification cannot require it of a new call; the receipt stays text (decision-blocker:typed-receipt-replay), so its `goal_revision` is not a field ESS can read; unfinished assignments are a selector `goal_id == subject.goal_id` over Assignment (rows 1 and 2) |
 | 14 | a goal with assignment history is not deleted | a selector `goal_id == subject.goal_id` over Assignment (rows 1 and 2) |
 | 15 | one registration per canonical workspace path, answered with its first receipt | canonical path discovery reads the filesystem, and a repeat answers the recorded receipt rather than a refusal |
 | 16 | a workspace directory with active assignments or planning is not removed | the directory's repositories come from a filesystem scan (`repository_common_dirs`), and the rule spans Directory, RepositoryRegistration, Assignment and Goal |

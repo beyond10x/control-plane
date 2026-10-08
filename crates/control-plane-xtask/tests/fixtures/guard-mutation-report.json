@@ -2,16 +2,16 @@
   "baseline": {
     "not_scored": [],
     "refusals": 0,
-    "scenarios": 174
+    "scenarios": 175
   },
   "counts": {
     "equivalent": 0,
     "inconclusive": 0,
     "killed": 12,
-    "mutants": 12,
+    "mutants": 13,
     "stillborn": 0,
     "survived": 0,
-    "unwitnessed": 0
+    "unwitnessed": 1
   },
   "format": "ess-mutation-report/3",
   "implementation": "control-plane-core::contract::ContractStore 0.1.0",
@@ -24,7 +24,7 @@
         "controlplane.host.CreateGoal/outcome/created"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -35,7 +35,7 @@
         "controlplane.host.CreateGoal/outcome/attempts-invalid"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -46,7 +46,7 @@
         "controlplane.host.CreateGoal/outcome/created"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -57,7 +57,7 @@
         "controlplane.host.CreateGoal/outcome/minutes-invalid"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -68,7 +68,7 @@
         "controlplane.host.CreateGoal/outcome/created"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -79,7 +79,7 @@
         "controlplane.host.CreateGoal/outcome/workers-invalid"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -216,13 +216,14 @@
         "controlplane.host.ReviewAssignment/outcome/applied",
         "controlplane.host.ReviewAssignment/outcome/tests-not-current",
         "controlplane.host.SatisfyGoal/outcome/applied",
+        "controlplane.host.SatisfyGoal/outcome/stale-revision",
         "controlplane.host.StartGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/cancelled",
         "controlplane.host.UpdateGoal/outcome/satisfied"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -358,13 +359,14 @@
         "controlplane.host.ReviewAssignment/outcome/applied",
         "controlplane.host.ReviewAssignment/outcome/tests-not-current",
         "controlplane.host.SatisfyGoal/outcome/applied",
+        "controlplane.host.SatisfyGoal/outcome/stale-revision",
         "controlplane.host.StartGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/cancelled",
         "controlplane.host.UpdateGoal/outcome/satisfied"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -502,13 +504,14 @@
         "controlplane.host.ReviewAssignment/outcome/applied",
         "controlplane.host.ReviewAssignment/outcome/tests-not-current",
         "controlplane.host.SatisfyGoal/outcome/applied",
+        "controlplane.host.SatisfyGoal/outcome/stale-revision",
         "controlplane.host.StartGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/applied",
         "controlplane.host.UpdateGoal/outcome/cancelled",
         "controlplane.host.UpdateGoal/outcome/satisfied"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -522,8 +525,23 @@
         "controlplane.host.RepairAssignment/outcome/rebased"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
+    },
+    {
+      "added_refusals": [
+        {
+          "code": "ESS-SYNTH-003",
+          "scenario": "controlplane.host.SatisfyGoal/outcome/stale-revision",
+          "subject": "outcome controlplane.host.SatisfyGoal/stale-revision"
+        }
+      ],
+      "change": "`when: defined(receipt_revision)` becomes `when: not (defined(receipt_revision))`",
+      "class": "guard-negate",
+      "id": "guard-negate/controlplane.host.SatisfyGoal/stale-revision",
+      "refusals": 1,
+      "scenarios": 174,
+      "verdict": "unwitnessed"
     },
     {
       "change": "`attempts-invalid` (`max_attempts <= 0`) and `minutes-invalid` (`max_minutes <= 0`) change places, so `minutes-invalid` answers where both hold",
@@ -533,7 +551,7 @@
         "controlplane.host.CreateGoal/outcome/minutes-invalid"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     },
     {
@@ -544,10 +562,10 @@
         "controlplane.host.CreateGoal/outcome/attempts-invalid"
       ],
       "refusals": 0,
-      "scenarios": 174,
+      "scenarios": 175,
       "verdict": "killed"
     }
   ],
-  "spec_digest": "c4dda5ccc49fd738a60e886dbf7d9aa1b3aa7b406ec8f453127c63b9f6583548",
+  "spec_digest": "067305d07e71dad22be3826b880d520f1f1c41ed0bdd99b54d385d0d95f58dad",
   "specification": "controlplane v1"
 }

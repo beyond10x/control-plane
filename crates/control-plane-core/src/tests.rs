@@ -831,7 +831,7 @@ async fn finished_goal_refuses_edit(finish: (&str, Value, Actor), refusal: &str)
 #[tokio::test]
 async fn satisfied_goal_refuses_edit() {
     let receipt = json!({"kind":"goal_acceptance","goal_revision":1}).to_string();
-    let satisfy = json!({"satisfaction_receipt":receipt});
+    let satisfy = json!({"satisfaction_receipt":receipt,"receipt_revision":1});
     let goal =
         finished_goal_refuses_edit(("SatisfyGoal", satisfy, Actor::Supervisor), "satisfied").await;
     assert_eq!(goal["state"], "Satisfied");
@@ -866,7 +866,7 @@ async fn unchanged_goal_is_satisfied_after_acceptance() {
     let satisfied = store
         .execute(
             "SatisfyGoal",
-            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            json!({"goal_id":goal,"satisfaction_receipt":receipt,"receipt_revision":checked["revision"]}),
             Actor::Supervisor,
         )
         .await
@@ -883,11 +883,12 @@ async fn unchanged_goal_is_satisfied_after_acceptance() {
     assert_eq!(reopened.query("GoalList").unwrap()[0], after);
 }
 
-/// SatisfyGoal is admitted only for the revision its receipt names. Goal acceptance reads the
-/// goal at revision 1, an operator edit moves it to 2, and the receipt for revision 1 is
-/// refused, as is any receipt that names no revision. Nothing is recorded: the goal stays
-/// Running at revision 2 without a receipt. A goal that cannot be satisfied keeps its declared
-/// `wrong-state` refusal, whatever the receipt holds.
+/// SatisfyGoal is admitted only for the revision it names. Goal acceptance reads the goal at
+/// revision 1 and an operator edit moves it to 2. A satisfaction naming revision 1 gets the
+/// declared `stale-revision` refusal, which is recorded. A satisfaction that names no integer
+/// `receipt_revision`, or whose receipt does not name that same revision, is refused by the host
+/// and nothing is recorded. Either way the goal stays Running at revision 2 without a receipt. A
+/// goal that cannot be satisfied keeps its declared `wrong-state` refusal, whatever it is sent.
 #[tokio::test]
 async fn satisfaction_receipt_must_name_the_current_goal_revision() {
     let temp = tempfile::tempdir().unwrap();
@@ -912,39 +913,76 @@ async fn satisfaction_receipt_must_name_the_current_goal_revision() {
         .unwrap();
     let edited = store.query("GoalList").unwrap()[0].clone();
     assert_eq!(edited["revision"], 2);
+
     let version = store.version;
-    for (receipt, message) in [
+    let refused = store
+        .execute(
+            "SatisfyGoal",
+            json!({"goal_id":goal,"satisfaction_receipt":stale,"receipt_revision":checked}),
+            Actor::Supervisor,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        refused,
+        json!({"outcome":"stale-revision","error":"controlplane.host.GoalStateConflict","payload":{"state":"Running"},"published":[]})
+    );
+    assert_eq!(
+        store.version,
+        version + 1,
+        "the declared refusal is recorded"
+    );
+    assert_eq!(store.query("GoalList").unwrap()[0], edited);
+
+    let version = store.version;
+    let current = json!({"kind":"goal_acceptance","goal_revision":2}).to_string();
+    for (receipt, revision, message) in [
+        (
+            current.clone(),
+            Value::Null,
+            "goal satisfaction names no integer receipt_revision; the goal is at revision 2",
+        ),
+        (
+            current.clone(),
+            json!("2"),
+            "goal satisfaction names no integer receipt_revision; the goal is at revision 2",
+        ),
         (
             stale,
-            "goal satisfaction receipt names goal revision 1 but the goal is at revision 2",
+            json!(2),
+            "goal satisfaction receipt names goal revision 1 but receipt_revision is 2",
         ),
         (
             json!({"kind":"goal_acceptance","goal_revision":"2"}).to_string(),
-            "goal satisfaction receipt names goal revision \"2\" but the goal is at revision 2",
+            json!(2),
+            "goal satisfaction receipt names goal revision \"2\" but receipt_revision is 2",
         ),
         (
             json!({"kind":"goal_acceptance"}).to_string(),
-            "goal satisfaction receipt names no goal_revision; the goal is at revision 2",
+            json!(2),
+            "goal satisfaction receipt names no goal_revision; receipt_revision is 2",
         ),
         (
             "acceptance-verified".to_owned(),
-            "goal satisfaction receipt is not a JSON object naming its goal_revision; the goal is at revision 2",
+            json!(2),
+            "goal satisfaction receipt is not a JSON object naming its goal_revision; receipt_revision is 2",
         ),
         (
             "2".to_owned(),
-            "goal satisfaction receipt is not a JSON object naming its goal_revision; the goal is at revision 2",
+            json!(2),
+            "goal satisfaction receipt is not a JSON object naming its goal_revision; receipt_revision is 2",
         ),
     ] {
+        let mut body = json!({"goal_id":goal,"satisfaction_receipt":receipt});
+        if !revision.is_null() {
+            body["receipt_revision"] = revision.clone();
+        }
         let error = store
-            .execute(
-                "SatisfyGoal",
-                json!({"goal_id":goal,"satisfaction_receipt":receipt}),
-                Actor::Supervisor,
-            )
+            .execute("SatisfyGoal", body, Actor::Supervisor)
             .await
-            .expect_err(&receipt);
-        assert_eq!(format!("{error:#}"), message, "{receipt}");
-        assert_eq!(store.version, version, "{receipt}");
+            .expect_err(&format!("{receipt} {revision}"));
+        assert_eq!(format!("{error:#}"), message, "{receipt} {revision}");
+        assert_eq!(store.version, version, "{receipt} {revision}");
         assert_eq!(store.query("GoalList").unwrap()[0], edited, "{receipt}");
     }
     assert_eq!(edited["state"], "Running");
@@ -953,11 +991,10 @@ async fn satisfaction_receipt_must_name_the_current_goal_revision() {
     let mut store = Store::open(&db).await.unwrap();
     assert_eq!(store.query("GoalList").unwrap()[0], edited);
 
-    let current = json!({"kind":"goal_acceptance","goal_revision":2}).to_string();
     let satisfied = store
         .execute(
             "SatisfyGoal",
-            json!({"goal_id":goal,"satisfaction_receipt":current}),
+            json!({"goal_id":goal,"satisfaction_receipt":current,"receipt_revision":2}),
             Actor::Supervisor,
         )
         .await
@@ -998,8 +1035,9 @@ async fn running_goal_and_edit(store: &mut Store, path: &Path) -> (String, Value
 
 /// story:acceptance-edit-ordering, the edit first. Goal acceptance checked the goal at revision
 /// 1, then the operator's edit moved it to revision 2. The SatisfyGoal acceptance sends names
-/// revision 1 and is refused before any decision is appended. The goal stays Running at
-/// revision 2 with the edited acceptance criteria and no receipt, also after replay.
+/// revision 1 and gets the declared `stale-revision` refusal, recorded as one decision. The goal
+/// stays Running at revision 2 with the edited acceptance criteria and no receipt, also after
+/// replay.
 #[tokio::test]
 async fn satisfy_after_edit_names_the_old_revision_and_is_refused() {
     let temp = tempfile::tempdir().unwrap();
@@ -1020,19 +1058,23 @@ async fn satisfy_after_edit_names_the_old_revision_and_is_refused() {
     assert_eq!(current["revision"], 2, "{current}");
 
     let version = store.version;
-    let error = store
+    let refused = store
         .execute(
             "SatisfyGoal",
-            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            json!({"goal_id":goal,"satisfaction_receipt":receipt,"receipt_revision":checked["revision"]}),
             Actor::Supervisor,
         )
         .await
-        .expect_err("a receipt for revision 1 satisfied the goal at revision 2");
+        .expect("a receipt for revision 1 is a declared refusal of the goal at revision 2");
     assert_eq!(
-        format!("{error:#}"),
-        "goal satisfaction receipt names goal revision 1 but the goal is at revision 2"
+        refused,
+        json!({"outcome":"stale-revision","error":"controlplane.host.GoalStateConflict","payload":{"state":"Running"},"published":[]})
     );
-    assert_eq!(store.version, version, "the refusal appended a decision");
+    assert_eq!(
+        store.version,
+        version + 1,
+        "the refusal is one recorded decision"
+    );
     let after = store.query("GoalList").unwrap()[0].clone();
     assert_eq!(after, current);
     assert_eq!(after["state"], "Running");
@@ -1045,6 +1087,57 @@ async fn satisfy_after_edit_names_the_old_revision_and_is_refused() {
     drop(store);
     let reopened = Store::open(&db).await.unwrap();
     assert_eq!(reopened.query("GoalList").unwrap()[0], current);
+}
+
+/// story:typed-satisfaction-receipt. SatisfyGoal names the revision its acceptance checked in
+/// `receipt_revision`, so the generated behaviour compares it with the goal's: a receipt for
+/// revision 1 sent after an edit moved the goal to revision 2 gets the declared `stale-revision`
+/// outcome, through the host's admission and through the durable contract alike. The refusal is
+/// recorded, and the goal stays Running at revision 2 without a receipt, also after replay.
+#[tokio::test]
+async fn satisfy_with_a_receipt_for_an_old_revision_is_a_declared_refusal() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = temp.path().join("state.sqlite");
+    let mut store = Store::open(&db).await.unwrap();
+    let (goal, edit) = running_goal_and_edit(&mut store, temp.path()).await;
+    let satisfy = json!({
+        "goal_id": goal,
+        "satisfaction_receipt": json!({"kind":"goal_acceptance","goal_revision":1}).to_string(),
+        "receipt_revision": 1,
+    });
+    store
+        .execute("UpdateGoal", edit, Actor::Operator)
+        .await
+        .unwrap();
+    let current = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(current["revision"], 2, "{current}");
+    let refusal = json!({"outcome":"stale-revision","error":"controlplane.host.GoalStateConflict","payload":{"state":"Running"},"published":[]});
+
+    let version = store.version;
+    let refused = store
+        .execute("SatisfyGoal", satisfy.clone(), Actor::Supervisor)
+        .await
+        .expect("a stale receipt is a declared refusal, not a host error");
+    assert_eq!(refused, refusal);
+    assert_eq!(
+        store.version,
+        version + 1,
+        "the declared refusal is recorded"
+    );
+    let after = store.query("GoalList").unwrap()[0].clone();
+    assert_eq!(after, current);
+    assert_eq!(after["state"], "Running");
+    assert_eq!(after["satisfaction_receipt"], "");
+    drop(store);
+
+    let mut contract = contract::ContractStore::open(&db).await.unwrap();
+    assert_eq!(contract.query("GoalList").unwrap()[0], current);
+    let refused = contract
+        .execute("SatisfyGoal", satisfy, Actor::Supervisor)
+        .await
+        .unwrap();
+    assert_eq!(refused, refusal);
+    assert_eq!(contract.query("GoalList").unwrap()[0], current);
 }
 
 /// story:acceptance-edit-ordering, the acceptance first. SatisfyGoal records the receipt for
@@ -1064,7 +1157,7 @@ async fn edit_after_satisfy_is_refused_and_says_why() {
     let satisfied = store
         .execute(
             "SatisfyGoal",
-            json!({"goal_id":goal,"satisfaction_receipt":receipt}),
+            json!({"goal_id":goal,"satisfaction_receipt":receipt,"receipt_revision":checked["revision"]}),
             Actor::Supervisor,
         )
         .await
@@ -2506,6 +2599,13 @@ async fn declared_admission_refusals_are_recorded_and_replay() {
             queue(&goal, 2),
             Actor::Supervisor,
             "goal-not-current",
+        ),
+        (
+            "SatisfyGoal",
+            json!({"goal_id":goal,"receipt_revision":2,
+                "satisfaction_receipt":json!({"kind":"goal_acceptance","goal_revision":2}).to_string()}),
+            Actor::Supervisor,
+            "stale-revision",
         ),
         (
             "ClaimAssignment",

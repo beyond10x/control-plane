@@ -220,6 +220,54 @@ async fn recorded_history_replays() -> Result<()> {
     Ok(())
 }
 
+/// story:typed-satisfaction-receipt. SatisfyGoal's `receipt_revision` input is optional, so the
+/// four SatisfyGoal decisions recorded before it existed (event versions 12, 90, 91 and 102),
+/// which carry no `receipt_revision`, replay through current generated behaviour with their
+/// recorded answers and no host migration, and every view equals its recorded view.
+#[tokio::test]
+async fn recorded_satisfactions_still_replay() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let copy = copy_history(dir.path())?;
+    let recorded = decisions(&copy).await?;
+    let satisfactions: Vec<(usize, &Value)> = recorded
+        .iter()
+        .enumerate()
+        .filter(|(_, decision)| decision["command"] == "SatisfyGoal")
+        .map(|(index, decision)| (index + 1, decision))
+        .collect();
+    assert_eq!(
+        satisfactions
+            .iter()
+            .map(|(version, decision)| (*version, decision["outcome"]["outcome"].as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (12, Some("not-found")),
+            (90, Some("applied")),
+            (91, Some("wrong-state")),
+            (102, Some("applied")),
+        ]
+    );
+    for (version, decision) in &satisfactions {
+        let body = decision["body"].as_object().context("decision body")?;
+        assert!(
+            body.keys().eq(["goal_id", "satisfaction_receipt"]),
+            "decision {version} names {:?}",
+            body.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            body["satisfaction_receipt"].is_string(),
+            "decision {version}"
+        );
+    }
+
+    let store = Store::open(&copy).await?;
+    let expected: Value = serde_json::from_slice(&fs::read(VIEWS)?)?;
+    for view in declared("GET", "/host/views/") {
+        assert_eq!(store.query(view)?, expected[view], "{view} after replay");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn changed_recorded_outcome_fails_replay() -> Result<()> {
     let dir = tempfile::tempdir()?;

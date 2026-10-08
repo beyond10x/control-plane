@@ -2770,7 +2770,7 @@ fn satisfy_goals(host: &Host) -> Result<(usize, Vec<String>)> {
                 let outcome = store
                     .execute(
                         "SatisfyGoal",
-                        json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt}),
+                        json!({"goal_id":goal["goal_id"],"satisfaction_receipt":receipt,"receipt_revision":goal["revision"]}),
                         Actor::Supervisor,
                     )
                     .await?;

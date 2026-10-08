@@ -711,7 +711,17 @@ commands:
     type: Uuid
   - name: satisfaction_receipt
     type: String
+  - name: receipt_revision
+    type: Optional<Integer>
   outcomes:
+  - name: stale-revision
+    when: defined(receipt_revision)
+    when_subject:
+      predicate:
+        all:
+        - state == Running
+        - revision != input.receipt_revision
+    error: controlplane.host.GoalStateConflict
   - name: applied
     moves: controlplane.host.Goal.satisfy
     instance: goal_id
