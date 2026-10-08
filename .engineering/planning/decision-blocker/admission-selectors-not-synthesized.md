@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:admission-selectors-not-synthesized
 kind: decision-blocker
-status: open
+status: cleared
 title: Re-scope story:spec-owned-admission to the guards ESS 0.56.0 synthesizes, or park it?
 relations:
 - blocks: story:spec-owned-admission
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-08T03:28:43Z", actor: "human:timo", revision: 3}
 ---
 ## Question
 
@@ -39,3 +41,7 @@ The design review's table marks 15 missing rows (1–11, 14–17), not 16.
 | B | Park the story until an ESS release synthesizes those selectors | no admission work in this wave; the rules stay host code anyway |
 
 Recommendation: A, with the ESS request either way.
+
+## Decided
+
+Option A, decided 2026-10-08 under the operator's delegated decision authority: story:spec-owned-admission is re-scoped to the guards ESS 0.56.0 synthesizes. The input-addressed QueueAssignment guards are declared (184 scenarios, 0 refusals in the trial). Rows 1-4 of the design review (second running goal per workspace, one active change per Git common directory, worker limit, repository disabled) are listed as host facts in the specification README, quoting the ESS 0.56.0 refusals. The acceptance `second_running_goal_is_refused_in_conformance` is replaced by one that checks what synthesizes. Synthesis of selectors that compare a row with a subject field has been requested from ESS; the trial outputs stay in the unit tree's `.scratch/trial/` until ESS has copied them.

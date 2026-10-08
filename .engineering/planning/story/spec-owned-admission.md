@@ -27,7 +27,7 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 8
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-08T03:13:39Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
@@ -45,8 +45,10 @@ The admission rules the product relies on are declared in the specification wher
 
 ## Acceptance
 
-- `admission_rules_are_declared`: each missing row of the design review is either a declared guard with synthesized scenarios, or listed in a host-facts section of the specification's README with the reason (for example canonical path discovery).
-- `second_running_goal_is_refused_in_conformance`: the synthesized scenario that sends StartGoal for a workspace that already has a Running goal passes against the conformance target and observes the declared refusal; run against today's `ContractStore` target the same scenario fails.
+Re-scoped on 2026-10-08 (decision-blocker:admission-selectors-not-synthesized, option A).
+
+- `admission_rules_are_declared`: each missing row of the design review (its table marks 15: rows 1–11 and 14–17) is either a declared guard with synthesized scenarios, or listed in a host-facts section of the specification's README with the reason; rows 1–4 (second running goal per workspace, one active change per Git common directory, worker limit, repository disabled) are host facts quoting the ESS 0.56.0 refusal each met.
+- `queue_guards_are_refused_in_conformance`: the synthesized scenarios for QueueAssignment's declared refusals (goal missing, goal not Running or at a stale revision, repository missing) pass against the conformance target, and the target runs them through the same admission path as the console and runtime; run against today's `ContractStore` target, a scenario that depends on admission fails or is absent.
 - `guard_mutants_are_killed`: `ess verify conform mutate --emit` / `--collect`, run through the xtask runner, reports guard-class mutants and no survivor.
 - `supervisor_grants_are_least_privilege`: the Supervisor's `may` list equals the set of commands the runtime executes as Supervisor at the time of the change.
 - `recorded_history_replays` stays green, or each change id is acknowledged.
@@ -60,6 +62,8 @@ Resolved by a coordinator trial on 2026-10-08 against ESS 0.56.0 (`ess/22`), in 
 - It validates (`controlplane v1 — 3 file(s), valid`, `--strict-requires`) once Assignment declares `common_dir: String` and QueueAssignment's `created` outcome sets it with `common_dir: {related: {via: input.repository_id, field: common_dir}}`.
 
 Decision: Assignment carries the common directory, stamped when it is queued; the selector above is the declared refusal. Not yet checked: recorded Assignment rows that predate the field (`recorded_history_replays`) and whether conformance synthesis covers the selector branch.
+
+Superseded on 2026-10-08: the selector validates but ESS 0.56.0 conformance synthesis refuses it ("reads a subject field the steps leave undetermined"; 180 scenarios fell to 141). The rule stays a host fact; see decision-blocker:admission-selectors-not-synthesized.
 
 ## Scope
 
