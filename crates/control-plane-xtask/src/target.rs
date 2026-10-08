@@ -5,12 +5,32 @@ use anyhow::{Context, Result};
 use control_plane_core::{Actor, contract::ContractStore};
 use ess_conformance::scenario::OutcomeRef;
 use ess_conformance::target::*;
-use ess_conformance::{AdmittedSuite, CountReport, Runner};
-use ess_primitives::{consistency::ConsistencyToken, node::Node};
+use ess_conformance::{AdmittedSuite, Clock, CountReport, Ids, Runner, RunnerConfig};
+use ess_primitives::{consistency::ConsistencyToken, node::Node, time::Timestamp};
 use std::{
     cell::{Cell, RefCell},
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
+
+/// The machine's clock, so a report states when its run happened. Reads never go backwards, and
+/// the machine's clock keeps moving, so a bounded assertion still ends at its budget.
+#[derive(Default)]
+struct WallClock {
+    last: u64,
+}
+
+impl Clock for WallClock {
+    fn now(&mut self) -> Timestamp {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since| {
+                u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+            });
+        self.last = self.last.max(millis);
+        Timestamp::from_epoch_millis(self.last)
+    }
+}
 
 pub struct DurableTarget {
     runtime: tokio::runtime::Runtime,
@@ -226,7 +246,12 @@ impl ConformanceTarget for DurableTarget {
 
 pub fn run(suite: &str, target: &impl ConformanceTarget) -> Result<(CountReport, String)> {
     let admitted = AdmittedSuite::from_json(suite)?;
-    let executed = Runner::for_suite(admitted.suite()).run_admitted(&admitted, target);
+    let runner = Runner::new(
+        RunnerConfig::default(),
+        WallClock::default(),
+        Ids::for_suite(admitted.suite()),
+    );
+    let executed = runner.run_admitted(&admitted, target);
     let report = CountReport::from_run(&executed, &admitted)?;
     Ok((report, serde_json::to_string_pretty(&*executed)?))
 }

@@ -59,7 +59,7 @@ jobs:
             echo "$RUNNER_TEMP/$asset" >> "$GITHUB_PATH"
           done <<'TOOLS'
           ess 0.56.0 97bf08aad9e0c1615b70636a08aae4e0fe3a7a63e92c1dfe75e7503fff2a4a6f
-          aep 0.68.0 02bf6a2c4bc9a3ffd717edfb365f665491005004f159774a8847d3cbd18c5e91
+          aep 0.69.1 39eb89d6354cbf381a77e15051fac092e1454a7ebbf94a9bf0d85417a4c4a3f0
           worktree 0.8.2 8be61b3ee06e3a49c02416b52f5269e270846c105432ef3c2f5b63f30241b737
           TOOLS
       - name: Validate and qualify
@@ -106,7 +106,7 @@ jobs:
             echo "$RUNNER_TEMP/$asset" >> "$GITHUB_PATH"
           done <<'TOOLS'
           ess 0.56.0 97bf08aad9e0c1615b70636a08aae4e0fe3a7a63e92c1dfe75e7503fff2a4a6f
-          aep 0.68.0 02bf6a2c4bc9a3ffd717edfb365f665491005004f159774a8847d3cbd18c5e91
+          aep 0.69.1 39eb89d6354cbf381a77e15051fac092e1454a7ebbf94a9bf0d85417a4c4a3f0
           worktree 0.8.2 8be61b3ee06e3a49c02416b52f5269e270846c105432ef3c2f5b63f30241b737
           TOOLS
       - name: Audit guard mutants
