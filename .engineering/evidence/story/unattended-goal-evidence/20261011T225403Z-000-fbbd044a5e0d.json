@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-11T22:54:03Z",
+  "actor": "human:timo",
+  "artifact": "story:unattended-goal-evidence",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gate of control-plane-xtask with ess 0.56.0 and aep 0.69.1: fmt, clippy -D warnings, cargo test (148 passed in 20 binaries, the four unattended_run_report tests ok), aep and ess validate, all exit 0; .scratch/unattended-run-report empty after the run (control-plane/wave-9@46777ec)",
+    "reference": "control-plane/wave-9@46777ec"
+  }
+}

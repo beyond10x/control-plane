@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:report-test-scratch-cleanup
 kind: story
-status: active
+status: implemented
 title: The eval report tests leave no fixture repositories under .scratch
 relations:
 - decomposes: epic:unattended-operation
@@ -10,10 +10,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-xtask/tests/unattended_run_report.rs
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-11T22:05:09Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-11T22:54:04Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

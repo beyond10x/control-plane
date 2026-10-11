@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:unattended-goal-evidence
 kind: story
-status: active
+status: implemented
 title: One goal on a real repository is accepted with no operator input, and the run's record shows it
 relations:
 - decomposes: epic:unattended-operation
@@ -19,10 +19,11 @@ scope:
   path: README.md
 - confidence: cited
   path: docs/runs/2026-10-11-unattended-go-auth-web.md
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "active", to: "implemented", at: "2026-10-11T22:54:04Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":1,"verification":1}}}
 ---
 ## Outcome
 
