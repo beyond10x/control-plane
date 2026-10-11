@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-11T22:12:45Z",
+  "actor": "human:timo",
+  "artifact": "story:unattended-goal-evidence",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "control-plane-xtask eval report on the round-7 go-auth-web state store: Satisfied, receipt revision 1, merged a0f52f8 on origin/main, elapsed 242.132s, operator commands after start 0, unattended yes; verifier PASS go-auth-web on a clean clone; 35 turns, 214078 input and 10855 output tokens",
+    "reference": "docs/runs/2026-10-11-unattended-go-auth-web.md"
+  }
+}
