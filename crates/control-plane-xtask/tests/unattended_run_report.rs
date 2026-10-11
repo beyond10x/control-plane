@@ -61,6 +61,11 @@ impl AgentModel for Scripted {
 
 /// A recorded run: the state store the run left behind, its goal and the repository it merged into.
 struct Run {
+    /// The fixture root that holds the repository, its origin, the store and the managed
+    /// worktree records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    root: PathBuf,
+    /// Deletes `root` when the run is dropped, linked worktrees and their records with it.
+    _scratch: tempfile::TempDir,
     state: PathBuf,
     goal: String,
     repo: PathBuf,
@@ -75,7 +80,8 @@ async fn recorded_run(between: &[&str]) -> Run {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/unattended-run-report");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -253,6 +259,8 @@ async fn recorded_run(between: &[&str]) -> Run {
             .expect("the store is closed after the run"),
     );
     Run {
+        root,
+        _scratch: scratch,
         state,
         goal,
         repo,
@@ -383,12 +391,31 @@ async fn unattended_run_report_passes_a_clean_run() {
     // A missing store is refused, not created.
     let missing = Run {
         state: run.state.with_file_name("absent.sqlite"),
-        goal: run.goal.clone(),
-        repo: run.repo.clone(),
-        candidate: run.candidate.clone(),
-        base: run.base.clone(),
+        ..run
     };
     assert!(!report(&missing).status.success());
     assert!(!missing.state.exists());
     assert!(!missing.state.with_extension("lock").exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unattended_run_report_leaves_no_scratch() {
+    let run = recorded_run(&[]).await;
+    let root = run.root.clone();
+    // The run's repository, origin, store and managed worktree records all live in its root.
+    assert!(run.repo.starts_with(&root), "{}", run.repo.display());
+    assert!(run.state.starts_with(&root), "{}", run.state.display());
+    assert!(
+        root.join("state").is_dir(),
+        "worktree state is outside the root"
+    );
+    let output = report(&run);
+    let (stdout, stderr) = text(&output);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    drop(run);
+    assert!(
+        !root.exists(),
+        "the recorded run left {} behind",
+        root.display()
+    );
 }
