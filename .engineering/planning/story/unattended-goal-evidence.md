@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:unattended-goal-evidence
 kind: story
-status: draft
+status: active
 title: One goal on a real repository is accepted with no operator input, and the run's record shows it
 relations:
 - decomposes: epic:unattended-operation
@@ -14,8 +14,13 @@ relations:
 - depends_on: story:unattended-run-report
 scope:
 - confidence: inferred
+  path: .engineering/evidence
+- confidence: inferred
   path: README.md
-revision: 4
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:unattended-run-spending
 kind: decision-blocker
-status: open
+status: cleared
 title: How many real-model runs may story:unattended-goal-evidence spend, with which limits?
 relations:
 - blocks: story:unattended-goal-evidence
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-11T22:04:54Z", actor: "human:timo", revision: 3}
 ---
 ## Question
 
@@ -27,3 +29,7 @@ story:unattended-goal-evidence needs one real-model run: a goal on a real reposi
 | C | no real run now; wave 8 builds only the report checks (`unattended_run_report_counts_operator_commands`, `unattended_run_report_requires_a_merged_commit_on_target`) | no model spend; G1 evidence stays open |
 
 Recommendation: A. One bounded run gives the evidence or names the next defect, and every further run is a separate spending decision.
+
+## Answer
+
+The operator chose option A on 2026-10-11: exactly one real-model run on go-auth-web, one worker, one attempt, a 10-minute goal budget, at most about 2.2M input tokens, on the existing codex login with no new account or key, and no GitHub publication by the run. A failed run is kept; a second run is a new question for the operator. Recorded as approval-record:unattended-run-spending-2026-10-11.
