@@ -17,7 +17,9 @@ scope:
   path: .engineering/evidence
 - confidence: inferred
   path: README.md
-revision: 7
+- confidence: cited
+  path: docs/runs/2026-10-11-unattended-go-auth-web.md
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-11T22:05:08Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
@@ -44,12 +46,23 @@ Several goals, several repositories, a benchmark, publication to a hosted servic
 
 ## Scope
 
-Inferred: README.md (the run procedure), .engineering/evidence/ (written by the coordinator). The report code is story:unattended-run-report's.
+Inferred: README.md (the run procedure), .engineering/evidence/ (written by the coordinator). Cited: docs/runs/2026-10-11-unattended-go-auth-web.md (the run record). The report code is story:unattended-run-report's.
 
 ## Planning
 
-The run spends the operator's model budget and needs the operator's configured model login. decision-blocker:unattended-run-spending holds the spending question; no real-model run starts until it is answered. Wave 8 delivers story:unattended-run-report and leaves this story in draft.
+The run spends the operator's model budget and needs the operator's configured model login. The operator answered decision-blocker:unattended-run-spending on 2026-10-11 with option A (approval-record:unattended-run-spending-2026-10-11): one run, go-auth-web, one worker, one attempt, 10 minutes, about 2.2M input tokens at most, the existing codex login, no GitHub publication. Wave 9 made that run.
 
 ## Findings
 
 - Load sensitivity (wave 7 integration gate, 2026-10-08, 12:49Z): `editing_another_goal_during_acceptance_does_not_fail_the_fleet_tick` (crates/control-plane-runtime/tests/goal_acceptance_authority_pass2_attack.rs:379) panicked at line 396, "a goal reached its final review", after more than 60 s while the whole workspace's tests ran in parallel on a loaded host. It passed alone 2 of 2, with its own binary 3 of 3 (12-27 s), and 5 of 5 reruns afterwards. The test depends on the scripted fleet tick reaching final review within its run; under load that ordering did not happen once. An unattended run on a loaded host can take the same path, so the real run's report records host load (`/proc/loadavg`) beside its elapsed time. Recorded here, not as an issue.
+
+## Run (2026-10-11)
+
+One real-model run, the only one approved; the record is docs/runs/2026-10-11-unattended-go-auth-web.md.
+
+- Outcome: goal 44f885aa-77cc-4da7-a42e-069b364f54a3 went from StartGoal (22:08:43Z) to Satisfied (22:12:45Z) on a fresh go-auth-web seed with a local origin. `control-plane-xtask eval report` (exit 0): state Satisfied, receipt revision 1, merged commit a0f52f8 on origin/main: yes, elapsed 242.132 s, operator commands after start 0, unattended yes.
+- Ran unattended to the end: yes. Nothing was typed between StartGoal and the service stop; the stop came 5 s after Satisfied was observed.
+- Tokens: 214,078 input (50,560 of them cached) and 10,855 output in 35 turns over five Loom sessions (planner 14 turns, plan critic 1, implementor 18, code reviewer 1, goal reviewer 1). 9.7 % of the 2.2M input limit. Dollar cost not reported by the provider.
+- Wall time: 248.07 s from StartGoal to the stop, under the 600 s budget. Host load 38.79 at the start and 13.70 at the stop (1-minute average, 20 cores).
+- Independent check: the trusted verifier on a clean clone of the published origin at a0f52f8 printed PASS go-auth-web.
+- Built from control-plane/wave-9 at 6bf3795, which differs from main f0ad6c2 only in planning records.
