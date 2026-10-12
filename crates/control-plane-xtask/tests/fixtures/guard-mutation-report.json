@@ -5,15 +5,15 @@
     "scenarios": 175
   },
   "counts": {
-    "equivalent": 0,
+    "equivalent": 1,
     "inconclusive": 0,
     "killed": 12,
     "mutants": 13,
     "stillborn": 0,
     "survived": 0,
-    "unwitnessed": 1
+    "unwitnessed": 0
   },
-  "format": "ess-mutation-report/3",
+  "format": "ess-mutation-report/5",
   "implementation": "control-plane-core::contract::ContractStore 0.1.0",
   "mutants": [
     {
@@ -541,12 +541,14 @@
       "id": "guard-negate/controlplane.host.SatisfyGoal/stale-revision",
       "refusals": 1,
       "scenarios": 174,
-      "verdict": "unwitnessed"
+      "unsatisfiable_guard": "(not (defined(receipt_revision)) and (state == Running and revision != input.receipt_revision))",
+      "verdict": "equivalent"
     },
     {
       "change": "`attempts-invalid` (`max_attempts <= 0`) and `minutes-invalid` (`max_minutes <= 0`) change places, so `minutes-invalid` answers where both hold",
       "class": "precedence-swap",
       "id": "precedence-swap/controlplane.host.CreateGoal/attempts-invalid/minutes-invalid",
+      "identical_answer": "refuse with `controlplane.host.GoalLimitInvalid` and no payload; neither changes state, sets or emits anything",
       "killers": [
         "controlplane.host.CreateGoal/outcome/minutes-invalid"
       ],
@@ -558,6 +560,7 @@
       "change": "`workers-invalid` (`max_workers <= 0`) and `attempts-invalid` (`max_attempts <= 0`) change places, so `attempts-invalid` answers where both hold",
       "class": "precedence-swap",
       "id": "precedence-swap/controlplane.host.CreateGoal/workers-invalid/attempts-invalid",
+      "identical_answer": "refuse with `controlplane.host.GoalLimitInvalid` and no payload; neither changes state, sets or emits anything",
       "killers": [
         "controlplane.host.CreateGoal/outcome/attempts-invalid"
       ],
