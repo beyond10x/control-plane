@@ -25,10 +25,12 @@ specification declares, each with synthesized scenarios:
 ## Host facts
 
 Rules the host enforces in `crates/control-plane-core/src/guards.rs` and `directories.rs`
-because ESS 0.56.0 (`ess/22`) cannot declare them with synthesized scenarios, or because the
-generated Rust cannot implement the declaration. Each quotation is what ESS printed in a trial
-of this specification with the rule added; the trials and their full output are kept with the
-unit's working records (`host-facts/<row>.txt`). A candidate count depends on the trial: it is
+because ESS (`ess/22`) cannot declare them with synthesized scenarios, or because the
+generated Rust cannot implement the declaration. Each quotation is what ESS 0.56.0 printed in a
+trial of this specification with the rule added; the trials and their full output are kept with
+the unit's working records (`host-facts/<row>.txt`). Re-run with ESS 0.59.0 against the same
+specification (story:ess-059-upgrade), every trial printed the same output apart from the
+version line, and trial `4-repository-missing` still leaves QueueAssignment an obligation. A candidate count depends on the trial: it is
 quoted with the trial that printed it.
 
 | row | rule kept by the host | why the specification does not hold it |

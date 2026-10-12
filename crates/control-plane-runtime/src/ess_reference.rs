@@ -4,9 +4,9 @@ use anyhow::{Result, ensure};
 use serde_json::{Value, json};
 use std::path::Path;
 
-const VERSION: &str = "0.56.0";
-const SOURCE: &str = "https://github.com/beyond10x/ess/blob/84ee8d38eb69e3a4507de801fdcb248232ed6e6e/schemas/generated/ess.schema.json";
-const SCHEMA: &str = include_str!("../resources/ess-0.56.0/ess.schema.json");
+const VERSION: &str = "0.59.0";
+const SOURCE: &str = "https://github.com/beyond10x/ess/blob/56bd965b4a54e4f57afdcf1c1868317bcd0237b4/schemas/generated/ess.schema.json";
+const SCHEMA: &str = include_str!("../resources/ess-0.59.0/ess.schema.json");
 const LIMIT: usize = 12 * 1024;
 
 pub fn lookup(root: &Path, runner: &ProcessRunner, pointer: &str) -> Result<String> {
@@ -78,7 +78,7 @@ mod tests {
         // Digest of the bytes at the source commit named above, not a local projection.
         assert_eq!(
             format!("{:x}", Sha256::digest(SCHEMA.as_bytes())),
-            "e16e00ee763315e6af759028f7855d23c65c370b1eb877d13c198ecf447055df"
+            "ee26adfc6630b960340a26c6ad62a4f601f0cab1a4c6b1e52a98379715c188b2"
         );
         let root: Value = serde_json::from_str(&project("").unwrap()).unwrap();
         assert!(
