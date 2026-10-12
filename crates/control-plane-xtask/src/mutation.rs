@@ -21,27 +21,8 @@ pub const GUARD_CLASSES: [&str; 4] = [
     "precedence-swap",
 ];
 
-/// The one mutant the audit admits unwitnessed: its id, and the single synthesis refusal (code
-/// and scenario) its suite must have gained. Negating SatisfyGoal's `stale-revision` guard,
-/// `when: defined(receipt_revision)`, leaves that outcome reading an input the guard now requires
-/// absent, so ESS refuses to synthesize its scenario (ESS-SYNTH-003) and reports the mutant
-/// unwitnessed (ESS-MUTATE-004). Remove this exemption when the ESS release ships a witness for
-/// a negated `defined()` guard.
-pub const UNWITNESSED_EXEMPTION: (&str, &str, &str) = (
-    "guard-negate/controlplane.host.SatisfyGoal/stale-revision",
-    "ESS-SYNTH-003",
-    "controlplane.host.SatisfyGoal/outcome/stale-revision",
-);
-
-/// Whether `mutant` is exactly the exempted unwitnessed mutant with exactly its refusal.
-fn exempt(mutant: &serde_json::Value) -> bool {
-    let (id, code, scenario) = UNWITNESSED_EXEMPTION;
-    mutant["id"] == id
-        && mutant["verdict"] == "unwitnessed"
-        && mutant["added_refusals"].as_array().is_some_and(|refusals| {
-            matches!(refusals.as_slice(), [only] if only["code"] == code && only["scenario"] == scenario)
-        })
-}
+/// The only report format the verdict judges: what the pinned ESS 0.59.0 `--collect` writes.
+pub const REPORT_FORMAT: &str = "ess-mutation-report/5";
 
 /// The committed `--collect` report of the last audit of the specification, checked by the fast
 /// test against the specification digest of `generated/conformance.json`. `task mutation --
@@ -61,22 +42,41 @@ pub struct Audit {
     pub kept: Option<PathBuf>,
 }
 
-/// The counts of an `ess-mutation-report/3` document. It is refused unless every listed mutant is
-/// killed by its own record or is the [`UNWITNESSED_EXEMPTION`], the counts agree with the list,
-/// and a guard-class mutant was killed.
+/// The counts of an [`REPORT_FORMAT`] document. It is refused unless every listed mutant is
+/// killed or is [`evidenced_equivalent`], the counts agree with the list, and a guard-class
+/// mutant was killed. No mutant is admitted unwitnessed, survived, inconclusive or stillborn.
 #[derive(Debug, PartialEq)]
 pub struct Verdict {
     pub mutants: u64,
     pub killed: u64,
-    /// Mutants admitted unwitnessed by [`UNWITNESSED_EXEMPTION`]: 0 or 1.
-    pub exempt: u64,
+    /// Mutants admitted as equivalent on ESS's own evidence.
+    pub equivalent: u64,
     pub guard_mutants: usize,
+}
+
+/// Whether `mutant` is an `equivalent` record carrying the evidence ESS 0.59.0 writes for that
+/// verdict (`ess-mutation-report/5`). The `ESS-MUTATE-005` code itself appears only in the text
+/// summary of `--collect`; the record carries one of two fields instead:
+///
+/// - `unsatisfiable_guard`: the non-empty mutated guard, with the stored predicate beside it, that
+///   no input satisfies (ESS 0.57.0, "no input satisfies …"; on any guard class, and on a
+///   `precedence-swap` whose two guards never overlap);
+/// - `identical_answer`: on a `precedence-swap` only, the non-empty description of the one answer
+///   both swapped branches give (ESS 0.57.0, beyond10x/ess#517; ESS refuses it on another class).
+///
+/// An `equivalent` record with neither, with an empty or non-text value, or with
+/// `identical_answer` on another class, is not evidenced.
+fn evidenced_equivalent(mutant: &serde_json::Value) -> bool {
+    let text = |key: &str| mutant[key].as_str().is_some_and(|value| !value.is_empty());
+    mutant["verdict"] == "equivalent"
+        && (text("unsatisfiable_guard")
+            || (mutant["class"] == "precedence-swap" && text("identical_answer")))
 }
 
 pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
     ensure!(
-        report["format"] == "ess-mutation-report/3",
-        "not an ess-mutation-report/3 document: {}",
+        report["format"] == REPORT_FORMAT,
+        "not an {REPORT_FORMAT} document: {}",
         report["format"]
     );
     let counts = &report["counts"];
@@ -86,42 +86,34 @@ pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
             .with_context(|| format!("no {key} count"))
     };
     let mutants = report["mutants"].as_array().context("no mutants array")?;
-    let exempted = mutants.iter().filter(|mutant| exempt(mutant)).count() as u64;
-    for key in ["survived", "inconclusive"] {
+    for key in ["survived", "inconclusive", "unwitnessed"] {
         ensure!(count(key)? == 0, "{} mutant(s) {key}", count(key)?);
     }
-    ensure!(
-        exempted <= 1,
-        "the exempted mutant is listed {exempted} times"
-    );
-    // With the exemption, `run_verb` no longer relies on `--collect` passing, so this verdict
-    // also refuses the counts ESS would otherwise judge.
-    if exempted > 0 {
-        for key in ["stillborn", "equivalent"] {
-            let n = counts[key].as_u64().unwrap_or(0);
-            ensure!(n == 0, "{n} mutant(s) {key} beside the exempted mutant");
-        }
-    }
-    ensure!(
-        count("unwitnessed")? == exempted,
-        "{} mutant(s) unwitnessed, {exempted} of them exempted",
-        count("unwitnessed")?
-    );
+    let stillborn = counts["stillborn"].as_u64().unwrap_or(0);
+    ensure!(stillborn == 0, "{stillborn} mutant(s) stillborn");
     // Each mutant is judged by its own record; the counts must agree with the list.
     let unkilled: Vec<String> = mutants
         .iter()
-        .filter(|mutant| mutant["verdict"] != "killed" && !exempt(mutant))
+        .filter(|mutant| mutant["verdict"] != "killed" && !evidenced_equivalent(mutant))
         .map(|mutant| format!("{} ({})", mutant["id"], mutant["verdict"]))
         .collect();
     ensure!(
         unkilled.is_empty(),
-        "mutant(s) not killed: {}",
+        "mutant(s) neither killed nor equivalent on ESS's evidence: {}",
         unkilled.join(", ")
     );
-    let killed = mutants.len() as u64 - exempted;
+    let equivalent = mutants
+        .iter()
+        .filter(|mutant| evidenced_equivalent(mutant))
+        .count() as u64;
+    let killed = mutants.len() as u64 - equivalent;
+    let counted_equivalent = counts["equivalent"].as_u64().unwrap_or(0);
     ensure!(
-        count("mutants")? == mutants.len() as u64 && count("killed")? == killed,
-        "the counts ({} mutants, {} killed) disagree with the {} mutant(s) listed ({killed} killed)",
+        count("mutants")? == mutants.len() as u64
+            && count("killed")? == killed
+            && counted_equivalent == equivalent,
+        "the counts ({} mutants, {} killed, {counted_equivalent} equivalent) disagree with the {} \
+         mutant(s) listed ({killed} killed, {equivalent} equivalent)",
         count("mutants")?,
         count("killed")?,
         mutants.len()
@@ -139,7 +131,7 @@ pub fn verdict(report: &serde_json::Value) -> Result<Verdict> {
     Ok(Verdict {
         mutants: count("mutants")?,
         killed,
-        exempt: exempted,
+        equivalent,
         guard_mutants,
     })
 }
@@ -263,18 +255,17 @@ pub fn run_verb(root: &Path, classes: Vec<String>, keep: bool) -> Result<()> {
     if let Some(dir) = &audit.kept {
         println!("kept: {}", dir.display());
     }
-    // `--collect` fails an audit with an unwitnessed mutant. It is admitted only when the
-    // verdict accepts the report with the exempted mutant in it and the baseline passed.
-    let verdict = verdict(&audit.report);
-    let exempted = matches!(&verdict, Ok(verdict) if verdict.exempt > 0);
+    // Both judges must pass: `--collect`, which fails an audit with an unwitnessed mutant, and
+    // the verdict, over a baseline that passed every scenario.
     ensure!(
-        audit.passed || (exempted && audit.baseline_passed),
+        audit.passed && audit.baseline_passed,
         "the mutation audit did not pass"
     );
-    let verdict = verdict?;
+    let verdict = verdict(&audit.report)?;
     println!(
-        "{} mutant(s), {} killed, {} exempted unwitnessed, {} of the guard classes; no survivor",
-        verdict.mutants, verdict.killed, verdict.exempt, verdict.guard_mutants
+        "{} mutant(s), {} killed, {} equivalent on ESS's evidence, {} of the guard classes; no \
+         survivor",
+        verdict.mutants, verdict.killed, verdict.equivalent, verdict.guard_mutants
     );
     Ok(())
 }
@@ -292,7 +283,8 @@ mod tests {
     }
 
     /// The recorded `--collect` report of `xtask mutate` (the gate step, `task mutation`) is of
-    /// this specification, scores guard-class mutants and finds no survivor.
+    /// this specification, scores guard-class mutants, finds no survivor and holds no unwitnessed
+    /// mutant: every mutant is killed or equivalent with ESS's own evidence.
     #[test]
     fn guard_mutants_are_killed() -> Result<()> {
         let report: serde_json::Value =
@@ -304,16 +296,34 @@ mod tests {
             "{RECORDED_REPORT} audits another specification; run `task mutation -- --keep` and \
              copy the kept mutation-report.json there"
         );
+        assert_eq!(report["counts"]["unwitnessed"], 0);
         let verdict = verdict(&report)?;
-        assert!(verdict.guard_mutants > 0 && verdict.killed + verdict.exempt == verdict.mutants);
+        assert!(
+            verdict.guard_mutants > 0 && verdict.killed + verdict.equivalent == verdict.mutants
+        );
         Ok(())
+    }
+
+    fn mutation_report(mutants: Vec<serde_json::Value>) -> serde_json::Value {
+        let count = |verdict: &str| mutants.iter().filter(|m| m["verdict"] == verdict).count();
+        serde_json::json!({"format": "ess-mutation-report/5",
+            "counts": {"mutants": mutants.len(), "killed": count("killed"),
+                "survived": count("survived"), "inconclusive": count("inconclusive"),
+                "unwitnessed": count("unwitnessed"), "equivalent": count("equivalent"),
+                "stillborn": count("stillborn")},
+            "mutants": mutants})
+    }
+
+    fn killed_guard() -> serde_json::Value {
+        serde_json::json!({"id": "guard-negate/controlplane.host.CreateGoal/workers-invalid",
+            "class": "guard-negate", "verdict": "killed"})
     }
 
     /// A report with a survivor, or with no guard-class mutant, is refused.
     #[test]
     fn verdict_refuses_survivors_and_audits_without_guard_mutants() {
         let report = |survived: u64, class: &str| {
-            serde_json::json!({"format": "ess-mutation-report/3",
+            serde_json::json!({"format": "ess-mutation-report/5",
                 "counts": {"mutants": 1, "killed": 1 - survived, "survived": survived,
                     "inconclusive": 0, "unwitnessed": 0},
                 "mutants": [{"class": class, "verdict": if survived == 0 { "killed" } else { "survived" }}]})
@@ -323,118 +333,129 @@ mod tests {
         assert!(verdict(&report(0, "emit-drop")).is_err());
     }
 
-    /// story:typed-satisfaction-receipt. The one unwitnessed mutant ESS 0.56.0 cannot witness,
-    /// the negated `defined(receipt_revision)` guard of SatisfyGoal's `stale-revision`, is
-    /// admitted only with its own ESS-SYNTH-003 refusal on that outcome's scenario. Another
-    /// unwitnessed id, this id with another refusal, an extra refusal or another verdict, and a
-    /// survivor beside it, are refused.
+    /// Only `ess-mutation-report/5`, the format the pinned ESS 0.59.0 writes, is judged; the
+    /// formats before it, `/3` included, and any later one are refused.
     #[test]
-    fn only_the_declared_unwitnessed_mutant_is_admitted() {
-        let id = "guard-negate/controlplane.host.SatisfyGoal/stale-revision";
-        let scenario = "controlplane.host.SatisfyGoal/outcome/stale-revision";
-        let refusal = |code: &str, scenario: &str| {
-            serde_json::json!({"code": code, "scenario": scenario,
-                "subject": "outcome controlplane.host.SatisfyGoal/stale-revision"})
-        };
-        let report = |unwitnessed: serde_json::Value, survived: u64| {
-            let mut mutants = vec![
-                serde_json::json!({"id": "guard-negate/controlplane.host.CreateGoal/workers-invalid",
-                    "class": "guard-negate", "verdict": "killed"}),
-                unwitnessed,
-            ];
-            if survived == 1 {
-                mutants.push(
-                    serde_json::json!({"id": "guard-boundary/x", "class": "guard-boundary",
-                    "verdict": "survived"}),
-                );
+    fn verdict_judges_only_the_pinned_report_format() {
+        for (format, admitted) in [
+            ("ess-mutation-report/5", true),
+            ("ess-mutation-report/3", false),
+            ("ess-mutation-report/4", false),
+            ("ess-mutation-report/6", false),
+            ("ess-mutation-manifest/5", false),
+        ] {
+            let mut report = mutation_report(vec![killed_guard()]);
+            report["format"] = format.into();
+            assert_eq!(verdict(&report).is_ok(), admitted, "{format}");
+        }
+    }
+
+    /// story:remove-stale-revision-mutation-exemption. No mutant is admitted unwitnessed: a `/5`
+    /// report with one unwitnessed mutant fails the audit, whatever its id, the once-exempted
+    /// negated `stale-revision` guard with its ESS-SYNTH-003 refusal included.
+    #[test]
+    fn mutation_audit_admits_no_exemption() {
+        assert!(verdict(&mutation_report(vec![killed_guard()])).is_ok());
+        let refusal = serde_json::json!({"code": "ESS-SYNTH-003",
+            "scenario": "controlplane.host.SatisfyGoal/outcome/stale-revision",
+            "subject": "outcome controlplane.host.SatisfyGoal/stale-revision"});
+        for id in [
+            "guard-negate/controlplane.host.SatisfyGoal/stale-revision",
+            "guard-negate/controlplane.host.RepairAssignment/rebased",
+        ] {
+            let unwitnessed = serde_json::json!({"id": id, "class": "guard-negate",
+                "verdict": "unwitnessed", "added_refusals": [refusal]});
+            let report = mutation_report(vec![killed_guard(), unwitnessed]);
+            assert!(verdict(&report).is_err(), "unwitnessed {id} was admitted");
+        }
+    }
+
+    /// An `equivalent` mutant is admitted only with ESS 0.59.0's evidence on its own record: a
+    /// guard mutant's `unsatisfiable_guard` (ESS-MUTATE-005, "no input satisfies …"), or a
+    /// `precedence-swap`'s `identical_answer`. Without it, with an empty value, or with
+    /// `identical_answer` on a mutant that is not a `precedence-swap`, it fails the audit.
+    #[test]
+    fn an_equivalent_mutant_is_admitted_only_with_its_evidence() {
+        let guard = "(not (defined(receipt_revision)) and (state == Running and revision != input.receipt_revision))";
+        let answer = "refuse with `controlplane.host.GoalLimitInvalid` and no payload; neither \
+                      changes state, sets or emits anything";
+        let equivalent = |class: &str, evidence: Option<(&str, serde_json::Value)>| {
+            let mut mutant = serde_json::json!({"id": format!("{class}/controlplane.host.X/y"),
+                "class": class, "verdict": "equivalent"});
+            if let Some((key, value)) = evidence {
+                mutant[key] = value;
             }
-            serde_json::json!({"format": "ess-mutation-report/3",
-                "counts": {"mutants": mutants.len(), "killed": 1, "survived": survived,
-                    "inconclusive": 0, "unwitnessed": 1},
-                "mutants": mutants})
+            mutation_report(vec![killed_guard(), mutant])
         };
-        let mutant = |id: &str, verdict: &str, refusals: Vec<serde_json::Value>| {
-            serde_json::json!({"id": id, "class": "guard-negate", "verdict": verdict,
-                "added_refusals": refusals})
-        };
-        let admitted = verdict(&report(
-            mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-003", scenario)]),
-            0,
-        ));
-        assert_eq!(
-            admitted
-                .map(|verdict| (verdict.killed, verdict.exempt))
-                .ok(),
-            Some((1, 1))
-        );
-        for (refused, why) in [
+        for (report, why) in [
             (
-                report(
-                    mutant(
-                        "guard-negate/controlplane.host.RepairAssignment/rebased",
-                        "unwitnessed",
-                        vec![refusal("ESS-SYNTH-003", scenario)],
-                    ),
-                    0,
-                ),
-                "another unwitnessed id",
+                equivalent("guard-negate", Some(("unsatisfiable_guard", guard.into()))),
+                "a negated guard no input satisfies",
             ),
             (
-                report(
-                    mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-001", scenario)]),
-                    0,
-                ),
-                "another refusal code",
+                equivalent("precedence-swap", Some(("identical_answer", answer.into()))),
+                "a swap of two branches that answer alike",
             ),
             (
-                report(
-                    mutant(
-                        id,
-                        "unwitnessed",
-                        vec![refusal(
-                            "ESS-SYNTH-003",
-                            "controlplane.host.SatisfyGoal/outcome/applied",
-                        )],
-                    ),
-                    0,
+                equivalent(
+                    "precedence-swap",
+                    Some(("unsatisfiable_guard", guard.into())),
                 ),
-                "another refused scenario",
-            ),
-            (
-                report(
-                    mutant(
-                        id,
-                        "unwitnessed",
-                        vec![
-                            refusal("ESS-SYNTH-003", scenario),
-                            refusal(
-                                "ESS-SYNTH-003",
-                                "controlplane.host.SatisfyGoal/outcome/applied",
-                            ),
-                        ],
-                    ),
-                    0,
-                ),
-                "an extra refusal",
-            ),
-            (report(mutant(id, "unwitnessed", vec![]), 0), "no refusal"),
-            (
-                report(
-                    mutant(id, "inconclusive", vec![refusal("ESS-SYNTH-003", scenario)]),
-                    0,
-                ),
-                "another verdict",
-            ),
-            (
-                report(
-                    mutant(id, "unwitnessed", vec![refusal("ESS-SYNTH-003", scenario)]),
-                    1,
-                ),
-                "a survivor beside it",
+                "a swap of two guards that never overlap",
             ),
         ] {
-            assert!(verdict(&refused).is_err(), "{why} was admitted: {refused}");
+            assert!(verdict(&report).is_ok(), "{why} was refused: {report}");
         }
+        for (report, why) in [
+            (equivalent("guard-negate", None), "no evidence"),
+            (equivalent("precedence-swap", None), "no evidence on a swap"),
+            (
+                equivalent("guard-negate", Some(("unsatisfiable_guard", "".into()))),
+                "an empty unsatisfiable_guard",
+            ),
+            (
+                equivalent("guard-negate", Some(("unsatisfiable_guard", true.into()))),
+                "an unsatisfiable_guard that is not the guard ESS stored",
+            ),
+            (
+                equivalent("guard-negate", Some(("identical_answer", answer.into()))),
+                "identical_answer on a mutant that is not a precedence-swap",
+            ),
+            (
+                equivalent("precedence-swap", Some(("identical_answer", true.into()))),
+                "an identical_answer that names no answer",
+            ),
+        ] {
+            assert!(verdict(&report).is_err(), "{why} was admitted: {report}");
+        }
+    }
+
+    /// The `equivalent` and `stillborn` counts agree with the records: a count with no record
+    /// behind it, or a record the count leaves out, fails; a stillborn mutant fails.
+    #[test]
+    fn equivalent_and_stillborn_counts_agree_with_the_records() {
+        let guard = "(not (defined(x)) and (state == Running))";
+        let equivalent = serde_json::json!({"id": "guard-negate/controlplane.host.X/y",
+            "class": "guard-negate", "verdict": "equivalent", "unsatisfiable_guard": guard});
+        let admitted = mutation_report(vec![killed_guard(), equivalent.clone()]);
+        assert!(verdict(&admitted).is_ok());
+        for key in ["equivalent", "stillborn"] {
+            let mut report = admitted.clone();
+            report["counts"][key] = (report["counts"][key].as_u64().unwrap() + 1).into();
+            assert!(
+                verdict(&report).is_err(),
+                "{key} count off by one was admitted"
+            );
+        }
+        let mut report = admitted.clone();
+        report["counts"]["equivalent"] = 0.into();
+        assert!(
+            verdict(&report).is_err(),
+            "an uncounted equivalent record was admitted"
+        );
+        let stillborn = serde_json::json!({"id": "guard-boundary/controlplane.host.X/z",
+            "class": "guard-boundary", "verdict": "stillborn"});
+        assert!(verdict(&mutation_report(vec![killed_guard(), stillborn])).is_err());
     }
 
     /// The emitted directory is removed when the audit ends, and kept on request.

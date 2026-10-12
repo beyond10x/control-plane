@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-12T00:32:41Z",
+  "actor": "human:timo",
+  "artifact": "story:ess-059-upgrade",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates with ess 0.59.0 and aep 0.69.1 on 7588f8f: ess validate, xtask generate (136 generated, 0 obligations), generated-check, conformance 204 passed, spec-history-check, fmt, clippy, control-plane-runtime 136 passed; on c200e30: fmt, clippy, cargo test -p control-plane-xtask 157 passed in 20 binaries, xtask mutate 13 mutants 12 killed 1 equivalent on ESS's evidence; all exit 0 (control-plane/wave-10@daf23f9, same code as c200e30)",
+    "reference": "control-plane/wave-10@daf23f9"
+  }
+}
