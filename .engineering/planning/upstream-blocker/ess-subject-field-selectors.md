@@ -6,7 +6,7 @@ status: open
 title: ESS synthesis of subject-field selectors and two selectors per command
 relations:
 - blocks: story:spec-owned-busy-rules
-revision: 1
+revision: 2
 ---
 ## What is blocked
 
@@ -22,3 +22,7 @@ Both are planned after ESS 0.57.0 and 0.58.0. ESS holds the reproductions taken 
 ## Clears when
 
 An ESS release ships both stories, and `ess verify conform synthesize` on the declared selectors reports 0 refusals.
+
+## Checked against ESS 0.59.0 (2026-10-11)
+
+The host-fact trials of the specification README (rows 1 and 2, on the wave-7 specification with their snippets, `requires:` raised to 0.59.0) print the same output as under 0.56.0 apart from the version line: row 1 synthesis refuses `controlplane.host.StartGoal/workspace-busy` with ESS-SYNTH-001 ("reads a subject field the steps leave undetermined"); row 2 with both guards is refused at validation with ESS-COMMAND-009 (one command reads one kind of related row). Still open.

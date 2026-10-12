@@ -2,13 +2,25 @@
 format: aep.planning-md/3
 id: story:remove-stale-revision-mutation-exemption
 kind: story
-status: draft
+status: active
 title: The mutation audit admits no exemption once ESS witnesses the negated stale-revision guard
 relations:
 - depends_on: story:typed-satisfaction-receipt
 - decomposes: epic:unattended-operation
 - serves: vision:autonomous-engineering
-revision: 2
+scope:
+- confidence: cited
+  path: crates/control-plane-xtask/src/mutation.rs
+- confidence: cited
+  path: crates/control-plane-xtask/tests/fixtures/guard-mutation-report.json
+- confidence: cited
+  path: crates/control-plane-xtask/tests/mutation_exemption_attack.rs
+- confidence: cited
+  path: ess/README.md
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-12T00:08:19Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-12T00:08:19Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 
