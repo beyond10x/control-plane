@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:ess-059-upgrade
 kind: story
-status: active
+status: implemented
 title: Move control-plane to the newest ESS release
 relations:
 - decomposes: epic:bootstrap
@@ -26,10 +26,11 @@ scope:
   path: ess/spec-acknowledgements.json
 - confidence: inferred
   path: generated
-revision: 12
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-11T23:03:13Z", actor: "human:timo", revision: 11}
 - {from: "proposed", to: "active", at: "2026-10-11T23:03:13Z", actor: "human:timo", revision: 12}
+- {from: "active", to: "implemented", at: "2026-10-12T00:32:41Z", actor: "human:timo", revision: 13, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

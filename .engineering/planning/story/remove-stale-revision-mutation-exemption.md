@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:remove-stale-revision-mutation-exemption
 kind: story
-status: active
+status: implemented
 title: The mutation audit admits no exemption once ESS witnesses the negated stale-revision guard
 relations:
 - depends_on: story:typed-satisfaction-receipt
@@ -17,10 +17,11 @@ scope:
   path: crates/control-plane-xtask/tests/mutation_exemption_attack.rs
 - confidence: cited
   path: ess/README.md
-revision: 5
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-12T00:08:19Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-12T00:08:19Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "active", to: "implemented", at: "2026-10-12T00:32:41Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 ## Outcome
 
@@ -44,3 +45,7 @@ Any other mutation class or guard; changes to SatisfyGoal's behaviour.
 ## Scope
 
 Inferred: crates/control-plane-xtask/src/mutation.rs, crates/control-plane-xtask/tests/fixtures/guard-mutation-report.json, crates/control-plane-xtask/tests/, the ESS pin (Taskfile.yml / CI workflow).
+
+## Delivered (wave 10, ESS 0.59.0)
+
+ESS 0.57.0 and later score the mutant equivalent rather than killed or witnessed: its record carries `unsatisfiable_guard`, the mutated guard no input satisfies (ESS-MUTATE-005). The exemption is deleted; the verdict admits an equivalent mutant only with that evidence (or `identical_answer` on a precedence-swap) and refuses any unwitnessed one, so the outcome holds on equivalence instead of a witness. Commit c200e30.

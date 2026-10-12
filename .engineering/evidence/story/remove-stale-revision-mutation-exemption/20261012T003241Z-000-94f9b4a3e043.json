@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-12T00:32:41Z",
+  "actor": "human:timo",
+  "artifact": "story:remove-stale-revision-mutation-exemption",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "on c200e30 with ess 0.59.0: mutation_audit_admits_no_exemption, an_equivalent_mutant_is_admitted_only_with_its_evidence, guard_mutants_are_killed among cargo test -p control-plane-xtask 157 passed in 20 binaries; xtask mutate 13 mutants, 12 killed, 0 unwitnessed, 1 equivalent on ESS's evidence; exemption constant deleted (control-plane/wave-10@daf23f9)",
+    "reference": "control-plane/wave-10@daf23f9"
+  }
+}
