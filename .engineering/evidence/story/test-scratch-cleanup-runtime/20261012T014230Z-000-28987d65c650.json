@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-12T01:42:30Z",
+  "actor": "human:timo",
+  "artifact": "story:test-scratch-cleanup-runtime",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates with ess 0.59.0 and aep 0.69.1 on 0b4e114: red first (8 runtime <file>_leaves_no_scratch checks, conformance_tests_leave_no_scratch and tests_keep_no_scratch_fixtures failed on the kept fixtures, exit 101); then ess validate, fmt, clippy -p control-plane-runtime and -p control-plane-xtask, cargo test -p control-plane-runtime 144 passed, cargo test -p control-plane-xtask 160 passed, all exit 0; .scratch after the runs holds only conformance/report.json and diagnostics.json plus empty shared parents (912M before the fix); fixture worktree registries are fixture-local, 0 machine registry rows name .scratch",
+    "reference": "control-plane/wave-11@2e81c73"
+  }
+}

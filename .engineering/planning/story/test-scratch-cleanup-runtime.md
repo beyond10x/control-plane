@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:test-scratch-cleanup-runtime
 kind: story
-status: active
+status: implemented
 title: The runtime and xtask tests leave no fixture directories under .scratch
 relations:
 - decomposes: epic:unattended-operation
@@ -14,10 +14,11 @@ scope:
   path: crates/control-plane-xtask/src/target.rs
 - confidence: cited
   path: crates/control-plane-xtask/tests
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 6}
 - {from: "proposed", to: "active", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 7}
+- {from: "active", to: "implemented", at: "2026-10-12T01:42:30Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
