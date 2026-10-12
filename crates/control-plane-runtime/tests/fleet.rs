@@ -1,3 +1,5 @@
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
@@ -45,6 +47,9 @@ async fn history(store: &SharedStore) -> Value {
     store.activity_history(goal.as_str().unwrap()).unwrap()
 }
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     root: PathBuf,
     store: SharedStore,
     config: RuntimeConfig,
@@ -54,7 +59,8 @@ struct Fixture {
 async fn fixture(count: usize) -> Fixture {
     let scratch = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/fleet");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -230,6 +236,7 @@ async fn fixture(count: usize) -> Fixture {
         .await
         .unwrap();
     Fixture {
+        _scratch: scratch,
         root,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
@@ -3042,4 +3049,14 @@ async fn round_six_gofmt_proposal_recovers() {
         run.provider.inputs.lock().unwrap()[1].contains("Commands that write files"),
         "the refusal did not carry the admitted command grammar"
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn fleet_leaves_no_scratch() {
+    let fixture = fixture(1).await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }

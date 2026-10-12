@@ -6,6 +6,8 @@
 //! the goals one after another; one acceptance runs checks and a model review and can take
 //! minutes. These cases have two workspaces, each with one Running goal whose work is merged,
 //! and an operator edits the second goal while the first goal's acceptance runs.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
@@ -37,6 +39,9 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     store: SharedStore,
     config: RuntimeConfig,
     goals: Vec<Value>,
@@ -157,7 +162,8 @@ async fn fixture_with(workspaces: usize) -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/goal-acceptance-pass2");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root: PathBuf = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -236,6 +242,7 @@ async fn fixture_with(workspaces: usize) -> Fixture {
         goals.push(goal);
     }
     Fixture {
+        _scratch: scratch,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
         goals,
@@ -580,4 +587,14 @@ async fn transient_origin_failure_after_goal_review_does_not_latch_acceptance() 
         model.reviews.lock().unwrap(),
         json!({"status":acceptance["status"],"goal_revision":acceptance["goal_revision"]})
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn goal_acceptance_authority_pass2_attack_leaves_no_scratch() {
+    let fixture = fixture().await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }

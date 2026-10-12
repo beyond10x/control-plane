@@ -3,6 +3,8 @@
 //! The fixture is the one `tests/publication_exit_attack.rs` builds (after `tests/fleet.rs`): a
 //! bare remote, a managed worktree workspace, an active AEP story and a publish command that
 //! exits without pushing (`git --version`), kept under its own scratch directory.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
@@ -45,6 +47,9 @@ async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     root: PathBuf,
     store: SharedStore,
     config: RuntimeConfig,
@@ -57,7 +62,8 @@ async fn fixture() -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/publication-exit-pass2-attack");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -200,6 +206,7 @@ async fn fixture() -> Fixture {
         .await
         .unwrap();
     Fixture {
+        _scratch: scratch,
         root,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
@@ -599,4 +606,14 @@ async fn reconfigured_repository_does_not_append_on_every_tick() {
         after - before,
         assignment["reason"]
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn publication_exit_pass2_attack_leaves_no_scratch() {
+    let fixture = fixture().await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }

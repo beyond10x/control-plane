@@ -1,3 +1,5 @@
+mod support;
+
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
 use serde_json::{Value, json};
@@ -34,7 +36,7 @@ async fn activity(store: &tokio::sync::Mutex<Store>) -> Vec<Value> {
 
 #[tokio::test]
 async fn missing_reads_are_observations_and_planning_can_continue() {
-    let (_, store, config, _, _) = setup(true).await;
+    let (_fixture, store, config, _, _) = setup(true).await;
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
         json!({"action":"read","paths":["ess/domains/not-created.yaml"]}),
         json!({"action":"read_range","path":"ess/domains/not-created.yaml","start_line":1,"line_count":20}),
@@ -56,7 +58,7 @@ async fn missing_reads_are_observations_and_planning_can_continue() {
 
 #[tokio::test]
 async fn no_change_is_not_progress() {
-    let (_, store, config, _, _) = setup(true).await;
+    let (_fixture, store, config, _, _) = setup(true).await;
     let write = json!({"action":"write_specification","path":"ess/system.yaml","contents":"format: ess/22\nsystem: demo\nversion: v1\ndomains: [demo.item]\n"});
     let mut actions = VecDeque::from(vec![write; 4]);
     actions.push_back(json!({"action":"finish","stories":["story:deliver"],"summary":"Identical writes are not progress."}));
@@ -157,15 +159,17 @@ fn run(root: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> S
     String::from_utf8(out.stdout).unwrap()
 }
 
-struct Fixture(std::path::PathBuf);
+/// The fixture root, deleted when the fixture is dropped. The managed worktree registry, the
+/// linked worktrees and their records live inside it (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`), and
+/// so does the repository whose Git administrative files name them, so deleting the root leaves
+/// no record behind outside it.
+struct Fixture(tempfile::TempDir);
 impl Fixture {
     fn path(&self) -> &Path {
-        &self.0
+        self.0.path()
     }
 }
 
-// Retain managed fixture records and archives for inspection; never let TempDir
-// recursively delete linked Git worktrees behind the registry's back.
 async fn setup(
     existing: bool,
 ) -> (
@@ -177,7 +181,7 @@ async fn setup(
 ) {
     let scratch = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/planner");
     std::fs::create_dir_all(&scratch).unwrap();
-    let temp = Fixture(tempfile::tempdir_in(scratch).unwrap().keep());
+    let temp = Fixture(tempfile::tempdir_in(scratch).unwrap());
     let repo = temp.path().join("repos/demo");
     std::fs::create_dir_all(&repo).unwrap();
     run(&repo, "git", &["init", "--initial-branch=main"], &[]);
@@ -1540,7 +1544,7 @@ async fn native_loom_recovers_missing_and_invalid_specification_and_queues_valid
 
 #[tokio::test]
 async fn planner_input_refusals_reach_the_model() {
-    let (_, store, config, _, _) = setup(true).await;
+    let (_fixture, store, config, _, _) = setup(true).await;
     let model = Arc::new(Scripted(Mutex::new(VecDeque::from([
         json!({"action":"write_specification","path":".github/workflows/publish.yaml","contents":"name: unauthorized\n"}),
         json!({"action":"finish","stories":["story:deliver","story:deliver"],"summary":"Duplicate selection."}),
@@ -1788,4 +1792,14 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
         receipt.len()
     );
     assert!(evidence(&store).await.contains("# Note 9"));
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn planner_leaves_no_scratch() {
+    let (fixture, store, config, goal, repo) = setup(true).await;
+    let root = support::fixture_root(&config.environment);
+    drop((fixture, store, config, goal, repo));
+    support::assert_removed(&root);
 }

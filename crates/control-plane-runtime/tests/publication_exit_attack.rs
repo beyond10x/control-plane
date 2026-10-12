@@ -2,6 +2,8 @@
 //!
 //! The fixture is the one `tests/fleet.rs` builds (a bare remote per repository, a managed
 //! worktree workspace and an active AEP story), kept under its own scratch directory.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
@@ -50,6 +52,9 @@ async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     root: PathBuf,
     store: SharedStore,
     config: RuntimeConfig,
@@ -62,7 +67,8 @@ async fn fixture() -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/publication-exit-attack");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -202,6 +208,7 @@ async fn fixture() -> Fixture {
     host.execute("ConfigureRepository",json!({"repository_id":repository["repository_id"],"base_branch":"main","test_command":"cargo test --quiet","publish_command":"git --version"}),Actor::Operator).await.unwrap();
     start_goal(&mut host, &workspace).await;
     Fixture {
+        _scratch: scratch,
         root,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
@@ -493,4 +500,14 @@ async fn cancelled_goal_frees_the_repository_for_a_second_workspace_in_one_tick(
             .any(|i| i["assignment_id"] == second["assignment_id"]),
         "the second workspace's assignment did not reach publication: {assignments:?}"
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn publication_exit_attack_leaves_no_scratch() {
+    let fixture = fixture().await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }
