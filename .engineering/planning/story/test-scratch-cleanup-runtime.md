@@ -14,7 +14,7 @@ scope:
   path: crates/control-plane-xtask/src/target.rs
 - confidence: cited
   path: crates/control-plane-xtask/tests
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 6}
 - {from: "proposed", to: "active", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 7}
@@ -31,7 +31,7 @@ transitions:
 
 ## Acceptance
 
-- `runtime_tests_leave_no_scratch` (or one such check per test file that writes under `.scratch/`): after the runtime tests run, no directory they created remains under `.scratch/`.
+- One check per test file that writes under `.scratch/`: after it runs, no directory it created remains under `.scratch/`: `fleet_leaves_no_scratch`, `planner_leaves_no_scratch`, `blocked_reason_update_attack_leaves_no_scratch`, `goal_acceptance_authority_attack_leaves_no_scratch`, `goal_acceptance_authority_pass2_attack_leaves_no_scratch`, `publication_exit_attack_leaves_no_scratch`, `publication_exit_pass2_attack_leaves_no_scratch`, `repair_on_moved_target_attack_leaves_no_scratch`, `conformance_tests_leave_no_scratch`; and `tests_keep_no_scratch_fixtures` refuses a kept fixture in any crate's `tests/`.
 - Every test that writes under `.scratch/` holds its directory guard for its own duration; the tests that pass today still pass.
 - Directories the gate keeps on purpose stay: `.scratch/conformance/` (`report.json` and `diagnostics.json`, written by `crates/control-plane-xtask/src/target.rs` and read by the evidence import), and a `mutation-<random>/` directory only when `xtask mutate --keep` asks for it.
 
