@@ -340,6 +340,13 @@ mod tests {
         }
     }
 
+    /// A directory of the test's own under `parent`, deleted with everything in it when the test
+    /// drops it; `parent` is shared by the test threads and binaries that compile this module.
+    fn held(parent: std::path::PathBuf) -> Result<tempfile::TempDir> {
+        std::fs::create_dir_all(&parent)?;
+        Ok(tempfile::tempdir_in(parent)?)
+    }
+
     /// The refusals QueueAssignment declares, as synthesized scenarios. A missing repository stays
     /// a host rule: beside the two goal guards, generated Rust keeps QueueAssignment an obligation
     /// ("`when_related:` reading several related rows in one command"), and this product admits
@@ -361,8 +368,9 @@ mod tests {
             .parent()
             .unwrap();
         let suite = std::fs::read_to_string(root.join("generated/conformance.json"))?;
-        let scratch = root.join(".scratch/conformance-queue-tests");
-        let target = DurableTarget::admitted(&scratch)?;
+        let held = held(root.join(".scratch/conformance-queue-tests"))?;
+        let scratch = held.path();
+        let target = DurableTarget::admitted(scratch)?;
         assert_eq!(
             target.identity().unwrap().to_string(),
             ImplementationIdentity::new(
@@ -377,7 +385,7 @@ mod tests {
             assert_eq!(statuses.get(id).copied(), Some("passed"), "{id}");
         }
 
-        let dir = tempfile::tempdir_in(&scratch)?;
+        let dir = tempfile::tempdir_in(scratch)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -450,11 +458,12 @@ mod tests {
             .parent()
             .unwrap();
         let suite = std::fs::read_to_string(root.join("generated/conformance.json"))?;
-        let scratch = root.join(".scratch/conformance-tests");
-        let target = DurableTarget::new(&scratch)?;
+        let held = held(root.join(".scratch/conformance-tests"))?;
+        let scratch = held.path();
+        let target = DurableTarget::new(scratch)?;
         let (baseline, _) = run(&suite, &target)?;
         gate(&baseline)?;
-        let mutant = CorruptArchivedState(DurableTarget::new(&scratch)?);
+        let mutant = CorruptArchivedState(DurableTarget::new(scratch)?);
         let (report, diagnostics) = run(&suite, &mutant)?;
         std::fs::write(
             scratch.join("negative-report.json"),
@@ -468,6 +477,24 @@ mod tests {
         );
         assert_eq!(report.counts().error, 0);
         assert_eq!(report.counts().unsupported, 0);
+        Ok(())
+    }
+
+    /// The conformance tests write their stores and negative reports only into a directory they
+    /// hold, so nothing they wrote stays under `.scratch` once they end; the gate's own
+    /// `.scratch/conformance/` reports are not theirs.
+    #[test]
+    fn conformance_tests_leave_no_scratch() -> Result<()> {
+        real_adapter_conformance()?;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        for name in ["negative-report.json", "negative-diagnostics.json"] {
+            let left = root.join(".scratch/conformance-tests").join(name);
+            assert!(!left.exists(), "the test left {} behind", left.display());
+        }
         Ok(())
     }
 }

@@ -2,17 +2,23 @@
 format: aep.planning-md/3
 id: story:test-scratch-cleanup-runtime
 kind: story
-status: draft
+status: implemented
 title: The runtime and xtask tests leave no fixture directories under .scratch
 relations:
 - decomposes: epic:unattended-operation
 - serves: vision:autonomous-engineering
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/control-plane-runtime/tests
-- confidence: inferred
+- confidence: cited
+  path: crates/control-plane-xtask/src/target.rs
+- confidence: cited
   path: crates/control-plane-xtask/tests
-revision: 2
+revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 6}
+- {from: "proposed", to: "active", at: "2026-10-12T00:57:22Z", actor: "human:timo", revision: 7}
+- {from: "active", to: "implemented", at: "2026-10-12T01:42:30Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
@@ -25,9 +31,9 @@ revision: 2
 
 ## Acceptance
 
-- `runtime_tests_leave_no_scratch` (or one such check per test file that writes under `.scratch/`): after the runtime tests run, no directory they created remains under `.scratch/`.
+- One check per test file that writes under `.scratch/`: after it runs, no directory it created remains under `.scratch/`: `fleet_leaves_no_scratch`, `planner_leaves_no_scratch`, `blocked_reason_update_attack_leaves_no_scratch`, `goal_acceptance_authority_attack_leaves_no_scratch`, `goal_acceptance_authority_pass2_attack_leaves_no_scratch`, `publication_exit_attack_leaves_no_scratch`, `publication_exit_pass2_attack_leaves_no_scratch`, `repair_on_moved_target_attack_leaves_no_scratch`, `conformance_tests_leave_no_scratch`; and `tests_keep_no_scratch_fixtures` refuses a kept fixture in any crate's `tests/`.
 - Every test that writes under `.scratch/` holds its directory guard for its own duration; the tests that pass today still pass.
-- Directories the gate keeps on purpose (the conformance report the evidence import reads) are named in the story when it is scoped, and stay.
+- Directories the gate keeps on purpose stay: `.scratch/conformance/` (`report.json` and `diagnostics.json`, written by `crates/control-plane-xtask/src/target.rs` and read by the evidence import), and a `mutation-<random>/` directory only when `xtask mutate --keep` asks for it.
 
 ## Out of scope
 
@@ -35,4 +41,10 @@ Changing what any test asserts.
 
 ## Scope
 
-Inferred: crates/control-plane-runtime/tests/, crates/control-plane-xtask/tests/.
+Cited (read at 81d84a1, `grep -n 'keep()\|tempdir_in'`):
+
+- `crates/control-plane-runtime/tests/`: `fleet.rs:57`, `planner.rs:180`, `blocked_reason_update_attack.rs:51`, `goal_acceptance_authority_attack.rs:54`, `goal_acceptance_authority_pass2_attack.rs:160`, `publication_exit_attack.rs:65`, `publication_exit_pass2_attack.rs:60`, `repair_on_moved_target_attack.rs:102` each call `tempdir_in(.scratch/<name>).keep()`, so every fixture root stays.
+- `crates/control-plane-xtask/tests/`: `generation_ownership.rs`, `spec_history_attack.rs`, `spec_history_pass2_attack.rs`, `precise_outcome_acknowledgements_attack.rs`, `precise_outcome_acknowledgements_pass2_attack.rs`, `record_history_attack.rs` hold a `TempDir` guard but leave the parent directory they create; `precise_outcome_acknowledgements_pass2_attack.rs:218` writes `.scratch/generated`.
+- `crates/control-plane-xtask/src/target.rs`: the in-crate tests write `.scratch/conformance-queue-tests` and `.scratch/conformance-tests`.
+
+The planner and fleet fixtures register linked Git worktrees; `planner.rs:167` says they were kept so a `TempDir` would not delete linked worktrees behind the registry's back. The cleanup removes those worktrees (or the whole fixture root together with the registry state it owns) in the order that leaves no dangling record, and the check proves it by listing `.scratch/` after the run.

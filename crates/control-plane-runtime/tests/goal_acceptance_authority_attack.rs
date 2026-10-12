@@ -5,13 +5,15 @@
 //! (`satisfy_goals`, fleet.rs) re-checks two more store facts after its review, the goal state
 //! and the workspace's repository configuration, and records any failure in the durable
 //! acceptance latch (`acceptance_is_unchanged`). These cases drive the fleet through both.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
-    path::{Path, PathBuf},
+    path::Path,
     process::Command,
     sync::{
         Arc, Mutex,
@@ -39,6 +41,9 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     store: SharedStore,
     config: RuntimeConfig,
     goal: Value,
@@ -51,7 +56,8 @@ async fn fixture() -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/goal-acceptance-attack");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root: PathBuf = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -209,6 +215,7 @@ async fn fixture() -> Fixture {
         .await
         .unwrap();
     Fixture {
+        _scratch: scratch,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
         goal,
@@ -432,4 +439,14 @@ async fn pause_during_goal_review_does_not_latch_acceptance_after_resume() {
         "resumed goal never re-reviewed ({} goal reviews); acceptance {acceptance}",
         model.inner.goal_reviews()
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn goal_acceptance_authority_attack_leaves_no_scratch() {
+    let fixture = fixture().await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }

@@ -7,6 +7,8 @@
 //! Blocked assignment recorded progress only, which the fingerprint leaves out (`planning_*`).
 //! These cases measure whether replacing the reason now starts planner runs that the planner
 //! cannot use: its engine input is the goal and the repository, never an assignment.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
@@ -37,6 +39,9 @@ fn cmd(cwd: &Path, program: &str, args: &[&str], env: &[(String, String)]) -> St
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     root: PathBuf,
     store: SharedStore,
     config: RuntimeConfig,
@@ -48,7 +53,8 @@ async fn fixture() -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/blocked-reason-update-attack");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let config = RuntimeConfig {
@@ -230,6 +236,7 @@ async fn fixture() -> Fixture {
         .await
         .unwrap();
     Fixture {
+        _scratch: scratch,
         root,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
@@ -426,4 +433,14 @@ async fn alternating_blocker_starts_no_planner_run_per_cycle() {
         model.calls("critic") - critic,
         committed(&fixture.store).await - start
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn blocked_reason_update_attack_leaves_no_scratch() {
+    let fixture = fixture().await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }

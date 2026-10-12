@@ -10,6 +10,8 @@
 //! move it in the ways those leave out: a change to the candidate's own line, a change to a file
 //! a failed attempt left uncommitted, a rewind, a squash of the candidate itself, and a commit
 //! command that fails once.
+mod support;
+
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
@@ -74,6 +76,9 @@ async fn rows(store: &SharedStore, view: &str) -> Vec<Value> {
 }
 
 struct Fixture {
+    /// Deletes the fixture root when the fixture is dropped: its repositories, remotes, store
+    /// and the managed worktrees with their records (`XDG_STATE_HOME`, `XDG_CONFIG_HOME`).
+    _scratch: tempfile::TempDir,
     root: PathBuf,
     store: SharedStore,
     config: RuntimeConfig,
@@ -99,7 +104,8 @@ async fn fixture(setup: Setup) -> Fixture {
     let scratch =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.scratch/repair-on-moved-target-attack");
     std::fs::create_dir_all(&scratch).unwrap();
-    let root = tempfile::tempdir_in(scratch).unwrap().keep();
+    let scratch = tempfile::tempdir_in(scratch).unwrap();
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir(root.join("repos")).unwrap();
     std::fs::create_dir(root.join("remotes")).unwrap();
     let commit_command = if setup.refuse_first_integration_commit {
@@ -246,6 +252,7 @@ async fn fixture(setup: Setup) -> Fixture {
         .await
         .unwrap();
     Fixture {
+        _scratch: scratch,
         root,
         store: Arc::new(tokio::sync::Mutex::new(host)),
         config,
@@ -786,4 +793,18 @@ async fn failed_integration_commit_leaves_no_merge_in_progress() {
         now["attempt"],
         now["reason"]
     );
+}
+
+/// The fixture's repositories, store and managed worktree records live in one root under
+/// `.scratch`, and that root is gone once the test drops the fixture.
+#[tokio::test]
+async fn repair_on_moved_target_attack_leaves_no_scratch() {
+    let fixture = fixture(Setup {
+        max_attempts: 2,
+        refuse_first_integration_commit: false,
+    })
+    .await;
+    let root = support::fixture_root(&fixture.config.environment);
+    drop(fixture);
+    support::assert_removed(&root);
 }
