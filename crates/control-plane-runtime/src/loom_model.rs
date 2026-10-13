@@ -1,7 +1,7 @@
 //! Host bindings to Loom's native loop and session store, and LLM's single-turn port.
 //! No model retry, compaction, provider wire, or effect execution lives here.
 use crate::{AgentModel, ModelEnvironment, ModelRequest};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use loom_sdk::loom::{
     harness::{
         turn_loop::{
@@ -45,9 +45,6 @@ impl CodexAgentModel {
     }
 }
 impl AgentModel for CodexAgentModel {
-    fn respond(&self, _: &ModelRequest) -> Result<Value> {
-        bail!("Loom model execution requires a host environment")
-    }
     fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value> {
         let provider: Arc<dyn llm_core::Model> = match &self.provider {
             Some(provider) => provider.clone(),
@@ -639,7 +636,7 @@ mod tests {
                 progress: Arc::new(move |event| {
                     if event["event"]["kind"] == "model-stream" {
                         if write_fails {
-                            bail!("injected durable progress failure");
+                            anyhow::bail!("injected durable progress failure");
                         }
                         signal.cancel();
                     }

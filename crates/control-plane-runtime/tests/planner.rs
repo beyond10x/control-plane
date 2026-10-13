@@ -1,7 +1,9 @@
 mod support;
 
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelEnvironment, ModelRequest, RuntimeConfig, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,
@@ -95,7 +97,11 @@ async fn empty_repository_receives_executable_ess_bootstrap_guidance() {
     );
     struct Bootstrap(Mutex<usize>);
     impl AgentModel for Bootstrap {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             if request.role == "critic" {
                 return Ok(json!({"approved":true,"reason":"Bootstrap validates."}));
             }
@@ -130,7 +136,7 @@ async fn empty_repository_receives_executable_ess_bootstrap_guidance() {
     assert_eq!(report.queued, 1, "{report:?}");
 }
 impl AgentModel for Scripted {
-    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         let next = self
             .0
             .lock()
@@ -440,7 +446,11 @@ async fn noun_first_aep_syntax_is_feedback_then_corrected_without_authority() {
 async fn command_syntax_feedback_allows_correction() {
     struct Recovering(Mutex<usize>);
     impl AgentModel for Recovering {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             let mut calls = self.0.lock().unwrap();
             let answer = match *calls {
                 0 => json!({"action":"aep","args":["list","--not-a-real-option"],"body":null}),
@@ -486,7 +496,11 @@ async fn command_syntax_feedback_allows_correction() {
 async fn unchanged_reads_preserve_action_history() {
     struct NeedsMemory(Mutex<Vec<String>>);
     impl AgentModel for NeedsMemory {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             assert!(request.prompt.contains("Deliver requested change"));
             if request.role == "critic" {
                 return Ok(json!({"approved":true,"reason":"Existing story is sufficient."}));
@@ -527,7 +541,7 @@ async fn unchanged_reads_preserve_action_history() {
 async fn unchanged_aep_reads_stop_with_explicit_stall_reason() {
     struct Repeats(Mutex<usize>);
     impl AgentModel for Repeats {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(&self, _: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
             *self.0.lock().unwrap() += 1;
             Ok(json!({"action":"aep","args":["show","story:deliver"],"body":null}))
         }
@@ -551,7 +565,11 @@ async fn unchanged_aep_reads_stop_with_explicit_stall_reason() {
 async fn alternating_reads_receive_stall_feedback() {
     struct Alternates(Mutex<usize>);
     impl AgentModel for Alternates {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             if request.role == "critic" {
                 return Ok(
                     json!({"approved":true,"reason":"Existing scoped story satisfies the goal."}),
@@ -689,7 +707,11 @@ async fn goal_completion_requires_evidence() {
 async fn rejected_plan_is_revised_before_a_fresh_independent_review() {
     struct RevisingModel(Mutex<usize>, Mutex<Vec<String>>);
     impl AgentModel for RevisingModel {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             let mut step = self.0.lock().unwrap();
             if request.role == "critic" {
                 self.1
@@ -858,7 +880,7 @@ struct LongLineModel {
     calls: Mutex<usize>,
 }
 impl AgentModel for LongLineModel {
-    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         if request.role == "critic" {
             return Ok(json!({"approved":true,"reason":"Complete long-line context inspected"}));
         }
@@ -922,7 +944,7 @@ async fn single_long_utf8_line_remains_retrievable_through_byte_pages() {
     );
 }
 impl AgentModel for RepeatedReadModel {
-    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         self.prompts.lock().unwrap().push(request.prompt.len());
         if request.role == "critic" {
             return Ok(
@@ -990,7 +1012,7 @@ async fn distinct_large_reads_do_not_exhaust_planner_context() {
     );
 }
 impl AgentModel for ObservingModel {
-    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         let receipt = tokio::runtime::Handle::current().block_on(async {
             self.store.lock().await.query("GoalList").unwrap()[0]["planning_receipt"].clone()
         });
@@ -1053,7 +1075,7 @@ async fn model_wait_is_visible_before_response_and_activity_survives_restart() {
     assert_eq!(activity(&tokio::sync::Mutex::new(reopened)).await, history);
 }
 impl AgentModel for PausingModel {
-    fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, _: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         tokio::runtime::Handle::current().block_on(async {
             self.store
                 .lock()
@@ -1228,7 +1250,7 @@ struct CountedModel {
     calls: std::sync::atomic::AtomicUsize,
 }
 impl AgentModel for CountedModel {
-    fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, _: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(self
             .responses
@@ -1577,7 +1599,11 @@ async fn planner_progress_does_not_repeat_the_transcript() {
         appended: Mutex<Vec<u64>>,
     }
     impl AgentModel for Reader {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             let appended = tokio::runtime::Handle::current()
                 .block_on(async { self.store.lock().await.appended_event_bytes() });
             let mut seen = self.appended.lock().unwrap();
@@ -1668,7 +1694,11 @@ async fn validated_plan_evidence_is_recorded_once_and_not_repeated() {
         marks: Mutex<usize>,
     }
     impl AgentModel for Reader {
-        fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            request: &ModelRequest,
+            _: &ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             let mut marks = self.marks.lock().unwrap();
             *marks += 1;
             Ok(match (request.role.as_str(), *marks) {
