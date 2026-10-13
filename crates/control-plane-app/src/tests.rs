@@ -164,7 +164,11 @@ async fn adversary_recorded_tool_run_keeps_the_command_the_dashboard_shows() {
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
     struct NoModel;
     impl AgentModel for NoModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("progress recording does not call the model")
         }
     }
@@ -1397,7 +1401,11 @@ async fn service_start_wakes_real_supervisor_and_exposes_durable_planning_reason
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct UnusedModel;
     impl AgentModel for UnusedModel {
-        fn respond(&self, _request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _request: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("empty repository inventory must not call the model")
         }
     }
@@ -1502,7 +1510,11 @@ async fn service_persists_repository_tool_refusal_and_keeps_operator_controls_av
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct UnexpectedModel;
     impl AgentModel for UnexpectedModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("repository checks must happen before model execution")
         }
     }
@@ -1592,7 +1604,11 @@ async fn restored_service_preserves_inactive_goals_while_resuming_running_goal()
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct NoRepositoryModel;
     impl AgentModel for NoRepositoryModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("a workspace with no repositories must not invoke a model")
         }
     }

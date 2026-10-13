@@ -656,7 +656,11 @@ mod tests {
         use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
         struct NoModel;
         impl AgentModel for NoModel {
-            fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+            fn respond_in(
+                &self,
+                _: &ModelRequest,
+                _: &control_plane_runtime::ModelEnvironment,
+            ) -> anyhow::Result<Value> {
                 anyhow::bail!("progress recording does not call the model")
             }
         }
@@ -863,7 +867,11 @@ mod tests {
     fn supervisor(state: &AppState) -> control_plane_runtime::Supervisor {
         struct Unused;
         impl control_plane_runtime::AgentModel for Unused {
-            fn respond(&self, _: &control_plane_runtime::ModelRequest) -> anyhow::Result<Value> {
+            fn respond_in(
+                &self,
+                _: &control_plane_runtime::ModelRequest,
+                _: &control_plane_runtime::ModelEnvironment,
+            ) -> anyhow::Result<Value> {
                 anyhow::bail!("progress recording does not call the model")
             }
         }
