@@ -21,7 +21,7 @@ scope:
   path: crates/control-plane-xtask/src/eval_report.rs
 - confidence: inferred
   path: crates/control-plane-xtask/tests/eval_verify.rs
-revision: 27
+revision: 28
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -48,7 +48,7 @@ Named checks for the lines above (added 2026-10-13):
 - eval_origin_outside_root_is_refused: an origin that is a local path outside the eval root, or a relative path, does not get eval commit rules.
 - eval_report_states_goal_bounds: `eval report` prints the goal's workers, attempts and minutes and says whether they are within one worker, one attempt and ten minutes.
 
-Open, and not closable without a model: real runs of the Go CLI and JSON HTTP cases. No real-model run is approved; the go-auth-web case ran on 2026-10-11 (story:unattended-goal-evidence).
+Open, and not closable without a model: real runs of the Go CLI and JSON HTTP cases. No real-model run is approved; the auth web case ran on 2026-10-11 (story:unattended-goal-evidence).
 
 ## Out of Scope
 
