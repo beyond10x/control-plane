@@ -31,12 +31,10 @@ pub struct ModelRequest {
     pub timeout: std::time::Duration,
 }
 
+/// A model binding answers a role only through its Loom session path: there is no default body,
+/// so a binding cannot answer without the host environment Loom files the session in.
 pub trait AgentModel: Send + Sync {
-    fn respond(&self, request: &ModelRequest) -> Result<Value>;
-    fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value> {
-        let _ = environment;
-        self.respond(request)
-    }
+    fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value>;
 }
 
 /// Host bindings for Loom. The model never supplies these values.
