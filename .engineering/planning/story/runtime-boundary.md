@@ -12,34 +12,24 @@ relations:
 - blocks: story:planner-feedback-recovery
 scope:
 - confidence: cited
-  path: .github/workflows/check.yml
-- confidence: cited
-  path: .gitignore
-- confidence: cited
-  path: AGENTS.md
-- confidence: cited
-  path: Cargo.lock
-- confidence: cited
-  path: README.md
-- confidence: cited
-  path: Taskfile.yml
-- confidence: cited
-  path: crates/control-plane-app/
-- confidence: cited
-  path: crates/control-plane-core/
+  path: .engineering/planning/story/runtime-boundary.md
 - confidence: inferred
-  path: crates/control-plane-protocol/
-- confidence: inferred
-  path: crates/control-plane-runtime/
+  path: crates/control-plane-app/tests/runtime_events_stream.rs
 - confidence: cited
-  path: crates/control-plane-xtask/
-- confidence: inferred
-  path: docs/
-- confidence: inferred
-  path: ess/
+  path: crates/control-plane-runtime/src/engine.rs
 - confidence: cited
-  path: frontend/
-revision: 23
+  path: crates/control-plane-runtime/src/fleet.rs
+- confidence: cited
+  path: crates/control-plane-runtime/src/lib.rs
+- confidence: cited
+  path: crates/control-plane-runtime/src/loom_model.rs
+- confidence: inferred
+  path: crates/control-plane-runtime/tests/native_roles.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/foundation.rs
+- confidence: inferred
+  path: crates/control-plane-xtask/tests/foundation_check.rs
+revision: 47
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 3, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
 - {from: "proposed", to: "active", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 4, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
@@ -62,16 +52,23 @@ Resolve foundation gaps through their repositories first: a demonstrated governe
 
 ## Acceptance
 
-- Not yet a named test: every agent runs through one shared governed executor.
+- every_role_runs_through_one_native_loom_session_path: one scripted run through the production model binding drives planner, plan critic, implementor, code reviewer and goal reviewer; each role's turns are filed in its own Loom session, provider calls equal Loom turns, and no provider call happens outside an open session. `AgentModel` has no default `respond_in` that bypasses Loom.
 - missing_reads_are_observations_and_planning_can_continue (missing-file refusal round trip)
 - no-change-is-not-progress
 - pause_during_model_call_prevents_further_effects and merge_requires_current_authority (stale authority before an effect, in part)
 - session-budget-restart
 - storage-failure-stops-effects
-- Not yet a named test: runtime events are visible to the operator.
+- native_runtime_events_reach_the_workspace_stream: a scripted native Loom run, not hand-made store rows, puts its turn-started, usage and finished events and an `input.refused` event on the workspace live stream in the order they happened, with no raw reasoning text.
 - native_loom_delivers_candidate_through_checks_review_and_observed_publication and review_and_publication_require_current_independent_evidence (current review and publication)
+- foundation_check_rejects_direct_model_loop: the foundation check fails on a fixture tree that calls the provider (`llm_core`, `.turn(`) or builds an `AgentLoop` outside `loom_model.rs`, or gives `AgentModel::respond_in` a default body.
+- foundation_check_scans_every_runtime_source_file: a forbidden call in a new runtime source file, not only `engine.rs` or `fleet.rs`, fails the check; the current tree passes it.
+- The single bounded real external eval: the 2026-10-11 run recorded on story:unattended-goal-evidence went through this runtime (planner, critic, implementor, code reviewer, goal reviewer in five Loom sessions) and was accepted unattended.
 
-The architecture artifact defines each scenario's observable result. First specify any changed public entities/contracts in their owning ESS domain, then implement the named regressions using the actual SDK and scripted provider responses. Production dependency/architecture checks reject direct model-loop implementation in control-plane after migration. A single bounded real external eval follows those passing checks; failed runs remain failed.
+The architecture artifact defines each scenario's observable result. First specify any changed public entities/contracts in their owning ESS domain, then implement the named regressions using the actual SDK and scripted provider responses.
+
+Decided 2026-10-13 under the operator's delegated decision authority, reversible:
+- The three review roles (plan critic, code reviewer, goal reviewer) propose no effects, so they run in their own Loom sessions without a Commission case; "one shared governed executor" means one Loom session path for every role, and one Commission path for every role that proposes effects.
+- The host's working-set and repeated-read projection (`context.rs`, `engine.rs`) stays host projection of observations; moving it into Loom is a foundation change and not part of this story.
 
 ## Sequence
 

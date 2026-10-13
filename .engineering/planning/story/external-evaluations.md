@@ -8,19 +8,20 @@ summary: Keep existing workspace, remove cancelled goals through ESS DeleteGoal,
 relations:
 - decomposes: epic:bootstrap
 - serves: vision:autonomous-engineering
-- depends_on: story:runtime-boundary
 scope:
+- confidence: cited
+  path: .engineering/planning/story/external-evaluations.md
 - confidence: inferred
   path: README.md
 - confidence: inferred
-  path: crates/
+  path: crates/control-plane-runtime/tests/eval_policy.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/eval.rs
+- confidence: cited
+  path: crates/control-plane-xtask/src/eval_report.rs
 - confidence: inferred
-  path: docs/vision.md
-- confidence: inferred
-  path: ess/
-- confidence: inferred
-  path: generated/
-revision: 17
+  path: crates/control-plane-xtask/tests/eval_verify.rs
+revision: 27
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-05T22:41:16Z", actor: "human:timo", revision: 4}
@@ -39,6 +40,15 @@ The operator can remove cancelled goals while retaining workspaces, and judge th
 - Auth web (eval verifier check labels): healthy-server, login-frontend, unauthenticated-denied, invalid-login, authenticated-identity, authenticated-frontend, invalid-session, the logout session revocation, documented-setup.
 - Each external repository has a local origin. Go/local commits require explicit eval-root configuration; other repositories retain Rust/bot rules.
 - The trusted Rust verifier lives outside candidate scope, requires executed Go tests, and checks actual HTTP behavior. Blank seeds fail. Runs are sequential, one worker, one attempt, ten minutes, with failures retained and no silent retries.
+
+Named checks for the lines above (added 2026-10-13):
+- blank_go_cli_seed_fails_trusted_verifier, blank_go_json_http_seed_fails_trusted_verifier, blank_go_auth_web_seed_fails_trusted_verifier: each case is seeded by the same code `eval init` uses (seeding no longer needs the `worktree` binary), and `eval verify` fails it.
+- go_test_file_without_tests_is_not_executed_tests: a seed whose Go test file holds no test function fails the executed-tests check (`go test` printing `ok … [no tests to run]` is not executed tests).
+- eval_init_gives_each_case_a_local_bare_origin and eval_init_refuses_root_inside_control_plane_repository.
+- eval_origin_outside_root_is_refused: an origin that is a local path outside the eval root, or a relative path, does not get eval commit rules.
+- eval_report_states_goal_bounds: `eval report` prints the goal's workers, attempts and minutes and says whether they are within one worker, one attempt and ten minutes.
+
+Open, and not closable without a model: real runs of the Go CLI and JSON HTTP cases. No real-model run is approved; the go-auth-web case ran on 2026-10-11 (story:unattended-goal-evidence).
 
 ## Out of Scope
 
