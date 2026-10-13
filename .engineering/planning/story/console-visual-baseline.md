@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:console-visual-baseline
 kind: story
-status: active
+status: implemented
 title: Visual baseline and one renderer
 relations:
 - decomposes: epic:console-clarity
@@ -47,10 +47,11 @@ scope:
   path: frontend/src/status.js
 - confidence: cited
   path: frontend/src/style.css
-revision: 27
+revision: 29
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-13T06:29:21Z", actor: "human:timo", revision: 26, decided_on: {"recorded":{"review_outcome":3}}}
 - {from: "proposed", to: "active", at: "2026-10-13T06:29:21Z", actor: "human:timo", revision: 27, decided_on: {"recorded":{"review_outcome":3}}}
+- {from: "active", to: "implemented", at: "2026-10-13T07:44:56Z", actor: "human:timo", revision: 29, decided_on: {"recorded":{"test_result":1,"review_outcome":3}}}
 ---
 ## Outcome
 
@@ -62,7 +63,7 @@ review-result:console-ux-review-2026-10-06 rows 7 and 8: secondary text 9-11 px 
 
 ## Acceptance
 
-- `text_meets_contrast`: a test over the compiled stylesheet (`frontend/dist/index.css`, media queries included) finds no rule whose text colour is under 4.5:1 against its own background, or, where the rule sets no background, against both the card background `#fff` and the page background.
+- `text_meets_contrast`: a test over the compiled stylesheet (`frontend/dist/index.css`, media queries included) finds no rule whose text colour is under 4.5:1 against its own background, or, where the rule sets no background, against both the card background `#fff` and the page background; a rule that sets only a background is measured against the text colour it inherits; rules inside every at-rule that holds style rules (`@media`, `@supports`, `@container`, `@layer`) count.
 - `text_meets_minimum_size`: the same test finds no `font-size` and no `font:` shorthand under 12 px, media queries included.
 - `each_derived_state_has_its_own_colour`: the goal badge for each derived goal state in `frontend/src/goalState.js` (starting, planning, executing, stalled, blocked, paused, cancelled, satisfied) resolves to its own background colour, merged assignments have their own badge colour, and the status header's states (idle, waiting, working, paused, blocked, disconnected) resolve to six distinct colours. One badge mapper serves every component.
 - `destructive_buttons_are_styled_as_danger`: the trigger and the confirm button of cancel goal, delete goal and remove directory carry the danger class; the reversible toggles (disable/enable, grant/withhold merge authority) and every other button do not.
