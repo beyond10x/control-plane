@@ -54,7 +54,7 @@ test('a runtime story id "<repository_id>::story:<slug>" (supervisor.rs QueueAss
   const view = frame()
   assignment(view, alpha).story_id = `${repositoryUuid}::story:status-endpoint`
   await show(view)
-  for (const [where, text] of [['card', visible(card().element)], ['queue', visible(wrapper.get('table').element)]]) {
+  for (const [where, text] of [['card', visible(card().element)], ['queue', visible(wrapper.get('.queue').element)]]) {
     expect.soft(text.toLowerCase(), where).toContain('status endpoint')
     expect.soft(text, where).not.toContain('bdceb31a')
     expect.soft(text, where).not.toContain('f88446681e4e')

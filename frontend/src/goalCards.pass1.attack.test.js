@@ -82,5 +82,5 @@ test('a Blocked assignment whose reason names its candidate hash (fleet.rs publi
   })
   await show(view)
   expect.soft(visible(card().element), 'card').not.toContain(hash)
-  expect.soft(visible(wrapper.get('table').element), 'queue').not.toContain(hash)
+  expect.soft(visible(wrapper.get('.queue').element), 'queue').not.toContain(hash)
 })

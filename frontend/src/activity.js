@@ -52,9 +52,9 @@ const sentences = {
 /** The sentence for an action id, or the id unchanged when it is not a known action. */
 export const activitySentence = action => Object.hasOwn(sentences, action) ? sentences[action] : action
 
-// Actions whose `detail` (live.rs `observation`: command · program · path · reason · candidate)
-// is a path, a hash or a bare hook name (supervisor.rs labels an unnamed planner kind with the
-// kind itself). Their detail is shown inside the entry's details only.
+// Actions whose `detail` (live.rs `observation`: command · program and arguments · path ·
+// worktree · reason · candidate) is a path, a hash or a bare hook name (supervisor.rs labels an
+// unnamed planner kind with the kind itself). Their detail is shown inside the entry's details only.
 const rawDetail = new Set(['checks.run', 'publication.invoke', 'file.write.completed', 'file.delete.completed', 'merge.completed', 'worktree.prepare', 'governor-state', 'loom-observation', 'planner.prepare-branch', 'planner.governor-state', 'planner.loom-observation'])
 
 /** Whether an entry's detail is prose that may be shown in the open. */
