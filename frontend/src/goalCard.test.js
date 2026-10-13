@@ -282,7 +282,7 @@ test('raw_ids_are_behind_details', async () => {
     // Correction 2, F1: the repository UUID and `::` of the runtime story id.
     ...view.assignments.map(row => row.repository_id), '::']
   const shownCard = visible(card().element), hiddenCard = disclosed(card().element)
-  const queue = wrapper.get('table').element, shownQueue = visible(queue), hiddenQueue = disclosed(queue)
+  const queue = wrapper.get('.queue').element, shownQueue = visible(queue), hiddenQueue = disclosed(queue)
   for (const id of raw) {
     expect.soft(shownCard, id).not.toContain(id)
     expect.soft(shownQueue, id).not.toContain(id)
@@ -332,7 +332,7 @@ test('blocked_reason_reads_without_ids', async () => {
   const expected = 'The publisher exited and main does not contain candidate; closed as not published: 300 s passed since the outcome became uncertain'
   expect(row(alpha).get('.assignment-step').text()).toBe(`Blocked · ${expected}`)
   expect(disclosed(row(alpha).element)).toContain(reason)
-  const queued = wrapper.findAll('tbody tr').find(tr => tr.text().includes('Status endpoint')).findAll('td')[3]
+  const queued = wrapper.findAll('.queue .queue-item').find(item => item.text().includes('Status endpoint')).get('.queue-reason')
   expect(visible(queued.element).trim()).toBe(`${expected}Full reason`)
   expect(disclosed(queued.element)).toContain(reason)
 })

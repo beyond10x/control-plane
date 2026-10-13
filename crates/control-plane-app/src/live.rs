@@ -30,6 +30,12 @@ async fn projection(state: &AppState, workspace: Option<&str>) -> Result<(u64, V
     ))
 }
 
+/// The payload a console page embeds for Vue to mount from (`web.rs` `console_page`): the
+/// projection the page's stream sends (all workspaces, or one workspace's), with its clock.
+pub(crate) async fn snapshot(state: &AppState, workspace: Option<&str>) -> Result<Value> {
+    Ok(clocked(projection(state, workspace).await?.1))
+}
+
 pub async fn console(State(state): State<AppState>) -> Response {
     let view = async { with_history(&state, state.snapshot().await?).await }.await;
     api_answer(view.map(|view| clocked(compact(view))))
@@ -91,7 +97,7 @@ async fn with_history(state: &AppState, mut view: Value) -> Result<Value> {
 /// that role (`planner` → `planner_model`; `implementor` → `implementor_model`; `critic`,
 /// `reviewer` and `goal_reviewer` → `reviewer_model`, which is what the runtime sends each of
 /// them), and `since` the `at` of the call's request.
-fn compact(mut view: Value) -> Value {
+pub(crate) fn compact(mut view: Value) -> Value {
     view.as_object_mut().unwrap().remove("server_observed_at");
     view.as_object_mut().unwrap().remove("committed_version");
     let replayed = view
@@ -375,6 +381,25 @@ fn merged_at(assignment: &Value) -> Value {
         })
 }
 
+/// A tool run's command line, `{program, args}` as fleet.rs records it: the program and its
+/// first 12 arguments, each cut at 80 characters, so the console shows what ran without the
+/// whole of a long argument list.
+fn command_line(detail: &Value) -> Option<String> {
+    let bounded = |text: &str| text.chars().take(80).collect::<String>();
+    let mut line = bounded(detail["program"].as_str()?);
+    for arg in detail["args"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(12)
+        .filter_map(Value::as_str)
+    {
+        line.push(' ');
+        line.push_str(&bounded(arg));
+    }
+    Some(line)
+}
+
 fn observation(value: &Value, id: &str) -> Value {
     if !value.is_object() {
         return Value::Null;
@@ -391,12 +416,22 @@ fn observation(value: &Value, id: &str) -> Value {
         .or_else(|| detail["summary"].as_str())
         .map(str::to_owned)
         .unwrap_or_else(|| {
-            ["command", "program", "path", "reason", "candidate"]
-                .into_iter()
-                .filter_map(|key| detail[key].as_str())
-                .map(|part| part.chars().take(180).collect::<String>())
-                .collect::<Vec<_>>()
-                .join(" · ")
+            [
+                "command",
+                "program",
+                "path",
+                "worktree",
+                "reason",
+                "candidate",
+            ]
+            .into_iter()
+            .filter_map(|key| match key {
+                "program" => command_line(detail),
+                _ => detail[key].as_str().map(str::to_owned),
+            })
+            .map(|part| part.chars().take(240).collect::<String>())
+            .collect::<Vec<_>>()
+            .join(" · ")
         });
     result["detail"] = json!(summary.chars().take(560).collect::<String>());
     result
@@ -958,7 +993,7 @@ mod tests {
         let worker = &goal["fleet"][&assignment];
         assert_eq!(worker["action"], "tool.run");
         assert_eq!(worker["role"], "implementor");
-        assert_eq!(worker["detail"], "cargo");
+        assert_eq!(worker["detail"], "cargo test");
         let id = worker["id"].as_str().expect("worker entry id");
         assert_eq!(goal["activity"][0]["id"], id);
         assert_ne!(goal["planner_activity"]["id"], id);
