@@ -106,8 +106,11 @@ pub(crate) fn compact(mut view: Value) -> Value {
         .remove("replayed_progress")
         .and_then(|replayed| replayed.as_u64())
         .unwrap_or(0);
-    // A stopped runtime holds no model call.
+    // A stopped runtime holds no model call. Its error is free text that may quote a URL.
     let runtime_holds_calls = !view["runtime_error"].is_string();
+    if let Some(error) = view["runtime_error"].as_str().map(redact) {
+        view["runtime_error"] = json!(error);
+    }
     // Each assignment's goal and state, in a stable order.
     let assignments: std::collections::BTreeMap<_, _> = view["assignments"]
         .as_array()
@@ -381,12 +384,123 @@ fn merged_at(assignment: &Value) -> Value {
         })
 }
 
+/// `text` with credential values replaced by `***` ([`Redactor`]).
+pub(crate) fn redact(text: &str) -> String {
+    Redactor::default().push(text)
+}
+
+/// Replaces credential values in recorded text with `***`: the userinfo of every URL
+/// (`scheme://user:secret@host` → `scheme://***@host`) and the value after an `Authorization`
+/// or `Bearer` word (`Authorization: Bearer sk-1` → `Authorization: Bearer ***`, also written
+/// `Authorization=…`, `--header=Authorization:…` or `Proxy-Authorization:…`). An authentication
+/// scheme after `Authorization` (`Bearer`, `Basic`, `Token`, `Digest`, `Negotiate`) is kept and
+/// the value after it replaced. Every other word, and all whitespace, is kept as recorded.
+///
+/// Text is read in whitespace-separated words, and a word never spans two [`Redactor::push`]
+/// calls, so the arguments of one command line are pushed one by one through one redactor:
+/// `--header` `Authorization:` `Bearer` `x` hides `x`. The console redacts every recorded
+/// string it shows before bounding it, so a cut cannot strip the `@` that marks userinfo and
+/// leave its secret behind.
+#[derive(Default)]
+struct Redactor {
+    /// The next word that is not an authentication scheme is a credential value.
+    pending: bool,
+}
+
+impl Redactor {
+    const SCHEMES: [&'static str; 5] = ["bearer", "basic", "token", "digest", "negotiate"];
+
+    fn push(&mut self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while !rest.is_empty() {
+            let space = rest.len() - rest.trim_start().len();
+            out.push_str(&rest[..space]);
+            rest = &rest[space..];
+            let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            let word = &rest[..end];
+            rest = &rest[end..];
+            if !word.is_empty() {
+                self.word(word, &mut out);
+            }
+        }
+        out
+    }
+
+    fn word(&mut self, word: &str, out: &mut String) {
+        if self.pending {
+            if Self::is_scheme(word) {
+                out.push_str(word);
+            } else {
+                out.push_str("***");
+                self.pending = false;
+            }
+            return;
+        }
+        match Self::credential_key(word) {
+            Some(cut) if cut == word.len() || Self::is_scheme(&word[cut..]) => {
+                out.push_str(word);
+                self.pending = true;
+            }
+            Some(cut) => {
+                out.push_str(&word[..cut]);
+                out.push_str("***");
+            }
+            None => out.push_str(&redact_userinfo(word)),
+        }
+    }
+
+    fn is_scheme(word: &str) -> bool {
+        let bare = word.trim_matches(|c: char| matches!(c, '"' | '\''));
+        Self::SCHEMES
+            .iter()
+            .any(|scheme| bare.eq_ignore_ascii_case(scheme))
+    }
+
+    /// The byte offset just past an `authorization` or `bearer` key in `word` and the `:` or
+    /// `=` after it: the key starts `word` or follows a character that is not alphanumeric, and
+    /// ends `word` or is followed by `:` or `=`.
+    fn credential_key(word: &str) -> Option<usize> {
+        let lower = word.to_ascii_lowercase();
+        ["authorization", "bearer"].iter().find_map(|key| {
+            lower.match_indices(key).find_map(|(at, _)| {
+                let before = lower[..at].chars().next_back();
+                let after = &lower[at + key.len()..];
+                let separated = after.is_empty() || after.starts_with([':', '=']);
+                (before.is_none_or(|c| !c.is_ascii_alphanumeric()) && separated)
+                    .then(|| at + key.len() + usize::from(!after.is_empty()))
+            })
+        })
+    }
+}
+
+/// `word` with the userinfo of each URL in it replaced by `***`.
+fn redact_userinfo(word: &str) -> String {
+    let mut out = String::with_capacity(word.len());
+    let mut rest = word;
+    while let Some(at) = rest.find("://") {
+        let (head, tail) = rest.split_at(at + 3);
+        out.push_str(head);
+        let authority = tail.find(['/', '?', '#']).unwrap_or(tail.len());
+        match tail[..authority].rfind('@') {
+            Some(userinfo) => {
+                out.push_str("***");
+                rest = &tail[userinfo..];
+            }
+            None => rest = tail,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A tool run's command line, `{program, args}` as fleet.rs records it: the program and its
-/// first 12 arguments, each cut at 80 characters, so the console shows what ran without the
-/// whole of a long argument list.
+/// first 12 arguments, each redacted ([`Redactor`]) and then cut at 80 characters, so the
+/// console shows what ran without the whole of a long argument list or a credential in it.
 fn command_line(detail: &Value) -> Option<String> {
-    let bounded = |text: &str| text.chars().take(80).collect::<String>();
-    let mut line = bounded(detail["program"].as_str()?);
+    let mut redactor = Redactor::default();
+    let mut shown = |text: &str| redactor.push(text).chars().take(80).collect::<String>();
+    let mut line = shown(detail["program"].as_str()?);
     for arg in detail["args"]
         .as_array()
         .into_iter()
@@ -395,26 +509,33 @@ fn command_line(detail: &Value) -> Option<String> {
         .filter_map(Value::as_str)
     {
         line.push(' ');
-        line.push_str(&bounded(arg));
+        line.push_str(&shown(arg));
     }
     Some(line)
 }
 
+/// The activity object the console shows for a recorded entry. Every string taken from the entry
+/// is redacted ([`redact`]) before it is bounded.
 fn observation(value: &Value, id: &str) -> Value {
     if !value.is_object() {
         return Value::Null;
     }
     let mut result = json!({});
-    result["id"] = json!(id);
+    result["id"] = json!(redact(id));
     for key in ["at", "action", "role", "status", "worktree"] {
-        result[key] = json!(field(value, key).chars().take(240).collect::<String>());
+        result[key] = json!(
+            redact(field(value, key))
+                .chars()
+                .take(240)
+                .collect::<String>()
+        );
     }
     result["goal_revision"] = value["goal_revision"].clone();
     let detail = &value["detail"];
     let summary = detail
         .as_str()
         .or_else(|| detail["summary"].as_str())
-        .map(str::to_owned)
+        .map(redact)
         .unwrap_or_else(|| {
             [
                 "command",
@@ -427,7 +548,7 @@ fn observation(value: &Value, id: &str) -> Value {
             .into_iter()
             .filter_map(|key| match key {
                 "program" => command_line(detail),
-                _ => detail[key].as_str().map(str::to_owned),
+                _ => detail[key].as_str().map(redact),
             })
             .map(|part| part.chars().take(240).collect::<String>())
             .collect::<Vec<_>>()
@@ -519,6 +640,56 @@ mod tests {
     use super::*;
     use http_body_util::BodyExt;
     use tower::ServiceExt;
+
+    #[test]
+    fn projected_text_redacts_credential_values_and_keeps_the_rest() {
+        for (recorded, shown) in [
+            ("git push origin main", "git push origin main"),
+            (
+                "https://x:ghs_1@github.com/o/r.git",
+                "https://***@github.com/o/r.git",
+            ),
+            (
+                "ssh://git@host/r http://h/a@b",
+                "ssh://***@host/r http://h/a@b",
+            ),
+            ("git@github.com:o/r.git", "git@github.com:o/r.git"),
+            (
+                "Authorization: Bearer sk-1 next",
+                "Authorization: Bearer *** next",
+            ),
+            ("--header=Authorization:sk-2", "--header=Authorization:***"),
+            (
+                "Proxy-Authorization: Basic dXNlcg==",
+                "Proxy-Authorization: Basic ***",
+            ),
+            ("authorization=Token 'abc'", "authorization=Token ***"),
+            ("Bearer:sk-3 bearer sk-4", "Bearer:*** bearer ***"),
+            ("bearers of news", "bearers of news"),
+        ] {
+            assert_eq!(redact(recorded), shown, "{recorded}");
+        }
+        // A command line redacts across its arguments, before each is cut at 80 characters:
+        // a userinfo secret past the cut is not left behind by losing its `@`.
+        let long = format!("https://user:{}@host/r", "s".repeat(120));
+        let line = command_line(&json!({"program":"curl","args":["-H","Authorization:","Bearer","sk-5",long,"-o","out"]})).unwrap();
+        assert_eq!(
+            line,
+            "curl -H Authorization: Bearer *** https://***@host/r -o out"
+        );
+        // Every recorded string the console shows is redacted, and so is the runtime error.
+        let entry = json!({"action":"tool.run","detail":{"command":"fetch https://u:sk-6@h/","reason":"Bearer sk-7"}});
+        assert_eq!(
+            observation(&entry, "e")["detail"],
+            "fetch https://***@h/ · Bearer ***"
+        );
+        let summary = json!({"action":"x","detail":"Authorization: sk-8"});
+        assert_eq!(observation(&summary, "e")["detail"], "Authorization: ***");
+        let view = compact(
+            json!({"runtime_error":"GET https://u:sk-9@api/ failed","goals":[],"assignments":[],"publications":[]}),
+        );
+        assert_eq!(view["runtime_error"], "GET https://***@api/ failed");
+    }
 
     #[test]
     fn compact_projection_omits_foreign_fleet_entries_and_raw_evidence() {

@@ -7,7 +7,7 @@ import { background, contrast, fontSizes, rgb, rules, value } from './stylesheet
 // `xtask frontend-check` rebuilds it and refuses a difference, so this is what the browser gets.
 const css = readFileSync(new URL('../dist/index.css', import.meta.url), 'utf8')
 const all = rules(css)
-const where = rule => `${rule.media ? `@media ${rule.media} ` : ''}${rule.selectors.join(',')}`
+const where = rule => `${rule.media ? `[${rule.media}] ` : ''}${rule.selectors.join(',')}`
 
 test('the stylesheet reader sees the rules inside media queries', () => {
   expect(all.length).toBeGreaterThan(100)
@@ -18,17 +18,71 @@ test('the stylesheet reader sees the rules inside media queries', () => {
   ])
 })
 
+test('the stylesheet reader reads every at-rule block that holds style rules', () => {
+  expect(rules('@supports (display:grid){@media (max-width:1px){b{color:#111}}}@layer x{c{color:#222}}')).toEqual([
+    { media: '@supports (display:grid) and (max-width:1px)', selectors: ['b'], declarations: [['color', '#111']] },
+    { media: '@layer x', selectors: ['c'], declarations: [['color', '#222']] },
+  ])
+  // Keyframe selectors and descriptors are not style rules; statement at-rules end at `;`.
+  expect(rules('@charset "utf-8";@layer a, b;@keyframes k{from{color:#eee}to{color:#fff}}@font-face{font-family:x}a{color:#000}')).toEqual([
+    { media: '', selectors: ['a'], declarations: [['color', '#000']] },
+  ])
+  // A style rule nested inside another is refused, never silently unmeasured.
+  expect(() => rules('a{color:#000;&.b{color:#eee}}')).toThrow(/nested style rule/)
+})
+
+// The colour a rule's text inherits when the rule sets none: the newest unconditional rule that
+// sets `color` for the element the selector's last compound names (its tag or one of its
+// classes, as `button` for `button.danger`), else for an ancestor compound, nearest first, else
+// `body`'s, else `:root`'s.
+function inheritedColour(selector) {
+  const plain = all.filter(rule => !rule.media && value(rule, 'color') !== undefined)
+  const compounds = selector.trim().split(/\s*[\s>+~]\s*/).filter(Boolean).reverse()
+  for (const compound of [...compounds, 'body', ':root']) {
+    const simple = [compound, ...(compound.match(/^[a-z][a-z0-9-]*|\.[\w-]+/gi) || [])]
+    const owner = plain.filter(rule => rule.selectors.some(own => own !== selector && simple.includes(own))).pop()
+    if (owner) return value(owner, 'color')
+  }
+}
+
+// An element whose box is shorter or narrower than the minimum text size (a status dot) holds
+// no text: some rule for its last compound's class sets `width` and `height` both under 12px.
+function holdsNoText(selector) {
+  const classes = selector.trim().split(/\s*[\s>+~]\s*/).pop().match(/\.[\w-]+/g) || []
+  return all.some(rule => rule.selectors.some(own => classes.includes(own)) &&
+    ['width', 'height'].every(side => { const size = value(rule, side)?.match(/^([\d.]+)px$/); return size && Number(size[1]) < 12 }))
+}
+
 test('text_meets_contrast', () => {
   const page = background(all.find(rule => rule.selectors.includes(':root')))
   expect(rgb(page)).toBeInstanceOf(Array)
   const failures = []
+  const measured = { colour: 0, inherited: 0 }
   for (const rule of all) {
     const colour = value(rule, 'color')
-    if (colour === undefined) continue
+    const own = background(rule)
+    if (colour === undefined) {
+      // A rule that sets only a background: measure it against the text colour it inherits.
+      if (own === undefined) continue
+      const behind = rgb(own)
+      if (behind === null) continue
+      if (behind instanceof Error) { failures.push(`${where(rule)}: ${behind.message}`); continue }
+      for (const selector of rule.selectors) {
+        if (holdsNoText(selector)) continue
+        const inherited = inheritedColour(selector)
+        const text = rgb(inherited)
+        if (text === null) continue
+        if (text instanceof Error) { failures.push(`${where(rule)}: ${text.message}`); continue }
+        measured.inherited++
+        const ratio = contrast(text, behind)
+        if (ratio < 4.5) failures.push(`${where(rule)}: ${selector} inherits ${inherited} on ${own} at ${ratio.toFixed(2)}:1`)
+      }
+      continue
+    }
     const text = rgb(colour)
     if (text === null) continue
     if (text instanceof Error) { failures.push(`${where(rule)}: ${text.message}`); continue }
-    const own = background(rule)
+    measured.colour++
     const against = own === undefined ? ['#fff', page] : [own]
     for (const surface of against) {
       const behind = rgb(surface)
@@ -39,6 +93,11 @@ test('text_meets_contrast', () => {
     }
   }
   expect(failures).toEqual([])
+  // Both kinds of rule are measured: a reader that stopped seeing either fails here.
+  expect(measured.colour).toBeGreaterThan(20)
+  expect(measured.inherited).toBeGreaterThan(5)
+  // The control: the destructive button inherits the base button's white text.
+  expect(inheritedColour('button.danger')).toBe('#fff')
 })
 
 test('text_meets_minimum_size', () => {

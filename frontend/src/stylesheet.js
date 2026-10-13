@@ -1,30 +1,48 @@
 // Reading the compiled stylesheet (`frontend/dist/index.css`) for the visual-baseline tests:
-// its rules with their media queries, colours as RGB and contrast ratios (WCAG 2.x).
+// its rules with the at-rule conditions they sit in, colours as RGB and contrast ratios (WCAG 2.x).
 
-/** Every style rule as `{ media, selectors, declarations }`; rules inside `@media` carry its query. */
+// At-rules whose block holds no style rules: keyframe selectors, descriptors or page margins.
+// Every other at-rule block (`@media`, `@supports`, `@container`, `@layer`, `@scope`,
+// `@starting-style`, `@document` and any not yet known) is read for the style rules inside it.
+const notStyle = /^@(-[a-z]+-)?(keyframes|font-face|font-feature-values|font-palette-values|counter-style|property|page|color-profile|position-try|view-transition)\b/i
+
+/** Every style rule as `{ media, selectors, declarations }`. `media` is the conditions of the
+ * at-rule blocks the rule sits in, outermost first, joined by ` and `: a `@media` query as
+ * written after `@media`, any other at-rule with its name (`@supports (display:grid)`,
+ * `@layer base`); empty for a rule outside every at-rule. A style rule nested inside another
+ * style rule is not read, so it throws rather than going unmeasured. */
 export function rules(css) {
   const out = []
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
   let at = 0
-  const walk = (media, end) => {
+  const walk = (conditions, end) => {
     while (at < end) {
       const open = text.indexOf('{', at)
+      const semicolon = text.indexOf(';', at)
+      // A statement at-rule (`@import`, `@charset`, `@layer a, b;`) ends at its semicolon.
+      if (semicolon >= 0 && semicolon < end && (open < 0 || semicolon < open) && text.slice(at, semicolon).trim().startsWith('@')) {
+        at = semicolon + 1
+        continue
+      }
       if (open < 0 || open >= end) { at = end; return }
       const prelude = text.slice(at, open).trim()
-      if (prelude.startsWith('@media')) {
-        at = open + 1
-        const close = matching(text, open)
-        walk(prelude.slice(6).trim(), close)
+      const close = matching(text, open)
+      if (prelude.startsWith('@')) {
+        if (!notStyle.test(prelude)) {
+          const condition = /^@media\b/i.test(prelude) ? prelude.slice(6).trim() : prelude
+          at = open + 1
+          walk([...conditions, condition], close)
+        }
         at = close + 1
         continue
       }
-      const close = matching(text, open)
-      if (prelude.startsWith('@')) { at = close + 1; continue }
-      out.push({ media, selectors: split(prelude, ','), declarations: declarations(text.slice(open + 1, close)) })
+      const body = text.slice(open + 1, close)
+      if (body.includes('{')) throw Error(`nested style rule not read: ${prelude}{${body}}`)
+      out.push({ media: conditions.join(' and '), selectors: split(prelude, ','), declarations: declarations(body) })
       at = close + 1
     }
   }
-  walk('', text.length)
+  walk([], text.length)
   return out
 }
 

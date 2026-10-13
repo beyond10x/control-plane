@@ -1929,3 +1929,24 @@ async fn restored_service_preserves_inactive_goals_while_resuming_running_goal()
         "shutdown retained the durable-store lock"
     );
 }
+
+#[test]
+fn adversary_projected_command_line_keeps_credential_values_off_the_page() {
+    // live.rs `command_line` now projects a tool run's arguments into every stream frame and the
+    // page's embedded snapshot. The planner label (supervisor.rs, `aep`) keeps "flags, values and
+    // request bodies" in the receipt; a worker's argument values reach the page unfiltered.
+    let event = json!({"at":"2026-10-05T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":{"program":"git","args":["push","https://x-access-token:ghs_SECRETVALUE0123@github.com/o/r.git","--header","Authorization: Bearer sk-SECRETVALUE4567"]}});
+    let receipt = json!({"last_activity":event,"activity":[event]}).to_string();
+    let view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Planning","planning_receipt":receipt}]});
+    let shown = live::compact(view).to_string();
+    assert!(
+        shown.contains("git push"),
+        "control: the command is projected"
+    );
+    for secret in ["ghs_SECRETVALUE0123", "sk-SECRETVALUE4567"] {
+        assert!(
+            !shown.contains(secret),
+            "{secret} reaches the console projection: {shown}"
+        );
+    }
+}
