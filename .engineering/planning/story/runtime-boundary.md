@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:runtime-boundary
 kind: story
-status: active
+status: implemented
 title: Run every agent through the governed Loom boundary
 summary: Remove private turn loops and duplicated governor behavior while preserving workspace/UI orchestration; fix foundation composition gaps at their owners.
 relations:
@@ -29,10 +29,11 @@ scope:
   path: crates/control-plane-xtask/src/foundation.rs
 - confidence: inferred
   path: crates/control-plane-xtask/tests/foundation_check.rs
-revision: 47
+revision: 48
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 3, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
 - {from: "proposed", to: "active", at: "2026-10-05T23:11:49Z", actor: "human:timo", revision: 4, executor: "agent:control-plane-coordinator", correlation: "runtime-ownership-correction"}
+- {from: "active", to: "implemented", at: "2026-10-13T07:09:21Z", actor: "human:timo", revision: 48, decided_on: {"recorded":{"test_result":3,"review_outcome":2}}}
 ---
 # Restore the runtime ownership boundary
 
