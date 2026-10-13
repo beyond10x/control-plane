@@ -76,6 +76,18 @@ pub fn run(state: &Path, goal: &str, repo: &Path) -> Result<()> {
             recorded.operator
         ));
     }
+    let [workers, attempts, minutes] = recorded.bounds;
+    println!("workers: {workers}");
+    println!("attempts: {attempts}");
+    println!("minutes: {minutes}");
+    println!(
+        "within one worker, one attempt and ten minutes: {}",
+        if workers <= 1 && attempts <= 1 && minutes <= 10 {
+            "yes"
+        } else {
+            "no"
+        }
+    );
     if reasons.is_empty() {
         println!("unattended: yes");
         return Ok(());
@@ -131,10 +143,12 @@ struct Recorded {
     merged: Vec<Merged>,
     elapsed_seconds: Option<f64>,
     operator: usize,
+    /// The goal's worker, attempt and minute limits, as the operator created it.
+    bounds: [i64; 3],
 }
 
 async fn read(copy: &Path, goal: &str) -> Result<Recorded> {
-    let (state, merged) = {
+    let (state, merged, bounds) = {
         let store = Store::open(copy).await?;
         let goals = store.query("GoalList")?;
         let row = goals
@@ -144,6 +158,12 @@ async fn read(copy: &Path, goal: &str) -> Result<Recorded> {
             .find(|row| row["goal_id"] == goal)
             .with_context(|| format!("goal {goal} is not in the store"))?;
         let state = text(row, "state")?.to_owned();
+        let bounds =
+            ["max_workers", "max_attempts", "max_minutes"].map(|field| row[field].as_i64());
+        let bounds = match bounds {
+            [Some(workers), Some(attempts), Some(minutes)] => [workers, attempts, minutes],
+            _ => bail!("goal {goal} has no worker, attempt or minute limit"),
+        };
         let repositories = store.query("RepositoryRegistrationList")?;
         let mut merged = Vec::new();
         for assignment in store
@@ -165,7 +185,7 @@ async fn read(copy: &Path, goal: &str) -> Result<Recorded> {
                 target: text(repository, "base_branch")?.to_owned(),
             });
         }
-        (state, merged)
+        (state, merged, bounds)
     };
 
     let log = SqliteEventStore::open_existing(
@@ -211,6 +231,7 @@ async fn read(copy: &Path, goal: &str) -> Result<Recorded> {
             (decisions[i].event.occurred_at - decisions[start].event.occurred_at).as_seconds_f64()
         }),
         operator,
+        bounds,
     })
 }
 

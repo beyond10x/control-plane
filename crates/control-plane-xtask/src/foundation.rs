@@ -128,21 +128,7 @@ pub fn check(metadata: &Value) -> Result<()> {
 }
 
 pub fn run(root: &Path) -> Result<()> {
-    for name in ["engine.rs", "fleet.rs"] {
-        let source =
-            std::fs::read_to_string(root.join("crates/control-plane-runtime/src").join(name))?;
-        for duplicated in [
-            "impl Governor for",
-            ".evaluate_effect(",
-            "call_tool(",
-            "for _ in 0..host.config.max_steps",
-        ] {
-            ensure!(
-                !source.contains(duplicated),
-                "{name} duplicates foundation execution: {duplicated}"
-            );
-        }
-    }
+    sources(root)?;
     let output = Command::new("cargo")
         .current_dir(root)
         .args(["metadata", "--format-version", "1", "--locked"])
@@ -154,6 +140,104 @@ pub fn run(root: &Path) -> Result<()> {
     );
     check(&serde_json::from_slice(&output.stdout)?)?;
     println!("production dependency graph uses admitted foundation libraries");
+    Ok(())
+}
+
+/// The one host binding to Loom's loop and the provider port, relative to the repository root.
+const LOOM_BINDING: &str = "crates/control-plane-runtime/src/loom_model.rs";
+/// Foundation execution a production source never duplicates.
+const DUPLICATED: [&str; 4] = [
+    "impl Governor for",
+    ".evaluate_effect(",
+    "call_tool(",
+    "for _ in 0..host.config.max_steps",
+];
+/// A provider call or a model loop of its own; only [`LOOM_BINDING`] may hold them.
+const MODEL_LOOP: [&str; 4] = ["llm_core", "b10x_llm", ".turn(", "AgentLoop"];
+
+/// Refuse foundation execution in production sources: every `.rs` file under `src/` of every
+/// crate except this tooling crate. Outside [`LOOM_BINDING`] no source names the provider or
+/// builds a loop ([`MODEL_LOOP`]); no source duplicates [`DUPLICATED`]; and the declaration of
+/// `AgentModel::respond_in` has no default body, so no model binding answers a role outside its
+/// Loom session. Line comments are not code and are not searched.
+pub fn sources(root: &Path) -> Result<()> {
+    let mut files = Vec::new();
+    for krate in std::fs::read_dir(root.join("crates")).context("crates directory")? {
+        let krate = krate?.path();
+        if krate
+            .file_name()
+            .is_some_and(|name| name == "control-plane-xtask")
+        {
+            continue;
+        }
+        let src = krate.join("src");
+        if src.is_dir() {
+            rust_files(&src, &mut files)?;
+        }
+    }
+    files.sort();
+    ensure!(
+        !files.is_empty(),
+        "no production sources under {}",
+        root.display()
+    );
+    let mut declares_respond_in = false;
+    for file in files {
+        let shown = file
+            .strip_prefix(root)
+            .unwrap_or(&file)
+            .display()
+            .to_string();
+        let code = std::fs::read_to_string(&file)
+            .with_context(|| format!("read {shown}"))?
+            .lines()
+            .map(|line| line.split_once("//").map_or(line, |(code, _)| code))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for duplicated in DUPLICATED {
+            ensure!(
+                !code.contains(duplicated),
+                "{shown} duplicates foundation execution: {duplicated}"
+            );
+        }
+        if shown != LOOM_BINDING {
+            for call in MODEL_LOOP {
+                ensure!(
+                    !code.contains(call),
+                    "{shown} drives the model outside {LOOM_BINDING}: {call}"
+                );
+            }
+        }
+        if let Some((_, declaration)) = code.split_once("trait AgentModel") {
+            let (_, signature) = declaration
+                .split_once("fn respond_in")
+                .with_context(|| format!("{shown}: AgentModel declares no respond_in"))?;
+            let end = signature
+                .find([';', '{'])
+                .with_context(|| format!("{shown}: unterminated respond_in"))?;
+            ensure!(
+                signature[end..].starts_with(';'),
+                "{shown}: AgentModel::respond_in has a default body, which answers without a Loom session"
+            );
+            declares_respond_in = true;
+        }
+    }
+    ensure!(
+        declares_respond_in,
+        "no production source declares AgentModel::respond_in"
+    );
+    Ok(())
+}
+
+fn rust_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            rust_files(&path, found)?;
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            found.push(path);
+        }
+    }
     Ok(())
 }
 

@@ -6,7 +6,9 @@ mod support;
 
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelEnvironment, ModelRequest, RuntimeConfig, SharedStore, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -237,7 +239,7 @@ impl Scripted {
     }
 }
 impl AgentModel for Scripted {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> Result<Value> {
         match request.role.as_str() {
             "planner" => Ok(
                 json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story describes the goal"}),

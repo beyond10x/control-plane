@@ -9,7 +9,9 @@ mod support;
 
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelEnvironment, ModelRequest, RuntimeConfig, SharedStore, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -240,7 +242,7 @@ impl Scripted {
     }
 }
 impl AgentModel for Scripted {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> Result<Value> {
         match request.role.as_str() {
             "planner" => Ok(
                 json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story describes the goal"}),
@@ -280,7 +282,7 @@ struct ReconfigureAfterFinalCheck {
     operator: Mutex<Option<std::thread::JoinHandle<(Value, Value)>>>,
 }
 impl AgentModel for ReconfigureAfterFinalCheck {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value> {
         let mut operator = self.operator.lock().unwrap();
         if request.role == "goal_reviewer" && operator.is_none() {
             cmd(
@@ -307,7 +309,7 @@ impl AgentModel for ReconfigureAfterFinalCheck {
             }));
         }
         drop(operator);
-        self.inner.respond(request)
+        self.inner.respond_in(request, environment)
     }
 }
 
@@ -371,7 +373,7 @@ struct PauseDuringGoalReview {
     paused: AtomicBool,
 }
 impl AgentModel for PauseDuringGoalReview {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, environment: &ModelEnvironment) -> Result<Value> {
         if request.role == "goal_reviewer" && !self.paused.swap(true, Ordering::SeqCst) {
             let mut store = self.store.blocking_lock();
             let outcome = tokio::runtime::Handle::current()
@@ -379,7 +381,7 @@ impl AgentModel for PauseDuringGoalReview {
                 .unwrap();
             assert_eq!(outcome["outcome"], "applied", "{outcome}");
         }
-        self.inner.respond(request)
+        self.inner.respond_in(request, environment)
     }
 }
 

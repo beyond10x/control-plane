@@ -1,7 +1,9 @@
 //! `control-plane-xtask eval report`: whether a recorded goal ran unattended, read from the
 //! store a scripted-model run leaves behind, against a disposable repository and its origin.
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelEnvironment, ModelRequest, RuntimeConfig, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
@@ -35,7 +37,7 @@ struct Scripted {
     calls: AtomicUsize,
 }
 impl AgentModel for Scripted {
-    fn respond(&self, request: &ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> anyhow::Result<Value> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         match request.role.as_str() {
             "planner" => Ok(

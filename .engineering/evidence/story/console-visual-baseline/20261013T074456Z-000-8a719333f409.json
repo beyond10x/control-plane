@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-13T07:44:56Z",
+  "actor": "human:timo",
+  "artifact": "story:console-visual-baseline",
+  "kind": "story",
+  "revision": 28,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates on 99c5c7a: clippy -D warnings and cargo test -p control-plane-app (lib 51, integration 14 passed); frontend-check with vitest 71 passed; red first for the eight named checks (served_page_links_only_the_bundled_stylesheet a guard, red on the error page); adversary NEEDS-CHANGE on 05f7c8e (3 introduced) fixed in 99c5c7a, each case red first or red on a mutant",
+    "reference": "99c5c7a"
+  }
+}

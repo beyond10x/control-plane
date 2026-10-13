@@ -163,7 +163,11 @@ async fn implementing(
 
 struct Unused;
 impl control_plane_runtime::AgentModel for Unused {
-    fn respond(&self, _: &control_plane_runtime::ModelRequest) -> anyhow::Result<Value> {
+    fn respond_in(
+        &self,
+        _: &control_plane_runtime::ModelRequest,
+        _: &control_plane_runtime::ModelEnvironment,
+    ) -> anyhow::Result<Value> {
         anyhow::bail!("these cases never reach a model call")
     }
 }

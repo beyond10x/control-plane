@@ -10,7 +10,9 @@ mod support;
 
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
-use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, SharedStore, Supervisor};
+use control_plane_runtime::{
+    AgentModel, ModelEnvironment, ModelRequest, RuntimeConfig, SharedStore, Supervisor,
+};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -268,7 +270,7 @@ struct EditOtherGoalDuringReview {
     edit: Mutex<Option<Edit>>,
 }
 impl AgentModel for EditOtherGoalDuringReview {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> Result<Value> {
         match request.role.as_str() {
             "planner" => Ok(
                 json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story describes the goal"}),
@@ -480,8 +482,8 @@ struct OriginUnreachableDuringReview {
     reviews: Mutex<usize>,
     broken: Mutex<Option<(PathBuf, String)>>,
 }
-impl AgentModel for OriginUnreachableDuringReview {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+impl OriginUnreachableDuringReview {
+    fn answer(&self, request: &ModelRequest) -> Result<Value> {
         match request.role.as_str() {
             "planner" => Ok(
                 json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story describes the goal"}),
@@ -507,6 +509,8 @@ impl AgentModel for OriginUnreachableDuringReview {
             other => anyhow::bail!("unexpected model role {other}"),
         }
     }
+}
+impl AgentModel for OriginUnreachableDuringReview {
     fn respond_in(
         &self,
         request: &ModelRequest,
@@ -528,7 +532,7 @@ impl AgentModel for OriginUnreachableDuringReview {
                 *broken = Some((path, url));
             }
         }
-        self.respond(request)
+        self.answer(request)
     }
 }
 

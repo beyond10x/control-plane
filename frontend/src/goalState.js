@@ -84,5 +84,16 @@ export function deriveGoalState(goal, assignments = []) {
 
 export const goalStateLabels = { starting: 'Starting', planning: 'Planning', executing: 'Executing', stalled: 'Stalled', blocked: 'Blocked', paused: 'Paused', satisfied: 'Satisfied', cancelled: 'Cancelled', unknown: 'Unknown' }
 
-/** The badge class for a derived state: green only while the goal is moving. */
-export const goalStateBadge = derived => ({ starting: 'active', planning: 'active', executing: 'active', blocked: 'blocked', stalled: 'blocked', satisfied: 'done' })[derived] || 'neutral'
+// The one badge mapper of the console: every badge takes its class, and so its colour
+// (style.css `.badge.<class>`), from here. Each derived goal state has its own colour; a goal's
+// lifecycle state and an assignment's state take the colour of the derived state they amount to,
+// except that a Merged assignment has its own and a waiting one (Queued, ReadyToMerge) shares
+// none. Anything else (a repository's or workspace's registration, an unknown state) is neutral.
+const badges = {
+  starting: 'starting', planning: 'planning', executing: 'executing', stalled: 'stalled', blocked: 'blocked', paused: 'paused', cancelled: 'cancelled', satisfied: 'satisfied',
+  Running: 'executing', Paused: 'paused', Satisfied: 'satisfied', Cancelled: 'cancelled',
+  Implementing: 'executing', Reviewing: 'executing', Merging: 'executing', Queued: 'waiting', ReadyToMerge: 'waiting', Blocked: 'blocked', Merged: 'merged',
+}
+
+/** The badge class for a derived goal state, a lifecycle state or an assignment state. */
+export const stateBadge = state => Object.hasOwn(badges, state) ? badges[state] : 'neutral'

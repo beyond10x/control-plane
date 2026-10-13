@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-13T07:39:09Z",
+  "actor": "human:timo",
+  "artifact": "story:external-evaluations",
+  "kind": "story",
+  "revision": 28,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates on 51775b6: clippy -D warnings of xtask and runtime; cargo test -p control-plane-xtask all lanes ok (bin 33, eval_verify 1); cargo test -p control-plane-runtime --test eval_policy 1 passed; red first for go_test_file_without_tests_is_not_executed_tests and eval_report_states_goal_bounds; init and origin checks shown red on mutations",
+    "reference": "51775b6"
+  }
+}

@@ -3233,9 +3233,6 @@ mod progress_tests {
         appended: std::sync::Mutex<Vec<u64>>,
     }
     impl AgentModel for Emitter {
-        fn respond(&self, _: &ModelRequest) -> Result<Value> {
-            bail!("this model only reports progress")
-        }
         fn respond_in(
             &self,
             _: &ModelRequest,
@@ -3403,7 +3400,7 @@ mod blocker_tests {
 
     struct NoModel;
     impl AgentModel for NoModel {
-        fn respond(&self, _: &ModelRequest) -> Result<Value> {
+        fn respond_in(&self, _: &ModelRequest, _: &crate::ModelEnvironment) -> Result<Value> {
             bail!("blocking calls no model")
         }
     }

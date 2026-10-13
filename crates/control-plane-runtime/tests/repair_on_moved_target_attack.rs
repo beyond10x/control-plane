@@ -15,7 +15,8 @@ mod support;
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
-    AgentModel, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore, Supervisor,
+    AgentModel, ModelEnvironment, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore,
+    Supervisor,
 };
 use serde_json::{Value, json};
 use std::{
@@ -279,7 +280,7 @@ impl Scripted {
     }
 }
 impl AgentModel for Scripted {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> Result<Value> {
         match request.role.as_str() {
             "planner" => Ok(
                 json!({"action":"finish","stories":["story:deliver"],"summary":"Existing story describes the goal"}),

@@ -93,14 +93,35 @@ pub fn run(action: Action) -> Result<()> {
     }
 }
 fn init(root: &Path) -> Result<()> {
-    fs::create_dir_all(root)?;
-    let root = root.canonicalize()?;
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .parent()
         .unwrap()
         .canonicalize()?;
+    init_with(root, &source, activate)
+}
+/// Activate the independent managed-worktree profile for the eval repositories.
+fn activate(root: &Path) -> Result<()> {
+    command(
+        root,
+        "worktree",
+        &[
+            "activate",
+            "--profile",
+            "worktree.toml",
+            "--workspace",
+            root.join("repos").to_str().context("UTF-8 root")?,
+        ],
+    )?;
+    Ok(())
+}
+/// `eval init` with the repository the root must stay outside and the profile activation
+/// supplied, so the seeding runs without the `worktree` binary.
+fn init_with(root: &Path, source: &Path, activate: impl FnOnce(&Path) -> Result<()>) -> Result<()> {
+    fs::create_dir_all(root)?;
+    let root = root.canonicalize()?;
+    let source = source.canonicalize()?;
     ensure!(
         !root.starts_with(&source),
         "eval root must be outside the control-plane repository"
@@ -115,63 +136,9 @@ fn init(root: &Path) -> Result<()> {
         root.join("worktree.toml"),
         "version = 1\nname = 'control-plane-evals'\nexpire_after_seconds = 604800\nprotect_workspace_root = true\n",
     )?;
-    command(
-        &root,
-        "worktree",
-        &[
-            "activate",
-            "--profile",
-            "worktree.toml",
-            "--workspace",
-            root.join("repos").to_str().context("UTF-8 root")?,
-        ],
-    )?;
+    activate(&root)?;
     for case in [Case::Cli, Case::JsonHttp, Case::AuthWeb] {
-        let repo = root.join("repos").join(case.name());
-        fs::create_dir(&repo)?;
-        fs::write(
-            repo.join("go.mod"),
-            format!("module example.invalid/{}\n\ngo 1.23\n", case.name()),
-        )?;
-        fs::write(repo.join(".gitignore"), "/bin/\n")?;
-        fs::write(
-            repo.join("AGENTS.md"),
-            "# External evaluation repository\n\nThis is a standalone local Go example, outside the beyond10x organization source tree. Use Go standard library and HTML/CSS. No external dependencies. Keep the implementation small. Follow TASK.md; do not edit it, this file, or the external verifier. The host owns AEP lifecycle, testing, review, commits and publication. Include automated Go tests. The planner must establish a valid minimal ESS specification before creating AEP stories, as required by the host. Named application acceptance scenarios in TASK.md are checked by the external verifier.\n",
-        )?;
-        fs::write(
-            repo.join("TASK.md"),
-            format!("# {}\n\n{}\n", case.name(), case.brief()),
-        )?;
-        command(&repo, "git", &["init", "--initial-branch=main"])?;
-        command(&repo, "git", &["config", "user.name", "Control Plane Eval"])?;
-        command(
-            &repo,
-            "git",
-            &["config", "user.email", "eval@example.invalid"],
-        )?;
-        command(&repo, "git", &["add", "."])?;
-        command(
-            &repo,
-            "git",
-            &["commit", "-m", "Seed isolated evaluation task"],
-        )?;
-        let remote = root.join("remotes").join(format!("{}.git", case.name()));
-        command(
-            &root,
-            "git",
-            &[
-                "init",
-                "--bare",
-                "--initial-branch=main",
-                remote.to_str().context("UTF-8 origin")?,
-            ],
-        )?;
-        command(
-            &repo,
-            "git",
-            &["remote", "add", "origin", remote.to_str().unwrap()],
-        )?;
-        command(&repo, "git", &["push", "-u", "origin", "main"])?;
+        let repo = seed(&root, case)?;
         println!("{}: {}", case.name(), repo.display());
     }
     fs::write(
@@ -179,6 +146,55 @@ fn init(root: &Path) -> Result<()> {
         "# Control-plane evaluations\n\nThree independent local repositories: go-cli, go-json-http, go-auth-web. TASK.md holds each fixed brief. Register each as a separate workspace. Run sequentially with one worker, one attempt and a ten-minute goal budget. Repository acceptance runs the trusted control-plane-xtask eval verify command, not a check supplied by the generated app. Keep failed runs as evidence; do not silently retry. Local origins are under remotes/. No GitHub publication is involved.\n",
     )?;
     Ok(())
+}
+/// Seed one blank case at `root/repos/<case>` with its bare origin at `root/remotes/<case>.git`.
+fn seed(root: &Path, case: Case) -> Result<PathBuf> {
+    let repo = root.join("repos").join(case.name());
+    fs::create_dir(&repo)?;
+    fs::write(
+        repo.join("go.mod"),
+        format!("module example.invalid/{}\n\ngo 1.23\n", case.name()),
+    )?;
+    fs::write(repo.join(".gitignore"), "/bin/\n")?;
+    fs::write(
+        repo.join("AGENTS.md"),
+        "# External evaluation repository\n\nThis is a standalone local Go example, outside the beyond10x organization source tree. Use Go standard library and HTML/CSS. No external dependencies. Keep the implementation small. Follow TASK.md; do not edit it, this file, or the external verifier. The host owns AEP lifecycle, testing, review, commits and publication. Include automated Go tests. The planner must establish a valid minimal ESS specification before creating AEP stories, as required by the host. Named application acceptance scenarios in TASK.md are checked by the external verifier.\n",
+    )?;
+    fs::write(
+        repo.join("TASK.md"),
+        format!("# {}\n\n{}\n", case.name(), case.brief()),
+    )?;
+    command(&repo, "git", &["init", "--initial-branch=main"])?;
+    command(&repo, "git", &["config", "user.name", "Control Plane Eval"])?;
+    command(
+        &repo,
+        "git",
+        &["config", "user.email", "eval@example.invalid"],
+    )?;
+    command(&repo, "git", &["add", "."])?;
+    command(
+        &repo,
+        "git",
+        &["commit", "-m", "Seed isolated evaluation task"],
+    )?;
+    let remote = root.join("remotes").join(format!("{}.git", case.name()));
+    command(
+        root,
+        "git",
+        &[
+            "init",
+            "--bare",
+            "--initial-branch=main",
+            remote.to_str().context("UTF-8 origin")?,
+        ],
+    )?;
+    command(
+        &repo,
+        "git",
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    )?;
+    command(&repo, "git", &["push", "-u", "origin", "main"])?;
+    Ok(repo)
 }
 struct Server(Child);
 impl Drop for Server {
@@ -196,12 +212,15 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             "documented-setup: README lacks {required}"
         );
     }
-    let tests = command(repo, "go", &["test", "-count=1", "./..."])?;
+    // A package line `ok … [no tests to run]` executed nothing: only a passed test event counts.
+    let tests = command(repo, "go", &["test", "-count=1", "-json", "./..."])?;
     ensure!(
-        tests
-            .lines()
-            .any(|line| line.starts_with("ok\t") || line.starts_with("ok ")),
-        "no Go test package executed: {tests}"
+        tests.lines().any(|line| {
+            serde_json::from_str::<serde_json::Value>(line).is_ok_and(|event| {
+                event["Action"] == "pass" && event["Test"].as_str().is_some_and(|t| !t.is_empty())
+            })
+        }),
+        "no Go test executed: {tests}"
     );
     command(repo, "go", &["vet", "./..."])?;
     let scratch = tempfile::tempdir()?;
@@ -402,3 +421,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "eval_tests.rs"]
+mod tests;

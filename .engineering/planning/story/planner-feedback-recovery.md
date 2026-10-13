@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/control-plane-runtime/
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T22:25:18Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}}
 - {from: "proposed", to: "active", at: "2026-10-05T22:25:18Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
@@ -39,3 +39,13 @@ Cited: crates/control-plane-runtime/src/engine.rs, context.rs, model.rs, process
 ## Authorization
 
 The operator explicitly reports recurring failures and requests continuation of the previously authorized implementation goal. No pause or goal cancellation is authorized.
+
+## Status (2026-10-13)
+
+Read from main on 2026-10-13, after story:runtime-boundary was implemented.
+
+Met by named tests:
+- aep_prefix_help_is_read_only, command_syntax_feedback_allows_correction, syntax_recovery_has_an_attempt_budget, unchanged_reads_preserve_action_history, alternating_reads_receive_stall_feedback (crates/control-plane-runtime/tests/planner.rs)
+- process_exit_retains_actual_status_for_syntax_recovery (crates/control-plane-runtime/src/process.rs)
+
+Open: "Confirm the live user goal produces a validated assignment". The live user goal this line names, the calculator goal, was cancelled at the operator's request (story:external-evaluations, Evidence). The 2026-10-11 unattended run (story:unattended-goal-evidence) produced a validated, merged and accepted assignment on a different goal, so it does not close this line. Closing it needs a real-model run on a user goal, and none is approved. The story stays active until one is.

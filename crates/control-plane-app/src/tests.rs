@@ -29,14 +29,164 @@ async fn dashboard_embeds_vue_assets_without_refresh_or_iframe() {
     assert!(shell.contains("href=\"/index.css\""));
     assert!(!shell.contains("<iframe"));
     assert!(!shell.contains("http-equiv=\"refresh\""));
-    assert!(shell.contains("action=\"/workspaces\""));
+    let (snapshot, _) = embedded(&shell);
+    assert!(snapshot["workspaces"].is_array());
     let live = app.oneshot(request("/live")).await.unwrap();
     assert_eq!(live.status(), StatusCode::OK);
     let live = body(live).await;
     assert!(!live.contains("http-equiv=\"refresh\""));
-    assert!(live.contains("Server observed"));
-    assert!(live.contains("No running goals"));
     assert!(live.contains("src=\"/app.js\""));
+    let (snapshot, _) = embedded(&live);
+    assert_eq!(snapshot["goals"], json!([]));
+    assert!(snapshot["server_time"].is_string());
+}
+
+const SNAPSHOT_OPEN: &str = "<script type=\"application/json\" id=\"console-snapshot\">";
+
+/// The console snapshot a served page embeds, and the page without it. The JSON holds no `<`,
+/// so no user text in it can close the element or open markup.
+fn embedded(html: &str) -> (Value, String) {
+    assert_eq!(
+        html.matches(SNAPSHOT_OPEN).count(),
+        1,
+        "one console snapshot"
+    );
+    let start = html.find(SNAPSHOT_OPEN).unwrap() + SNAPSHOT_OPEN.len();
+    let end = start
+        + html[start..]
+            .find("</script>")
+            .expect("snapshot element closes");
+    let json = &html[start..end];
+    assert!(!json.contains('<'), "`<` is escaped in the snapshot");
+    (
+        serde_json::from_str(json).expect("snapshot is JSON"),
+        format!("{}{}", &html[..start], &html[end..]),
+    )
+}
+
+/// A workspace with one Paused goal whose objective holds markup.
+async fn marked_up_goal(state: &AppState, path: &std::path::Path) -> (String, String) {
+    let ws = state
+        .add_workspace(WorkspaceInput {
+            path: path.to_string_lossy().into_owned(),
+            name: "snapshot".into(),
+        })
+        .await
+        .unwrap()["published"][0]["payload"]["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let goal = state.command("CreateGoal",json!({"workspace_id":ws,"objective":"Objective <b>marked</b> & </script> shown","acceptance":"Acceptance stays in the snapshot","max_workers":1,"max_attempts":1,"max_minutes":10,"planner_model":"scripted","implementor_model":"scripted","reviewer_model":"scripted","merge_authority":false})).await.unwrap()["published"][0]["payload"]["goal_id"].as_str().unwrap().to_owned();
+    (ws, goal)
+}
+
+async fn page(state: &AppState, request: Request<Body>) -> (StatusCode, String) {
+    let response = router(state.clone()).oneshot(request).await.unwrap();
+    (response.status(), body(response).await)
+}
+
+fn get(path: &str) -> Request<Body> {
+    Request::builder()
+        .uri(path)
+        .header("host", "127.0.0.1:8787")
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn page_embeds_a_snapshot_for_vue() {
+    let (temp, state) = fixture().await;
+    let (ws, goal) = marked_up_goal(&state, temp.path()).await;
+    for path in ["/".to_owned(), format!("/workspaces/{ws}")] {
+        let (status, html) = page(&state, get(&path)).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        let (snapshot, outside) = embedded(&html);
+        // The console payload: the projection `/api/console` and the stream send, with its clock.
+        let row = &snapshot["goals"][0];
+        assert_eq!(row["goal_id"], goal.as_str(), "{path}");
+        assert_eq!(
+            row["objective"],
+            "Objective <b>marked</b> & </script> shown"
+        );
+        assert!(row["planner_activity"].is_null() && row.get("planning_receipt").is_none());
+        assert!(snapshot["server_time"].is_string());
+        if path == "/" {
+            assert_eq!(snapshot["workspaces"][0]["workspace_id"], ws.as_str());
+        } else {
+            assert_eq!(snapshot["workspace"]["workspace_id"], ws.as_str());
+        }
+        // No server-rendered goal markup: nothing of the goal outside the JSON.
+        assert!(!outside.contains("class=\"operation"), "{path}");
+        for text in ["Objective", "marked", "Acceptance stays", goal.as_str()] {
+            assert!(
+                !outside.contains(text),
+                "{path}: {text} outside the snapshot"
+            );
+        }
+        assert!(outside.contains("<div id=\"app\"></div>"), "{path}");
+        assert!(
+            outside.find(SNAPSHOT_OPEN) < outside.find("src=\"/app.js\""),
+            "{path}: the snapshot precedes the application"
+        );
+    }
+}
+
+#[tokio::test]
+async fn duplicate_stylesheet_is_removed() {
+    assert!(
+        !std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dashboard.css")).exists()
+    );
+    let (_temp, state) = fixture().await;
+    let refused = Request::builder()
+        .method("POST")
+        .uri("/workspaces")
+        .header("host", "127.0.0.1:8787")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("csrf=wrong&path=.&name=refused"))
+        .unwrap();
+    let (status, html) = page(&state, refused).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(html.contains("Request needs attention"));
+    assert!(html.contains("<link rel=\"stylesheet\" href=\"/index.css\">"));
+    assert!(!html.contains("<style"));
+}
+
+/// The stylesheets a page links or embeds.
+fn stylesheets(html: &str) -> Vec<String> {
+    let mut found: Vec<String> = html
+        .split("<link")
+        .skip(1)
+        .map(|tag| tag[..tag.find('>').unwrap()].to_owned())
+        .filter(|tag| tag.contains("stylesheet"))
+        .collect();
+    found.extend(html.matches("<style").map(str::to_owned));
+    found
+}
+
+#[tokio::test]
+async fn served_page_links_only_the_bundled_stylesheet() {
+    let (temp, state) = fixture().await;
+    let (ws, _) = marked_up_goal(&state, temp.path()).await;
+    let refused = Request::builder()
+        .method("POST")
+        .uri("/workspaces")
+        .header("host", "127.0.0.1:8787")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from("path=.&name=refused"))
+        .unwrap();
+    for (name, request) in [
+        ("overview", get("/")),
+        ("workspace", get(&format!("/workspaces/{ws}"))),
+        ("error", refused),
+    ] {
+        let (_, html) = page(&state, request).await;
+        let found = stylesheets(&html);
+        assert_eq!(found.len(), 1, "{name}: {found:?}");
+        assert!(
+            found[0].contains("href=\"/index.css\""),
+            "{name}: {found:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -93,10 +243,14 @@ async fn live_activity_is_durable_scoped_and_does_not_inline_model_receipts() {
             .unwrap(),
     )
     .await;
-    assert!(html.contains("Model waiting visible-workspace"));
-    assert!(html.contains("2026-10-05T09:00:00Z"));
-    assert!(html.contains("since observation"));
-    assert!(html.contains("&lt;script&gt;unsafe&lt;/script&gt;"));
+    // The page embeds the workspace's projection; Vue shows its entries and their ages from it.
+    let (snapshot, _) = embedded(&html);
+    let shown = &snapshot["goals"][0]["last_activity"];
+    assert_eq!(shown["action"], "Model waiting visible-workspace");
+    assert_eq!(shown["at"], "2026-10-05T09:00:00Z");
+    assert!(snapshot["server_time"].is_string());
+    assert_eq!(shown["detail"], "<script>unsafe</script>");
+    assert!(!html.contains("<script>unsafe"));
     assert!(!html.contains("Model waiting other-workspace"));
     assert!(!html.contains("MODEL-RAW-SECRET"));
     assert!(html.len() < 30000);
@@ -115,26 +269,36 @@ fn concurrent_workers_and_blocked_stopped_states_are_distinct() {
     let event = |action| json!({"at":"2026-10-05T09:00:00Z","action":action,"role":"implementor","worktree":"worktree","detail":"actual tool observation","status":"running","goal_revision":1});
     let receipt=json!({"fleet":{"a":event("worker one running"),"b":event("worker two running"),"foreign":event("must not leak")}}).to_string();
     let mut view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":"Executor unavailable","repositories":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Blocked","planning_reason":"Repository unavailable","planning_receipt":receipt}],"assignments":[{"goal_id":"g","goal_revision":1,"assignment_id":"a","story_id":"first","state":"Implementing"},{"goal_id":"g","goal_revision":1,"assignment_id":"b","story_id":"second","state":"Reviewing"}]});
-    let html = dashboard::operations(&view).unwrap();
-    assert!(html.contains("worker one running"));
-    assert!(html.contains("worker two running"));
-    assert!(!html.contains("must not leak"));
-    assert!(html.contains("Autonomous processing stopped"));
-    assert!(html.contains("Planner needs attention"));
-    assert!(html.contains("Repository unavailable"));
-    assert!(html.contains("initial snapshot is static"));
-    assert!(!html.contains("Connected"));
+    // The projection Vue renders (the embedded snapshot, `/api/console` and every stream frame).
+    let projected = live::compact(view.clone());
+    let goal = &projected["goals"][0];
+    // Each worker keeps its own entry under its assignment; another goal's entry does not leak.
+    assert_eq!(goal["fleet"]["a"]["action"], "worker one running");
+    assert_eq!(goal["fleet"]["b"]["action"], "worker two running");
+    assert_ne!(goal["fleet"]["a"]["id"], goal["fleet"]["b"]["id"]);
+    assert!(!projected.to_string().contains("must not leak"));
+    // The stopped runtime and the blocked planner are both there, each with its own reason.
+    assert_eq!(projected["runtime_error"], "Executor unavailable");
+    assert_eq!(goal["state"], "Running");
+    assert_eq!(goal["planning_phase"], "Blocked");
+    assert_eq!(goal["planning_reason"], "Repository unavailable");
+    // A stopped runtime holds no model call, and the snapshot carries no observation clock of
+    // its own: nothing in it claims a live connection.
+    assert!(goal["waiting"].is_null());
+    assert!(projected.get("server_observed_at").is_none());
+    // Paused, the goal is stopped rather than blocked, and still holds no call.
     view["goals"][0]["state"] = json!("Paused");
-    let paused = dashboard::operations(&view).unwrap();
-    assert!(!paused.contains("worker one running"));
-    assert!(paused.contains("Paused; Start this goal to resume"));
+    let paused = live::compact(view.clone());
+    assert_eq!(paused["goals"][0]["state"], "Paused");
+    assert!(paused["goals"][0]["waiting"].is_null());
+    // At a later revision the workers' entries are of the earlier one, so none is current.
     view["goals"][0]["state"] = json!("Running");
     view["goals"][0]["revision"] = json!(2);
-    assert!(
-        !dashboard::operations(&view)
-            .unwrap()
-            .contains("worker one running")
-    );
+    let revised = live::compact(view);
+    for worker in ["a", "b"] {
+        assert_eq!(revised["goals"][0]["fleet"][worker]["goal_revision"], 1);
+    }
+    assert_eq!(revised["goals"][0]["revision"], 2);
 }
 
 #[test]
@@ -142,29 +306,37 @@ fn structured_worker_details_show_bounded_commands_and_paths_without_receipts() 
     let event = json!({"at":"2026-10-05T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":{"program":"cargo","args":["test","--package","<script>bad</script>"],"path":"src/lib.rs","worktree":"isolated/worker","receipt":"PRIVATE-RECEIPT".repeat(50000),"stdout":"PRIVATE-OUTPUT"}});
     let receipt = json!({"last_activity":event,"activity":[event]}).to_string();
     let mut view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Planning","planning_receipt":receipt}]});
-    let html = dashboard::operations(&view).unwrap();
-    assert!(html.contains("cargo test --package &lt;script&gt;bad&lt;/script&gt;"));
-    assert!(html.contains("src/lib.rs"));
-    assert!(html.contains("isolated/worker"));
-    assert!(!html.contains("PRIVATE-RECEIPT"));
-    assert!(!html.contains("PRIVATE-OUTPUT"));
-    assert!(!html.contains("<script>"));
-    assert!(html.len() < 30000);
+    let projected = live::compact(view.clone());
+    let detail = projected["goals"][0]["last_activity"]["detail"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(detail.contains("cargo test --package <script>bad</script>"));
+    assert!(detail.contains("src/lib.rs"));
+    assert!(detail.contains("isolated/worker"));
+    let shown = projected.to_string();
+    assert!(!shown.contains("PRIVATE-RECEIPT"));
+    assert!(!shown.contains("PRIVATE-OUTPUT"));
+    assert!(shown.len() < 30000);
     let receipt=json!({"last_activity":{"action":"blocked","detail":{"reason":"Required checks refused","command":"cargo test --locked"}}}).to_string();
     view["goals"][0]["planning_receipt"] = json!(receipt);
-    let html = dashboard::operations(&view).unwrap();
-    assert!(html.contains("Required checks refused"));
-    assert!(html.contains("cargo test --locked"));
+    let detail = live::compact(view)["goals"][0]["last_activity"]["detail"].clone();
+    assert!(detail.as_str().unwrap().contains("Required checks refused"));
+    assert!(detail.as_str().unwrap().contains("cargo test --locked"));
 }
 
 #[tokio::test]
 async fn adversary_recorded_tool_run_keeps_the_command_the_dashboard_shows() {
-    // The case above shows what the dashboard renders for a structured tool run, from a
+    // The case above shows what the console projection carries for a structured tool run, from a
     // hand-built view. This sends the same kind of event through the runtime's progress path.
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig, Supervisor};
     struct NoModel;
     impl AgentModel for NoModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("progress recording does not call the model")
         }
     }
@@ -204,8 +376,11 @@ async fn adversary_recorded_tool_run_keeps_the_command_the_dashboard_shows() {
     let event = json!({"at":"2026-10-06T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":detail});
     let hand_built = json!({"server_observed_at":"2026-10-06T09:00:01Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Queued","planning_receipt":json!({"last_activity":event}).to_string()}]});
     assert!(
-        dashboard::operations(&hand_built).unwrap().contains(shown),
-        "control: the dashboard shows the command of this event"
+        live::compact(hand_built)["goals"][0]["last_activity"]["detail"]
+            .as_str()
+            .unwrap()
+            .contains(shown),
+        "control: the console projection shows the command of this event"
     );
     let supervisor = Supervisor::new(
         state.store.clone(),
@@ -219,7 +394,7 @@ async fn adversary_recorded_tool_run_keeps_the_command_the_dashboard_shows() {
         .await
         .unwrap();
     let view = state.snapshot().await.unwrap();
-    let html = dashboard::operations(&view).unwrap();
+    let html = live::compact(view.clone()).to_string();
     let receipt = view["goals"][0]["planning_receipt"].as_str().unwrap();
     assert!(
         html.contains(shown),
@@ -262,7 +437,7 @@ async fn dashboard_and_evidence_read_activity_history_from_the_store() {
     // The recorded receipt carries the newest activity only.
     assert!(!field(&view["goals"][0], "planning_receipt").contains("first step"));
     dashboard::attach_history(&*state.store.lock().await, &mut view["goals"]).unwrap();
-    let html = dashboard::operations(&view).unwrap();
+    let html = live::compact(view).to_string();
     for step in ["first step", "second step", "third step"] {
         assert!(
             html.contains(step),
@@ -655,7 +830,9 @@ async fn local_operator_controls() {
             .to_vec(),
     )
     .unwrap();
-    assert!(body.contains("Add workspace"));
+    // The controls are the console application's, which starts from the embedded snapshot.
+    assert!(body.contains("src=\"/app.js\""));
+    assert!(embedded(&body).0["workspaces"].is_array());
 }
 
 #[tokio::test]
@@ -850,7 +1027,12 @@ async fn user_content_is_escaped_in_console() {
     );
     let html = body(response).await;
     assert!(!html.contains("<script>"));
-    assert!(html.contains("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;&quot;"));
+    assert!(html.contains("\\u003cscript\\u003ealert('x')\\u003c/script\\u003e\\\""));
+    let (snapshot, _) = embedded(&html);
+    assert_eq!(
+        snapshot["workspaces"][0]["name"],
+        "<script>alert('x')</script>\""
+    );
 }
 
 #[tokio::test]
@@ -940,10 +1122,11 @@ async fn cli_browser_and_store_share_goal_controls_over_real_http() {
         .text()
         .await
         .unwrap();
-    assert!(html.contains("Deliver first change"));
-    assert!(html.contains("Save repository settings"));
-    assert!(html.contains("Allow verified merges"));
-    assert!(html.contains("repository"));
+    let (page, _) = embedded(&html);
+    assert_eq!(page["workspace"]["workspace_id"], ws);
+    assert_eq!(page["goals"][0]["objective"], "Deliver first change");
+    assert_eq!(page["goals"][0]["max_workers"], 2);
+    assert_eq!(page["goals"][0]["merge_authority"], false);
     run(Cli::try_parse_from(["control-plane", "--url", &url, "goal", "cancel", goal]).unwrap())
         .await
         .unwrap();
@@ -1295,9 +1478,15 @@ async fn directory_cli_and_browser_share_membership_over_real_http() {
         .text()
         .await
         .unwrap();
-    assert!(page.contains("context &lt;&amp;&gt;"));
     assert!(!page.contains("context <&>"));
-    assert!(page.contains("Add directory"));
+    let (snapshot, _) = embedded(&page);
+    assert!(
+        snapshot["directories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|directory| field(directory, "path").ends_with("context <&>"))
+    );
     let removed = http
         .post(format!(
             "{url}/workspaces/{workspace}/directories/{directory}/remove"
@@ -1397,7 +1586,11 @@ async fn service_start_wakes_real_supervisor_and_exposes_durable_planning_reason
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct UnusedModel;
     impl AgentModel for UnusedModel {
-        fn respond(&self, _request: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _request: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("empty repository inventory must not call the model")
         }
     }
@@ -1502,7 +1695,11 @@ async fn service_persists_repository_tool_refusal_and_keeps_operator_controls_av
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct UnexpectedModel;
     impl AgentModel for UnexpectedModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("repository checks must happen before model execution")
         }
     }
@@ -1592,7 +1789,11 @@ async fn restored_service_preserves_inactive_goals_while_resuming_running_goal()
     use control_plane_runtime::{AgentModel, ModelRequest, RuntimeConfig};
     struct NoRepositoryModel;
     impl AgentModel for NoRepositoryModel {
-        fn respond(&self, _: &ModelRequest) -> anyhow::Result<Value> {
+        fn respond_in(
+            &self,
+            _: &ModelRequest,
+            _: &control_plane_runtime::ModelEnvironment,
+        ) -> anyhow::Result<Value> {
             anyhow::bail!("a workspace with no repositories must not invoke a model")
         }
     }
@@ -1727,4 +1928,25 @@ async fn restored_service_preserves_inactive_goals_while_resuming_running_goal()
         Store::open(&database).await.is_ok(),
         "shutdown retained the durable-store lock"
     );
+}
+
+#[test]
+fn adversary_projected_command_line_keeps_credential_values_off_the_page() {
+    // live.rs `command_line` now projects a tool run's arguments into every stream frame and the
+    // page's embedded snapshot. The planner label (supervisor.rs, `aep`) keeps "flags, values and
+    // request bodies" in the receipt; a worker's argument values reach the page unfiltered.
+    let event = json!({"at":"2026-10-05T09:00:00Z","action":"tool.run","role":"implementor","status":"running","goal_revision":1,"detail":{"program":"git","args":["push","https://x-access-token:ghs_SECRETVALUE0123@github.com/o/r.git","--header","Authorization: Bearer sk-SECRETVALUE4567"]}});
+    let receipt = json!({"last_activity":event,"activity":[event]}).to_string();
+    let view = json!({"server_observed_at":"2026-10-05T10:00:00Z","runtime_error":null,"repositories":[],"assignments":[],"goals":[{"goal_id":"g","revision":1,"state":"Running","planning_phase":"Planning","planning_receipt":receipt}]});
+    let shown = live::compact(view).to_string();
+    assert!(
+        shown.contains("git push"),
+        "control: the command is projected"
+    );
+    for secret in ["ghs_SECRETVALUE0123", "sk-SECRETVALUE4567"] {
+        assert!(
+            !shown.contains(secret),
+            "{secret} reaches the console projection: {shown}"
+        );
+    }
 }

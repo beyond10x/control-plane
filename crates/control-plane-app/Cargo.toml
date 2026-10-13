@@ -25,5 +25,6 @@ uuid.workspace = true
 
 [dev-dependencies]
 http-body-util = "0.1"
+llm-core = { package = "b10x-llm-core", git = "https://github.com/beyond10x/llm", rev = "8618681c9b3156a98ef7f71233e4c2758d4d1a33" }
 tempfile.workspace = true
 tower = { version = "0.5", features = ["util"] }

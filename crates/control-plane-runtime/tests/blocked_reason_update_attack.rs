@@ -12,7 +12,8 @@ mod support;
 use anyhow::Result;
 use control_plane_core::{Actor, Store};
 use control_plane_runtime::{
-    AgentModel, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore, Supervisor,
+    AgentModel, ModelEnvironment, ModelRequest, PUBLICATION_GRACE, RuntimeConfig, SharedStore,
+    Supervisor,
 };
 use serde_json::{Value, json};
 use std::{
@@ -260,7 +261,7 @@ impl Counting {
     }
 }
 impl AgentModel for Counting {
-    fn respond(&self, request: &ModelRequest) -> Result<Value> {
+    fn respond_in(&self, request: &ModelRequest, _: &ModelEnvironment) -> Result<Value> {
         *self
             .calls
             .lock()

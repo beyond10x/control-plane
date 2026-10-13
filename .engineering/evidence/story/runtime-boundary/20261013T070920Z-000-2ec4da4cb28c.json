@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-13T07:09:20Z",
+  "actor": "human:timo",
+  "artifact": "story:runtime-boundary",
+  "kind": "story",
+  "revision": 47,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gates on aab55ab: clippy -D warnings of runtime, xtask, app; cargo test -p control-plane-runtime 145 passed, -p control-plane-xtask 165 passed, -p control-plane-app 60 passed; foundation-check exit 0; red first for every_role_runs_through_one_native_loom_session_path and both foundation_check tests; native_runtime_events_reach_the_workspace_stream shown to fail on two mutations of loom_model.rs",
+    "reference": "aab55ab"
+  }
+}
