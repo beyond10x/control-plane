@@ -156,6 +156,10 @@ pub fn run(root: &Path) -> Result<()> {
     );
     check(&serde_json::from_slice(&output.stdout)?)?;
     println!("production dependency graph uses admitted foundation libraries");
+    loom_resolution(root)?;
+    println!("Cargo.lock resolves each Loom crate once");
+    loom_pins(root)?;
+    println!("every Loom dependency is pinned to a release tag");
     Ok(())
 }
 
@@ -254,6 +258,186 @@ fn rust_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> Result<()> {
             found.push(path);
         }
     }
+    Ok(())
+}
+
+/// The repository every Loom crate comes from; a URL names it when its path ends here.
+const LOOM_REPOSITORY: &str = "github.com/beyond10x/loom";
+/// Cargo's dependency tables, each also read under every `target.<cfg>`.
+const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
+
+/// Whether `url` (a manifest `git` or a lock `source`) names the Loom repository itself, not a
+/// repository whose name merely starts with `loom`.
+fn names_loom(url: &str) -> bool {
+    url.split_once(LOOM_REPOSITORY).is_some_and(|(_, tail)| {
+        let tail = tail.strip_prefix(".git").unwrap_or(tail);
+        tail.is_empty() || tail.starts_with(['?', '#', '/'])
+    })
+}
+
+/// A release tag: `<major>.<minor>.<patch>`, optionally `v`-prefixed.
+fn release_tag(tag: &str) -> bool {
+    let parts = tag
+        .strip_prefix('v')
+        .unwrap_or(tag)
+        .split('.')
+        .collect::<Vec<_>>();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// Every `Cargo.toml` under `dir`, skipping build output, dependencies and hidden directories.
+fn manifests(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
+        let path = entry?.path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if path.is_dir() {
+            if !(name.starts_with('.') || name == "target" || name == "node_modules") {
+                manifests(&path, found)?;
+            }
+        } else if name == "Cargo.toml" {
+            found.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// Why a Loom dependency declaration is not a release pin, or `None` when it is one (or when it
+/// inherits the workspace's declaration, which is read where it is made).
+fn unreleased(declaration: &toml::Value) -> Option<String> {
+    let Some(table) = declaration.as_table() else {
+        return Some("a registry version, not a release tag of the Loom repository".into());
+    };
+    if table.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+        return None;
+    }
+    if let Some(rev) = table.get("rev") {
+        return Some(format!("rev {rev}"));
+    }
+    if let Some(branch) = table.get("branch") {
+        return Some(format!("branch {branch}"));
+    }
+    match table.get("tag").and_then(toml::Value::as_str) {
+        None => Some("no tag".into()),
+        Some(tag) if !release_tag(tag) => Some(format!("tag {tag:?}, not <major>.<minor>.<patch>")),
+        Some(_) => None,
+    }
+}
+
+/// Refuse a Loom dependency that is not pinned to a release tag, in the workspace root and every
+/// crate manifest under `root`. A dependency is Loom when its package (or, unrenamed, its key) is
+/// `b10x-loom-*`, or when its `git` names the Loom repository. Every refusal names the manifest,
+/// relative to `root`, and the crate.
+pub fn loom_pins(root: &Path) -> Result<()> {
+    let mut files = Vec::new();
+    manifests(root, &mut files)?;
+    files.sort();
+    ensure!(!files.is_empty(), "no Cargo.toml under {}", root.display());
+    let mut refusals = Vec::new();
+    for file in files {
+        let shown = file
+            .strip_prefix(root)
+            .unwrap_or(&file)
+            .display()
+            .to_string();
+        let manifest: toml::Table = std::fs::read_to_string(&file)
+            .with_context(|| format!("read {shown}"))?
+            .parse()
+            .with_context(|| format!("parse {shown}"))?;
+        let mut tables = Vec::new();
+        for name in DEPENDENCY_TABLES {
+            tables.extend(manifest.get(name));
+        }
+        tables.extend(
+            manifest
+                .get("workspace")
+                .and_then(|workspace| workspace.get("dependencies")),
+        );
+        for platform in manifest
+            .get("target")
+            .and_then(toml::Value::as_table)
+            .into_iter()
+            .flat_map(|targets| targets.values())
+        {
+            for name in DEPENDENCY_TABLES {
+                tables.extend(platform.get(name));
+            }
+        }
+        for (key, declaration) in tables
+            .into_iter()
+            .filter_map(toml::Value::as_table)
+            .flat_map(|table| table.iter())
+        {
+            let package = declaration
+                .get("package")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(key);
+            let from_loom = declaration
+                .get("git")
+                .and_then(toml::Value::as_str)
+                .is_some_and(names_loom);
+            if !(package.starts_with("b10x-loom-") || from_loom) {
+                continue;
+            }
+            if let Some(reason) = unreleased(declaration) {
+                refusals.push(format!(
+                    "{shown}: Loom crate {package} is not pinned to a release tag ({reason})"
+                ));
+            }
+        }
+    }
+    ensure!(refusals.is_empty(), "{}", refusals.join("\n"));
+    Ok(())
+}
+
+/// Refuse a `Cargo.lock` under `root` that resolves one Loom package (`b10x-loom-*`, or any
+/// package sourced from the Loom repository) more than once, from two sources or at two versions.
+/// Every refusal names the package and each copy's version and source.
+pub fn loom_resolution(root: &Path) -> Result<()> {
+    let lock: toml::Table = std::fs::read_to_string(root.join("Cargo.lock"))
+        .context("read Cargo.lock")?
+        .parse()
+        .context("parse Cargo.lock")?;
+    let mut copies = BTreeMap::<&str, Vec<String>>::new();
+    for package in lock
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .context("Cargo.lock packages")?
+    {
+        let name = package
+            .get("name")
+            .and_then(toml::Value::as_str)
+            .context("Cargo.lock package name")?;
+        let source = package.get("source").and_then(toml::Value::as_str);
+        if !(name.starts_with("b10x-loom-") || source.is_some_and(names_loom)) {
+            continue;
+        }
+        let version = package
+            .get("version")
+            .and_then(toml::Value::as_str)
+            .unwrap_or("?");
+        copies.entry(name).or_default().push(format!(
+            "{version} from {}",
+            source.unwrap_or("a local path")
+        ));
+    }
+    let refusals = copies
+        .into_iter()
+        .filter(|(_, found)| found.len() > 1)
+        .map(|(name, found)| {
+            format!(
+                "Loom crate {name} resolves {} times: {}",
+                found.len(),
+                found.join("; ")
+            )
+        })
+        .collect::<Vec<_>>();
+    ensure!(refusals.is_empty(), "{}", refusals.join("\n"));
     Ok(())
 }
 
