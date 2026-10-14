@@ -63,8 +63,21 @@ fn admitted(package: &Value, inside_sdk: bool) -> bool {
                 )
             }
         }
-        "canon" => matches!(name, "b10x-canon" | "b10x-canon-core"),
-        "engineering-protocols" => inside_sdk && name == "b10x-canon-engineering",
+        "canon" => {
+            matches!(name, "b10x-canon" | "b10x-canon-core")
+                || (inside_sdk && name == "b10x-canon-expr")
+        }
+        "engineering-protocols" => {
+            inside_sdk
+                && matches!(
+                    name,
+                    "b10x-canon-engineering"
+                        | "b10x-canon-engineering-assertions"
+                        | "b10x-assertion-providers"
+                )
+        }
+        "connectors" => inside_sdk && matches!(name, "connectors-client" | "connectors-core"),
+        "substrate" => inside_sdk && matches!(name, "b10x-substrate-host" | "b10x-substrate-wire"),
         "eventlog" => matches!(name, "eventlog-core" | "eventlog-sqlite"),
         "llm" => {
             name.starts_with("b10x-llm-") && !matches!(name, "b10x-llm-cli" | "b10x-llm-gateway")
