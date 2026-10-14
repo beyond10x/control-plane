@@ -856,6 +856,9 @@ impl EffectPort for Planning<'_> {
                         }
                         .into(),
                     ),
+                    // A host operation, not a Connector invocation: no attempt or audit record.
+                    attempt: None,
+                    audit: None,
                 }))
             }
             Err(error) => {

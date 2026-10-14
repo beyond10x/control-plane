@@ -55,8 +55,11 @@ fn admitted(package: &Value, inside_sdk: bool) -> bool {
                         | "b10x-loom-intake-router"
                         | "b10x-loom-intake-slice"
                         | "b10x-loom-intake-references"
+                        | "b10x-loom-connectors"
+                        | "b10x-loom-protocols"
                         | "loom"
                         | "commission"
+                        | "intake"
                 )
             }
         }

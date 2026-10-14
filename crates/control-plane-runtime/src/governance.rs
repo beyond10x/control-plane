@@ -11,7 +11,7 @@ use loom_sdk::commission::{
     ports::{evidence::submit_evidence, governor::Governor},
 };
 use loom_sdk::{
-    CanonGovernor,
+    CanonGovernor, CaseInputs,
     governor::{CaseState, FallibleCaseStore},
 };
 use serde_json::json;
@@ -34,7 +34,8 @@ pub(crate) fn open(
     })
     .with_protocol_yaml(protocol, yaml)?
     .with_evaluation_time(clock as Clock);
-    governor.open_case(case.clone(), protocol, artifacts)?;
+    // This repository's protocols declare no case inputs.
+    governor.open_case(case.clone(), protocol, artifacts, CaseInputs::none())?;
     Ok(governor)
 }
 fn clock(_: &CaseId) -> Result<Option<String>, GovernorError> {

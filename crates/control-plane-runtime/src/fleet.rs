@@ -1723,6 +1723,9 @@ impl EffectPort for ImplementationPhase<'_> {
                 self.refusals.admitted();
                 Ok(EffectOutcome::Performed(EffectOutcomePerformed {
                     report: wire::Value::Text(report),
+                    // A host operation, not a Connector invocation: no attempt or audit record.
+                    attempt: None,
+                    audit: None,
                 }))
             }
             Err(error) => {
@@ -3023,6 +3026,9 @@ impl EffectPort for Publication<'_> {
                 report: wire::Value::Text(
                     "publisher returned; remote observation still required".into(),
                 ),
+                // The host's publisher, not a Connector invocation: no attempt or audit record.
+                attempt: None,
+                audit: None,
             })),
             Err(e) => Err(EffectError::new(e.to_string())),
         };
