@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:loom-pin-foundation-checks
 kind: story
-status: active
+status: implemented
 title: Keep Loom pinned to a release and resolved once
 relations:
 - decomposes: epic:bootstrap
@@ -12,10 +12,11 @@ scope:
   path: crates/control-plane-xtask/src/foundation.rs
 - confidence: cited
   path: crates/control-plane-xtask/tests/foundation_check.rs
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T02:58:09Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-14T02:58:09Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-14T05:13:09Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Keep Loom pinned to a release and resolved once
 

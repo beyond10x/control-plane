@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-14T05:13:09Z",
+  "actor": "human:timo",
+  "artifact": "story:loom-pin-foundation-checks",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "package gate on dc3e637 (ess validate, aep validate, fmt, npm ci, clippy -D warnings, cargo test --no-fail-fast of core, protocol, runtime, app, xtask: 0 failed; foundation-check, generated-check exit 0; acceptance-check 177 names resolve after the story:loom-release-pin acceptance rewording)"
+  }
+}

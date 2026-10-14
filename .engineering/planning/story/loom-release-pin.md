@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:loom-release-pin
 kind: story
-status: active
+status: implemented
 title: Build on a released Loom
 relations:
 - decomposes: epic:bootstrap
@@ -20,10 +20,11 @@ scope:
   path: crates/control-plane-runtime/src/governance.rs
 - confidence: cited
   path: crates/control-plane-runtime/src/loom_model.rs
-revision: 5
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T02:58:09Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-14T02:58:09Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-14T05:13:09Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Build on a released Loom
 
@@ -37,7 +38,7 @@ The pin predates every Loom release from 0.2.0 to 0.20.0. Consumers read Loom as
 
 ## Acceptance
 
-- The workspace pins `b10x-loom-sdk` with `tag = "0.20.0"` (or the newest Loom release when the unit starts), and `Cargo.lock` holds each `b10x-loom-*` package once, from that tag. `cargo tree --duplicates` lists no Loom crate.
+- The workspace pins Loom's SDK as `b10x-loom-sdk = { tag = "0.20.0" }` (or the newest Loom release when the unit starts), and `Cargo.lock` holds each `b10x-loom-*` package once, from that tag. `cargo tree --duplicates` lists no Loom crate.
 - Every Loom break crossed between the old pin and the tag is adapted at its call site in `crates/control-plane-runtime/src/` and recorded on this story under "Breaks crossed", each with the CHANGELOG entry that names it. A break no CHANGELOG entry names is recorded as a foundation defect in Loom, not worked around silently.
 - The existing runtime suite stays green on the new pin, with these named tests among it: every_role_runs_through_one_native_loom_session_path, native_runtime_events_reach_the_workspace_stream, native_loom_delivers_candidate_through_checks_review_and_observed_publication, review_and_publication_require_current_independent_evidence.
 - Spec first: the move changes no ESS entity of this repository unless a crossed break changes a projected contract; such a change is modelled in `ess/` before code.
