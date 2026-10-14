@@ -302,7 +302,7 @@ pub async fn run(cli: Cli) -> Result<Option<Value>> {
             ..Default::default()
         };
         // Gates settings are commit and publish credentials, never part of a check's environment.
-        for name in ["B10X_GATES_POLICY", "B10X_GATES_KEY", "B10X_GATES_GITLEAKS"] {
+        for name in ["B10X_GATES_POLICY", "B10X_GATES_GITLEAKS", "B10X_GATES_KEY"] {
             if gates_policy.is_some() && name == "B10X_GATES_POLICY" {
                 continue;
             }
