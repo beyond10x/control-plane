@@ -5,7 +5,8 @@ use anyhow::{Context, Result, ensure};
 use loom_sdk::loom::{
     harness::{
         turn_loop::{
-            AgentLoop, Budget, DenyAll, LoopConfig, LoopEvent, LoopSink, OutputSchema, RunLedger,
+            AgentLoop, Budget, DenyAll, LoopConfig, LoopEvent, LoopSink, LoopStop, OutputSchema,
+            RunLedger,
         },
         wire,
     },
@@ -84,6 +85,7 @@ fn run(
                 session_id: id.clone(),
                 commission_run: CommissionRunId(Uuid(request.execution_context.clone())),
                 wire: port.wire.as_str().into(),
+                boundary_refusals: 0,
             },
             &request.model,
             "llm:codex",
@@ -139,7 +141,7 @@ fn run(
         }
         let outcome = outcome?;
         ensure!(
-            outcome.stop.is_completed(),
+            outcome.stop == LoopStop::Completed,
             "Loom stopped: {:?}",
             outcome.stop
         );
