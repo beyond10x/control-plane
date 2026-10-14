@@ -13,6 +13,7 @@ fs2.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+toml = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 control-plane-core = { path = "../control-plane-core" }
 ess-conformance = { git = "https://github.com/beyond10x/ess", rev = "56bd965b4a54e4f57afdcf1c1868317bcd0237b4" }
