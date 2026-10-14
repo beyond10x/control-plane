@@ -320,10 +320,10 @@ mod tests {
     fn child_environment_keeps_only_allowlisted_and_configured_variables() {
         let parent = [
             ("PATH", "/usr/bin"),
-            ("HOME", "/home/operator"),
+            ("HOME", "/srv/operator"),
             ("OPENAI_API_KEY", "service-secret"),
             ("SSH_AUTH_SOCK", "/run/agent"),
-            ("XDG_STATE_HOME", "/home/operator/.local/state"),
+            ("XDG_STATE_HOME", "/srv/operator/.local/state"),
         ]
         .map(|(name, value)| (OsString::from(name), OsString::from(value)));
         let configured = [
@@ -339,7 +339,7 @@ mod tests {
             environment,
             [
                 ("CONTROL_PLANE_TARGET", "main"),
-                ("HOME", "/home/operator"),
+                ("HOME", "/srv/operator"),
                 ("PATH", "/usr/bin"),
                 ("XDG_STATE_HOME", "/scratch/state"),
             ]
