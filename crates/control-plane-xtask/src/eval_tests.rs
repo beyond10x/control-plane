@@ -9,7 +9,7 @@ fn scratch() -> tempfile::TempDir {
     tempfile::tempdir_in(parent).unwrap()
 }
 
-fn verified(case: Case, repo: &Path) -> Result<()> {
+fn verified(case: Case, repo: &Path) -> Result<Vec<String>> {
     tokio::runtime::Runtime::new()?.block_on(verify(case, repo))
 }
 
@@ -49,6 +49,57 @@ fn go_test_file_without_tests_is_not_executed_tests() {
         "package main\n\nimport \"testing\"\n\nfunc TestGreets(t *testing.T) {}\n",
     );
     verified(Case::Cli, repo).unwrap();
+}
+
+/// A passing go-cli candidate: the lines the verifier prints name every check it executed, so
+/// its stdout is evidence a reviewer can read rather than a bare `PASS`.
+#[test]
+fn passing_verify_reports_each_executed_check() {
+    let scratch = scratch();
+    let repo = scratch.path();
+    write(repo, "go.mod", "module example.invalid/go-cli\n\ngo 1.23\n");
+    write(
+        repo,
+        "README.md",
+        "# greet\n\n`go run ./cmd/greet Ada` greets; `go test ./...` tests.\n",
+    );
+    write(
+        repo,
+        "cmd/greet/main.go",
+        "package main\n\nimport (\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\tif len(os.Args) != 2 {\n\t\tos.Exit(2)\n\t}\n\tfmt.Printf(\"Hello, %s!\\n\", os.Args[1])\n}\n",
+    );
+    write(
+        repo,
+        "cmd/greet/main_test.go",
+        "package main\n\nimport \"testing\"\n\nfunc TestGreets(t *testing.T) {}\n",
+    );
+    let lines = verified(Case::Cli, repo).unwrap();
+    let report = lines.join("\n");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("go test -count=1 -json ./...") && line.contains("passed")),
+        "no go test line:\n{report}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("TestGreets")
+                && line.contains("example.invalid/go-cli/cmd/greet")),
+        "the passed test is not named with its package:\n{report}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("go vet ./...") && line.contains("exit 0")),
+        "no go vet line:\n{report}"
+    );
+    for scenario in ["greet-name", "reject-missing-name", "documented-setup"] {
+        assert!(
+            lines.contains(&format!("{scenario}: pass")),
+            "{scenario} not reported as passed:\n{report}"
+        );
+    }
 }
 
 /// The control-plane repository, as `eval init` reads it.

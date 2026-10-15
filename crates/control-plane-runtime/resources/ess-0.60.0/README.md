@@ -1,5 +1,5 @@
-This is the unmodified ESS 0.59.0 authoring schema from commit
-`56bd965b4a54e4f57afdcf1c1868317bcd0237b4`, path
+This is the unmodified ESS 0.60.0 authoring schema from commit
+`19d601013b867f0e6f5061f097fa81d55a734bb1`, path
 `schemas/generated/ess.schema.json` in beyond10x/ess.
 
 ESS generates it in `crates/edge/ess-xtask/src/main.rs`, `schema`, using
