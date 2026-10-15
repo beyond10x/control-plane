@@ -85,7 +85,9 @@ pub fn run(action: Action) -> Result<()> {
     match action {
         Action::Init { root } => init(&root),
         Action::Verify { case, repo } => {
-            tokio::runtime::Runtime::new()?.block_on(verify(case, &repo))?;
+            for line in tokio::runtime::Runtime::new()?.block_on(verify(case, &repo))? {
+                println!("{line}");
+            }
             println!("PASS {}", case.name());
             Ok(())
         }
@@ -203,7 +205,7 @@ impl Drop for Server {
         let _ = self.0.wait();
     }
 }
-async fn verify(case: Case, repo: &Path) -> Result<()> {
+async fn verify(case: Case, repo: &Path) -> Result<Vec<String>> {
     let readme = fs::read_to_string(repo.join("README.md"))
         .context("documented-setup: missing README.md")?;
     for required in ["go run", "go test"] {
@@ -214,15 +216,29 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
     }
     // A package line `ok … [no tests to run]` executed nothing: only a passed test event counts.
     let tests = command(repo, "go", &["test", "-count=1", "-json", "./..."])?;
-    ensure!(
-        tests.lines().any(|line| {
-            serde_json::from_str::<serde_json::Value>(line).is_ok_and(|event| {
-                event["Action"] == "pass" && event["Test"].as_str().is_some_and(|t| !t.is_empty())
-            })
-        }),
-        "no Go test executed: {tests}"
-    );
+    let passed: Vec<String> = tests
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|event| event["Action"] == "pass")
+        .filter_map(|event| {
+            let test = event["Test"].as_str().filter(|t| !t.is_empty())?;
+            Some(format!(
+                "  pass {} {test}",
+                event["Package"].as_str().unwrap_or("")
+            ))
+        })
+        .collect();
+    ensure!(!passed.is_empty(), "no Go test executed: {tests}");
+    let mut report = vec![format!(
+        "go test -count=1 -json ./...: {} passed",
+        passed.len()
+    )];
+    report.extend(passed);
     command(repo, "go", &["vet", "./..."])?;
+    report.push("go vet ./...: exit 0".to_owned());
+    if matches!(case, Case::Cli) {
+        report.push("documented-setup: pass".to_owned());
+    }
     let scratch = tempfile::tempdir()?;
     let binary = scratch.path().join("app");
     let entry = if matches!(case, Case::Cli) {
@@ -240,6 +256,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             command(repo, binary.to_str().unwrap(), &["Ada"])? == "Hello, Ada!\n",
             "greet-name: incorrect output"
         );
+        report.push("greet-name: pass".to_owned());
         ensure!(
             !Command::new(&binary)
                 .current_dir(repo)
@@ -248,12 +265,16 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
                 .success(),
             "reject-missing-name: accepted missing argument"
         );
-        return Ok(());
+        report.push("reject-missing-name: pass".to_owned());
+        return Ok(report);
     }
     ensure!(
         readme.contains("ADDR"),
         "documented-setup: README lacks ADDR"
     );
+    if matches!(case, Case::JsonHttp) {
+        report.push("documented-setup: pass".to_owned());
+    }
     let socket = std::net::TcpListener::bind("127.0.0.1:0")?;
     let address = socket.local_addr()?;
     drop(socket);
@@ -291,6 +312,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     ensure!(ready, "healthy-server: did not become ready");
+    report.push("healthy-server: pass".to_owned());
     if matches!(case, Case::JsonHttp) {
         let response = client
             .post(format!("{base}/api/echo"))
@@ -309,6 +331,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             response.json::<serde_json::Value>().await? == serde_json::json!({"message":"hello"}),
             "echo-json: body"
         );
+        report.push("echo-json: pass".to_owned());
         ensure!(
             client
                 .post(format!("{base}/api/echo"))
@@ -320,7 +343,8 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
                 == 400,
             "malformed-json: not rejected"
         );
-        return Ok(());
+        report.push("malformed-json: pass".to_owned());
+        return Ok(report);
     }
     for required in ["APP_USERNAME", "APP_PASSWORD"] {
         ensure!(
@@ -328,6 +352,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             "documented-setup: README lacks {required}"
         );
     }
+    report.push("documented-setup: pass".to_owned());
     let response = client.get(format!("{base}/")).send().await?;
     ensure!(response.status() == 200, "login-frontend: status");
     let html = response.text().await?.to_lowercase();
@@ -335,10 +360,12 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
         html.contains("<form") && html.contains("username") && html.contains("password"),
         "login-frontend: missing form"
     );
+    report.push("login-frontend: pass".to_owned());
     ensure!(
         client.get(format!("{base}/api/me")).send().await?.status() == 401,
         "unauthenticated-denied"
     );
+    report.push("unauthenticated-denied: pass".to_owned());
     ensure!(
         client
             .post(format!("{base}/login"))
@@ -349,6 +376,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             == 401,
         "invalid-login"
     );
+    report.push("invalid-login: pass".to_owned());
     let login = client
         .post(format!("{base}/login"))
         .form(&[("username", "eval-user"), ("password", &password)])
@@ -368,6 +396,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             && lower.contains("path=/"),
         "login: cookie flags"
     );
+    report.push("login: pass".to_owned());
     let cookie = cookie.split(';').next().unwrap();
     let me = client
         .get(format!("{base}/api/me"))
@@ -379,6 +408,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             && me.json::<serde_json::Value>().await? == serde_json::json!({"username":"eval-user"}),
         "authenticated-identity"
     );
+    report.push("authenticated-identity: pass".to_owned());
     let page = client
         .get(format!("{base}/"))
         .header("cookie", cookie)
@@ -388,6 +418,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
         page.status() == 200 && page.text().await?.to_lowercase().contains("logout"),
         "authenticated-frontend"
     );
+    report.push("authenticated-frontend: pass".to_owned());
     let forged = format!("{}=invalid", cookie.split('=').next().unwrap());
     ensure!(
         client
@@ -399,6 +430,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             == 401,
         "invalid-session"
     );
+    report.push("invalid-session: pass".to_owned());
     ensure!(
         client
             .post(format!("{base}/logout"))
@@ -409,6 +441,7 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             == 303,
         "logout: expected 303"
     );
+    report.push("logout: pass".to_owned());
     ensure!(
         client
             .get(format!("{base}/api/me"))
@@ -419,7 +452,8 @@ async fn verify(case: Case, repo: &Path) -> Result<()> {
             == 401,
         "logout-revokes-session"
     );
-    Ok(())
+    report.push("logout-revokes-session: pass".to_owned());
+    Ok(report)
 }
 
 #[cfg(test)]
